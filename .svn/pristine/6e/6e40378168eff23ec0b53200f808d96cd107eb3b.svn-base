@@ -1,0 +1,667 @@
+// CustomEvent 폴리필 (일부 Android WebView 호환)
+(function() {
+  if (typeof window.CustomEvent !== "function") {
+    function CustomEventPoly(event, params) {
+      params = params || { bubbles: false, cancelable: false, detail: undefined };
+      var evt = document.createEvent('CustomEvent');
+      evt.initCustomEvent(event, params.bubbles, params.cancelable, params.detail);
+      return evt;
+    }
+    CustomEventPoly.prototype = window.Event ? window.Event.prototype : {};
+    window.CustomEvent = CustomEventPoly;
+  }
+})();
+
+// 연결 재시도 카운터
+var reconnectAttempts = 0;
+var maxReconnectAttempts = 5; // 10 → 5로 감소
+var baseReconnectDelay = 5000; // 2초 → 5초로 증가
+var isConnecting = false; // 중복 연결 방지
+var isActuallyConnected = false; // 실제 연결 상태 추적
+var lastMessageTime = 0; // 마지막 메시지 수신 시간
+var isPageVisible = true; // 페이지 가시성 상태
+var backgroundReconnectTimer = null; // 백그라운드 재연결 타이머
+var __redirectInProgress = false; // 세션 만료 리다이렉트 중복 방지
+var lastUserActivityTs = Date.now(); // 마지막 사용자 활동 시간
+var CHECK_THRESHOLD_MS = 25 * 60 * 1000; // 25분 경과 시에만 타임아웃 체크
+
+// 사용자 활동 감지(PC/앱 공통)
+['mousemove','keydown','click','touchstart','scroll'].forEach(function(evt){
+  document.addEventListener(evt, function(){ lastUserActivityTs = Date.now(); }, { passive: true });
+});
+
+// 세션 타임아웃 체크 후 서버가 지시한 URL로 이동 (앱/PC 구분은 서버가 처리)
+function checkTimeoutAndRedirect() {
+  if (__redirectInProgress) return;
+  // 최근 사용자 활동 또는 메시지 수신이 25분 이내면 타임아웃 체크 생략(불필요한 오검 방지)
+  var lastTs = Math.max(lastUserActivityTs || 0, lastMessageTime || 0);
+  if (Date.now() - lastTs < CHECK_THRESHOLD_MS) {
+    return;
+  }
+  try {
+    var uid = '';
+    if (typeof $('#userId').val === 'function') {
+      uid = $('#userId').val() || '';
+    } else if (typeof document.getElementById('userId') !== 'undefined' && document.getElementById('userId')) {
+      uid = document.getElementById('userId').value || '';
+    }
+    var saveIdVal = 'N';
+    try {
+      if (typeof $('#saveId').val === 'function') saveIdVal = $('#saveId').val() || 'N';
+      else if (document.getElementById('saveId')) saveIdVal = document.getElementById('saveId').value || 'N';
+    } catch(e) {}
+    $.ajax({
+      url: '/login/checkSessionTimeout',
+      type: 'POST',
+      timeout: 5000,
+      contentType: 'application/json',
+      dataType: 'json',
+      xhrFields: { withCredentials: true },
+      data: JSON.stringify({ userId: uid, saveId: saveIdVal }),
+      success: function(res){
+        if (res && res.timeout === true && res.redirectUrl) {
+          __redirectInProgress = true;
+          location.href = res.redirectUrl;
+        }
+      },
+      error: function(){ /* 무시 */ }
+    });
+  } catch(e) { /* 무시 */ }
+}
+
+// 페이지 가시성 변경 감지
+document.addEventListener('visibilitychange', function() {
+    isPageVisible = !document.hidden;
+    console.log('페이지 가시성 변경: ' + (isPageVisible ? '보임' : '숨김'));
+    
+    // saveid 설정 확인
+    var currentSaveId = 'N';
+    if (typeof $('#saveId').val === 'function') {
+        currentSaveId = $('#saveId').val() || 'N';
+    } else if (typeof document.getElementById('saveId') !== 'undefined' && document.getElementById('saveId')) {
+        currentSaveId = document.getElementById('saveId').value || 'N';
+    }
+    
+    console.log('MQTT 처리 - 현재 saveid 설정: ' + currentSaveId);
+    
+    if (isPageVisible) {
+        // 페이지가 다시 보이면 MQTT 연결 상태 확인
+        if (currentSaveId === 'Y') {
+            // saveid가 Y인 경우: 즉시 연결 상태 확인 및 복구
+            console.log('saveid Y 설정: 페이지 활성화 시 즉시 MQTT 연결 상태 확인');
+            // 세션 타임아웃 체크 후 필요 시 서버가 지시하는 페이지로 이동
+            checkTimeoutAndRedirect();
+            checkAndReconnectIfNeeded();
+            
+            // 추가로 2초 후 재확인 (연결은 되어 있지만 데이터가 오지 않는 경우 대비)
+            setTimeout(function() {
+                if (currentSaveId === 'Y') {
+                    console.log('saveid Y 설정: 페이지 활성화 후 2초 재확인');
+                    checkAndReconnectIfNeeded();
+                }
+            }, 2000);
+        } else {
+            // saveid가 N인 경우: 기존 로직 유지
+            console.log('saveid N 설정: 페이지 활성화 시 기존 로직 적용');
+            // PC에서도 세션 만료 시 로그인으로 이동하도록 체크
+            checkTimeoutAndRedirect();
+        }
+    } else {
+        // 페이지가 숨겨졌을 때
+        if (currentSaveId === 'Y') {
+            console.log('saveid Y 설정: 백그라운드에서 MQTT 연결 유지');
+        } else {
+            console.log('saveid N 설정: 백그라운드에서 기존 로직 적용');
+        }
+    }
+});
+
+// 앱 포커스 이벤트 처리
+window.addEventListener('focus', function() {
+    console.log('MQTT 라이브러리: 앱 포커스 이벤트 감지');
+    
+    // saveid 설정 확인
+    var currentSaveId = 'N';
+    if (typeof $('#saveId').val === 'function') {
+        currentSaveId = $('#saveId').val() || 'N';
+    } else if (typeof document.getElementById('saveId') !== 'undefined' && document.getElementById('saveId')) {
+        currentSaveId = document.getElementById('saveId').value || 'N';
+    }
+    
+    if (currentSaveId === 'Y') {
+        console.log('saveid Y 설정: 앱 포커스 시 MQTT 연결 상태 확인');
+        
+        // 즉시 연결 상태 확인
+        setTimeout(function() {
+            checkAndReconnectIfNeeded();
+        }, 1000);
+    }
+});
+
+// 앱 인터페이스 함수 (앱에서 호출)
+window.mqttAppResume = function() {
+    console.log('MQTT 라이브러리: 앱에서 resume 이벤트 호출됨');
+    
+    // saveid 설정 확인
+    var currentSaveId = 'N';
+    if (typeof $('#saveId').val === 'function') {
+        currentSaveId = $('#saveId').val() || 'N';
+    } else if (typeof document.getElementById('saveId') !== 'undefined' && document.getElementById('saveId')) {
+        currentSaveId = document.getElementById('saveId').value || 'N';
+    }
+    
+    if (currentSaveId === 'Y') {
+        console.log('saveid Y 설정: 앱 resume 시 MQTT 연결 즉시 복구');
+        
+        // 즉시 연결 상태 확인 및 복구
+        setTimeout(function() {
+            checkAndReconnectIfNeeded();
+        }, 500);
+        
+        // 추가로 3초 후 재확인
+        setTimeout(function() {
+            if (currentSaveId === 'Y') {
+                console.log('saveid Y 설정: 앱 resume 후 3초 재확인');
+                checkAndReconnectIfNeeded();
+            }
+        }, 3000);
+    }
+};
+
+// MQTT 연결 상태 확인 및 필요시 재연결
+function checkAndReconnectIfNeeded() {
+    console.log('MQTT 연결 상태 확인 시작');
+    
+    if (typeof client !== 'undefined') {
+        var isConnected = false;
+        
+        try {
+            isConnected = client.isConnected();
+            console.log('MQTT 연결 상태 확인 결과:', isConnected);
+        } catch (e) {
+            console.log('MQTT 연결 상태 확인 중 오류:', e.message);
+            isConnected = false;
+        }
+        
+        if (!isConnected) {
+            console.log('MQTT 연결이 끊어져 있음 - 즉시 재연결 시도');
+            reconnectAttempts = 0; // 재연결 시도 횟수 리셋
+            startConnect();
+        } else {
+            console.log('MQTT 연결 상태 정상 - 실시간 데이터 수신 확인');
+            
+            // 연결은 되어 있지만 데이터가 오지 않는 경우를 대비해 추가 확인
+            var currentTime = Date.now();
+            var timeSinceLastMessage = currentTime - lastMessageTime;
+            
+            console.log('마지막 메시지 수신 후 경과 시간:', (timeSinceLastMessage / 1000) + '초');
+            
+            // 30초 이상 메시지가 오지 않으면 재연결 시도
+            if (timeSinceLastMessage > 30000) {
+                console.log('30초 이상 메시지 미수신 - 재연결 시도');
+                reconnectAttempts = 0;
+                startConnect();
+            }
+        }
+    } else {
+        console.log('MQTT 클라이언트가 정의되지 않음 - 연결 시도');
+        reconnectAttempts = 0;
+        startConnect();
+    }
+}
+
+// Called after form input is processed
+function startConnect() {
+    // 중복 연결 방지
+    if (isConnecting) {
+        console.log("이미 연결 시도 중입니다. 중복 연결 방지.");
+        return;
+    }
+    
+    isConnecting = true;
+    
+    // random client ID 생성
+    _clientId_ = window.localStorage.getItem("clientId");
+    //console.log("clientId : " + _clientId_);
+
+    if(_clientId_  != "" && _clientId_ != null) {
+        clientID = _clientId_;
+    } else {
+        clientID = "clientID-" + parseInt(Math.random() * 100);
+        window.localStorage.setItem("clientId", clientID);
+    }
+
+    // broker IP , broker websocket port
+    host = "iot.hntsolution.co.kr";
+    port = "9001";
+
+    console.log("=== MQTT 연결 시도 시작 ===");
+    console.log("연결 시도 횟수: " + (reconnectAttempts + 1) + "/" + maxReconnectAttempts);
+    console.log("호스트: " + host);
+    console.log("포트: " + port);
+    console.log("클라이언트 ID: " + clientID);
+    console.log("현재 시간: " + new Date().toLocaleString());
+    
+    // 네트워크 연결 상태 확인
+    console.log("네트워크 상태 확인 중...");
+    if (navigator.onLine) {
+        console.log("온라인 상태: 연결됨");
+    } else {
+        console.log("온라인 상태: 연결 끊김");
+        console.log("네트워크 연결을 확인한 후 다시 시도하세요.");
+        isConnecting = false;
+        return;
+    }
+
+    // 연결 상태 업데이트
+    if (typeof updateMqttStatus === 'function') {
+        updateMqttStatus('connecting', '연결 시도 중... (' + (reconnectAttempts + 1) + '/' + maxReconnectAttempts + ')');
+    }
+
+    // connection
+    client = new Paho.MQTT.Client(host, Number(port), clientID);
+    console.log("MQTT 클라이언트 객체 생성 완료");
+
+    // callback
+    client.onConnectionLost = onConnectionLost;
+    console.log("연결 끊김 콜백 설정 완료");
+
+    if(client.isConnected()) {
+        console.log("이미 연결되어 있음");
+        reconnectAttempts = 0; // 연결 성공 시 카운터 리셋
+        isConnecting = false;
+        isActuallyConnected = true;
+    } else {
+        console.log("연결이 필요함 - 연결 시도 중...");
+        console.log("연결 옵션:");
+        console.log("- 사용자명: hnt1");
+        console.log("- 비밀번호: abcde");
+        console.log("- Keep Alive: 120초");
+        console.log("- 타임아웃: 60초");
+        console.log("- SSL: 사용 안함");
+        
+        // Connect the client, if successful, call onConnect function
+        client.connect({
+            onSuccess: onConnect,
+            onFailure: onFailure,
+            userName: 'hnt1',
+            password: 'abcde',
+            cleanSession: true,
+            keepAliveInterval: 60,  // 120초 → 60초로 단축 (백그라운드에서 더 자주 Keep-Alive)
+            mqttVersion: 4,
+            timeout: 30,  // 60초 → 30초로 단축
+            useSSL: false  // SSL 사용 안함
+        });
+        console.log("MQTT 연결 요청 전송됨");
+    }
+}
+
+function onConnect() {
+    // 연결 성공 시 재시도 카운터 리셋
+    reconnectAttempts = 0;
+    isConnecting = false; // 연결 완료
+    isActuallyConnected = true; // 실제 연결 상태 설정
+    
+    console.log("=== MQTT 연결 성공! ===");
+    console.log("연결 성공 시간: " + new Date().toLocaleString());
+    console.log("총 연결 시도 횟수: " + (reconnectAttempts + 1));
+    
+    // 규칙: DEV 응답만 구독
+    topic = "HBEE/+/+/+/DEV";
+    console.log("구독할 토픽(DEV만): " + topic);
+
+    // Print output
+    console.log("MQTT 연결 성공: " + topic);
+    client.onMessageArrived = onMessageArrived;
+    console.log("메시지 수신 콜백 설정 완료");
+    
+    // 연결 상태 업데이트
+    if (typeof updateMqttStatus === 'function') {
+        updateMqttStatus('connected', '실시간 데이터 수신 중');
+    }
+    
+    // 연결 성공 후 구독
+    try {
+        client.subscribe(topic, {
+            onSuccess: function() {
+                console.log("MQTT 구독 성공: " + topic);
+                // 연결 및 구독 완료 이벤트(페이지 로딩 완료 후 0.5초 뒤 setSensor 트리거용)
+                try {
+                  var evt = new CustomEvent('mqtt:connected', { detail: { ts: Date.now() } });
+                  window.dispatchEvent(evt);
+                } catch (ex) {
+                  console.log('mqtt:connected 이벤트 디스패치 오류: ' + ex.message);
+                }
+            },
+            onFailure: function(err) {
+                console.log("MQTT 구독 실패: " + err.errorMessage);
+                if (typeof updateMqttStatus === 'function') {
+                    updateMqttStatus('error', '구독 실패: ' + err.errorMessage);
+                }
+            }
+        });
+    } catch(e) {
+        console.log("MQTT 구독 중 오류: " + e.message);
+        if (typeof updateMqttStatus === 'function') {
+            updateMqttStatus('error', '구독 오류: ' + e.message);
+        }
+    }
+}
+
+function onFailure(error) {
+    reconnectAttempts++;
+    isConnecting = false; // 연결 실패 시 플래그 리셋
+    
+    console.log("=== MQTT 연결 실패! ===");
+    console.log("실패 시간: " + new Date().toLocaleString());
+    console.log("에러 메시지: " + error.errorMessage);
+    if(error.errorCode) {
+        console.log("MQTT 에러 코드: " + error.errorCode);
+    }
+    console.log("전체 에러 객체:", error);
+    console.log("연결 실패 횟수: " + reconnectAttempts + "/" + maxReconnectAttempts);
+    
+    // 연결 실패 상태 업데이트
+    if (typeof updateMqttStatus === 'function') {
+        updateMqttStatus('error', '연결 실패: ' + error.errorMessage + ' (' + reconnectAttempts + '/' + maxReconnectAttempts + ')');
+    }
+    
+    // 최대 재시도 횟수 초과 시 중단
+    if (reconnectAttempts >= maxReconnectAttempts) {
+        console.log("최대 재연결 시도 횟수 초과. 수동으로 새로고침하세요.");
+        if (typeof updateMqttStatus === 'function') {
+            updateMqttStatus('error', '연결 실패: 최대 재시도 횟수 초과. 페이지를 새로고침하세요.');
+        }
+        return;
+    }
+    
+    // 지수 백오프 방식으로 재연결 지연 시간 계산 (더 긴 간격)
+    var delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts - 1), 60000); // 최대 60초
+    console.log("재연결 시도까지 대기 시간: " + (delay / 1000) + "초");
+    
+    setTimeout(function() { 
+        console.log("재연결 시도 시작...");
+        startConnect(); 
+    }, delay);
+}
+
+// connection error
+function onConnectionLost(responseObject) {
+    console.log("=== MQTT 연결 끊김 감지! ===");
+    console.log("연결 끊김 시간: " + new Date().toLocaleString());
+    console.log("에러 코드: " + responseObject.errorCode);
+    console.log("에러 메시지: " + responseObject.errorMessage);
+    console.log("페이지 가시성: " + (isPageVisible ? '보임' : '숨김'));
+    
+    // saveid 설정 확인
+    var currentSaveId = 'N';
+    if (typeof $('#saveId').val === 'function') {
+        currentSaveId = $('#saveId').val() || 'N';
+    } else if (typeof document.getElementById('saveId') !== 'undefined' && document.getElementById('saveId')) {
+        currentSaveId = document.getElementById('saveId').value || 'N';
+    }
+    console.log("saveid 설정: " + currentSaveId);
+    
+    // saveid가 Y인 경우 (앱 로그인): 백그라운드에서 연결이 끊어져도 재연결 시도하지 않음
+    if (currentSaveId === 'Y') {
+        console.log("saveid Y 설정: 앱 로그인 상태 - 백그라운드에서 연결 끊김 시 재연결 시도하지 않음");
+        console.log("앱이 포그라운드로 돌아올 때 자동으로 연결 상태를 확인하고 필요시 재연결합니다.");
+        isActuallyConnected = false;
+        return; // 앱 로그인 상태에서는 백그라운드 재연결 시도하지 않음
+    }
+    
+    // saveid가 N인 경우 (PC 로그인): 기존 로직 적용
+    if (!isPageVisible) {
+        console.log("saveid N 설정: 페이지가 백그라운드 상태에서 연결이 끊어짐 - 페이지 활성화 시 재연결 예정");
+        isActuallyConnected = false;
+        return; // 백그라운드에서는 즉시 재연결 시도하지 않음
+    }
+    
+    // 실제 연결 상태 확인
+    var isActuallyConnectedNow = false;
+    var hasRecentMessage = false;
+    
+    try {
+        if (typeof client !== 'undefined') {
+            isActuallyConnectedNow = client.isConnected();
+        }
+    } catch (e) {
+        console.log("연결 상태 확인 중 오류: " + e.message);
+    }
+    
+    // 최근 메시지 수신 여부 확인 (30초 이내)
+    var timeSinceLastMessage = Date.now() - lastMessageTime;
+    hasRecentMessage = (timeSinceLastMessage < 30000); // 30초
+    
+    console.log("마지막 메시지 수신 후 경과 시간: " + (timeSinceLastMessage / 1000) + "초");
+    
+    // 연결 상태와 최근 메시지 수신 여부를 종합적으로 판단
+    if (isActuallyConnectedNow || hasRecentMessage) {
+        console.log("⚠️ 경고: 연결 끊김 이벤트가 발생했지만 실제로는 연결이 유지되고 있습니다.");
+        console.log("- 실제 연결 상태: " + (isActuallyConnectedNow ? "연결됨" : "연결 끊김"));
+        console.log("- 최근 메시지 수신: " + (hasRecentMessage ? "예" : "아니오"));
+        console.log("이는 일시적인 네트워크 불안정으로 인한 것으로 보입니다.");
+        console.log("실제 연결 상태를 유지하므로 재연결을 시도하지 않습니다.");
+        return; // 실제로 연결되어 있거나 최근 메시지를 받았으면 재연결 시도하지 않음
+    }
+    
+    // 실제로 연결이 끊어진 경우에만 재연결 시도 (PC 로그인 상태에서만)
+    isActuallyConnected = false;
+    reconnectAttempts++;
+    isConnecting = false; // 연결 끊김 시 플래그 리셋
+    
+    console.log("실제 연결 끊김 확인됨 - 재연결 시도 시작 (PC 로그인 상태)");
+    console.log("연결 끊김 횟수: " + reconnectAttempts + "/" + maxReconnectAttempts);
+    
+    // 연결 끊김 상태 업데이트
+    if (typeof updateMqttStatus === 'function') {
+        updateMqttStatus('disconnected', '연결이 끊어졌습니다. 재연결 시도 중... (' + reconnectAttempts + '/' + maxReconnectAttempts + ')');
+    }
+    
+    // 최대 재시도 횟수 초과 시 중단
+    if (reconnectAttempts >= maxReconnectAttempts) {
+        console.log("최대 재연결 시도 횟수 초과. 수동으로 새로고침하세요.");
+        if (typeof updateMqttStatus === 'function') {
+            updateMqttStatus('error', '연결 끊김: 최대 재시도 횟수 초과. 페이지를 새로고침하세요.');
+        }
+        return;
+    }
+    
+    // 지수 백오프 방식으로 재연결 지연 시간 계산 (더 긴 간격)
+    var delay = Math.min(baseReconnectDelay * Math.pow(2, reconnectAttempts - 1), 60000); // 최대 60초
+    console.log("재연결 시도까지 대기 시간: " + (delay / 1000) + "초");
+    
+    setTimeout(function() { 
+        console.log("재연결 시도 시작...");
+        startConnect(); 
+    }, delay);
+}
+
+// subsribe output
+function onMessageArrived(message) {
+    // 메시지 수신 시간 업데이트
+    lastMessageTime = Date.now();
+    
+    // 토픽에서 사용자 ID 추출
+    var topicArr = message.destinationName.split("/");
+    var messageUserId = topicArr[1];
+    
+    // 현재 로그인한 사용자 ID 가져오기
+    var currentUserId = "";
+    if (typeof $('#userId').val === 'function') {
+        currentUserId = $('#userId').val();
+    } else if (typeof document.getElementById('userId') !== 'undefined' && document.getElementById('userId')) {
+        currentUserId = document.getElementById('userId').value;
+    }
+    
+    // 현재 사용자의 장치 메시지만 콘솔에 출력
+    if (messageUserId === currentUserId) {
+        console.log("=== 내 장치 MQTT 메시지 수신! ===");
+        console.log("수신 시간: " + new Date().toLocaleString());
+        console.log("토픽: " + message.destinationName);
+        console.log("메시지 내용: " + message.payloadString);
+        console.log("메시지 길이: " + message.payloadString.length + " 문자");
+        console.log("장치 UUID: " + (topicArr[3] || "N/A"));
+        console.log("페이지 가시성: " + (isPageVisible ? '보임' : '숨김'));
+    }
+    
+    // DEV 토픽만 처리 보강
+    if (topicArr.length >= 5 && topicArr[4] === 'DEV') {
+        if (typeof rcvMsg === 'function') {
+            rcvMsg(message.destinationName, message.payloadString);
+        } else {
+            console.log("rcvMsg 함수가 정의되지 않았습니다. 메시지 처리 건너뜀.");
+        }
+    }
+}
+
+// send a message (publish)
+function publish (element) {
+    var topic = $(element).attr("id"); //버튼의 id를 topic으로 설정
+
+    if(element.checked == true){
+        var message = "ON";
+    } else {
+        var message = "OFF";
+    }
+
+    message = new Paho.MQTT.Message(message);
+    message.destinationName = topic;
+    message.qos = 2;
+
+    client.send(message);
+}
+
+
+// disconnection
+function startDisconnect() {
+    console.log("=== MQTT 연결 종료 요청 ===");
+    console.log("종료 시간: " + new Date().toLocaleString());
+    
+    if (typeof client !== 'undefined' && client.isConnected()) {
+        console.log("MQTT 연결 종료 중...");
+        client.disconnect();
+        console.log("MQTT 연결 종료 완료");
+        
+        // 연결 상태 변수 리셋
+        isActuallyConnected = false;
+        isConnecting = false;
+        reconnectAttempts = 0;
+        
+        // 연결 상태 업데이트
+        if (typeof updateMqttStatus === 'function') {
+            updateMqttStatus('disconnected', '연결이 종료되었습니다.');
+        }
+    } else {
+        console.log("MQTT 연결이 이미 종료되어 있거나 정의되지 않음");
+    }
+}
+
+// 로그아웃 시 MQTT 연결 종료 함수 (앱에서 호출)
+window.logoutMqttDisconnect = function() {
+    console.log("=== 로그아웃 시 MQTT 연결 종료 ===");
+    console.log("로그아웃 시간: " + new Date().toLocaleString());
+    
+    // saveid 설정 확인
+    var currentSaveId = 'N';
+    if (typeof $('#saveId').val === 'function') {
+        currentSaveId = $('#saveId').val() || 'N';
+    } else if (typeof document.getElementById('saveId') !== 'undefined' && document.getElementById('saveId')) {
+        currentSaveId = document.getElementById('saveId').value || 'N';
+    }
+    
+    console.log("로그아웃 시 saveid 설정: " + currentSaveId);
+    
+    // 로그아웃 시에는 saveid 설정과 관계없이 연결 종료
+    startDisconnect();
+    
+    console.log("로그아웃 시 MQTT 연결 종료 완료");
+};
+
+function validateJson(str) {
+    try {
+        JSON.parse(str);
+        return true;
+    } catch(e) {
+        return false;
+    }
+}
+
+// 공통 현재온도 처리 함수 (모든 페이지에서 사용)
+function updateCurrentTemperature(uuid, value, isError) {
+    // 현재온도 표시 요소들 (모든 페이지에서 동일한 ID 사용)
+    var temperatureElements = [
+        '#sensorVal' + uuid,           // 메인페이지, 차트페이지
+        '#curTemp',                    // 장치설정페이지
+        '#sensorVal'                   // 차트페이지 (단일 장치)
+    ];
+    
+    if (isError) {
+        // 에러 상태 표시
+        temperatureElements.forEach(function(selector) {
+            var element = $(selector);
+            if (element.length > 0) {
+                if (selector === '#curTemp') {
+                    // 장치설정페이지는 작은 폰트
+                    element.html('<font size="30px" style="color: #c9302c;">Error</font>');
+                } else {
+                    // 메인페이지, 차트페이지는 큰 폰트
+                    element.html('<font size="50px">Error</font>');
+                }
+            }
+        });
+        
+        console.log("현재온도 에러 표시 - 장치: " + uuid);
+    } else {
+        // 정상 온도 표시
+        temperatureElements.forEach(function(selector) {
+            var element = $(selector);
+            if (element.length > 0) {
+                if (selector === '#curTemp') {
+                    // 장치설정페이지는 작은 폰트
+                    element.html('<font size="30px" style="color: #c9302c;">' + value + '</font> °C');
+                } else {
+                    // 메인페이지, 차트페이지는 큰 폰트
+                    element.html('<font size="50px">' + value + '</font> °C');
+                }
+            }
+        });
+        
+        console.log("현재온도 업데이트 - 장치: " + uuid + ", 온도: " + value + "°C");
+    }
+}
+
+// 공통 상태표시등 처리 함수
+function updateStatusIndicator(uuid, statusType, isActive) {
+    var statusElements = {
+        'status': '#status' + uuid,
+        'comp': '#comp' + uuid,
+        'def': '#def' + uuid,
+        'fan': '#fan' + uuid,
+        'error': '#error' + uuid
+    };
+    
+    // 단일 장치 페이지용 (uuid 없음)
+    if (uuid === '') {
+        statusElements = {
+            'status': '#status',
+            'comp': '#comp',
+            'def': '#defr',
+            'fan': '#fan',
+            'error': '#error'
+        };
+    }
+    
+    var element = $(statusElements[statusType]);
+    if (element.length > 0) {
+        if (isActive) {
+            if (statusType === 'error') {
+                element.html('<img src="/images/red.png" width="25" height="25">');
+            } else {
+                element.html('<img src="/images/alert.gif" width="25" height="25">');
+            }
+        } else {
+            element.html('<img src="/images/gray.png" width="25" height="25">');
+        }
+    }
+}

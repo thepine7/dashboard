@@ -1,0 +1,21 @@
+package com.andrew.hnt.api.model;
+
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+public class ExcelTest {
+
+    public ExcelTest(String name, String birth, String phoneNumber, String address) {
+        this.name = name;
+        this.birth = birth;
+        this.phoneNumber = phoneNumber;
+        this.address = address;
+    }
+
+    public String name;
+    public String birth;
+    public String phoneNumber;
+    public String address;
+}

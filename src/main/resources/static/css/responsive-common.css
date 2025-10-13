@@ -1,0 +1,344 @@
+/**
+ * 공통 반응형 CSS
+ * HnT Sensor API 프로젝트 전용
+ * 
+ * 주요 기능:
+ * - 브라우저 호환성 보장
+ * - 일관된 반응형 디자인
+ * - 성능 최적화된 미디어 쿼리
+ */
+
+/* ==========================================================================
+   기본 반응형 설정
+   ========================================================================== */
+
+/* 모바일 우선 접근법 (Mobile First) */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px; /* 기본 폰트 크기 */
+    -webkit-text-size-adjust: 100%; /* iOS Safari 텍스트 크기 조정 방지 */
+    -ms-text-size-adjust: 100%; /* IE 텍스트 크기 조정 방지 */
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
+   브레이크포인트 정의
+   ========================================================================== */
+
+/* 모바일 (기본) - 320px ~ 767px */
+@media screen and (max-width: 767px) {
+    html {
+        font-size: 14px;
+    }
+    
+    /* 공통 컨테이너 */
+    .container,
+    .container-fluid {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    /* 버튼 최적화는 common-buttons.css에서 관리됨 */
+    
+    /* 테이블 최적화 */
+    .table-responsive {
+        font-size: 12px;
+    }
+    
+    .table th,
+    .table td {
+        padding: 4px;
+    }
+    
+    /* 폼 요소 최적화 */
+    .form-control {
+        font-size: 14px;
+        padding: 8px;
+    }
+    
+    /* 텍스트 크기 조정 */
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.3rem; }
+    h3 { font-size: 1.2rem; }
+    h4 { font-size: 1.1rem; }
+    h5 { font-size: 1rem; }
+    h6 { font-size: 0.9rem; }
+}
+
+/* 태블릿 - 768px ~ 1023px */
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+    html {
+        font-size: 15px;
+    }
+    
+    .container,
+    .container-fluid {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    
+    /* 버튼 최적화는 common-buttons.css에서 관리됨 */
+    
+    .table th,
+    .table td {
+        padding: 6px;
+    }
+}
+
+/* 데스크톱 - 1024px 이상 */
+@media screen and (min-width: 1024px) {
+    html {
+        font-size: 16px;
+    }
+    
+    .container,
+    .container-fluid {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+    
+    /* 버튼 최적화는 common-buttons.css에서 관리됨 */
+    
+    .table th,
+    .table td {
+        padding: 8px;
+    }
+}
+
+/* ==========================================================================
+   고해상도 디스플레이 지원
+   ========================================================================== */
+
+/* Retina 디스플레이 */
+@media screen and (-webkit-min-device-pixel-ratio: 2),
+       screen and (min-resolution: 192dpi) {
+    /* 고해상도 이미지 최적화 */
+    img {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+    }
+}
+
+/* ==========================================================================
+   인쇄 스타일
+   ========================================================================== */
+
+@media print {
+    * {
+        background: transparent !important;
+        color: black !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+    
+    a,
+    a:visited {
+        text-decoration: underline;
+    }
+    
+    a[href]:after {
+        content: " (" attr(href) ")";
+    }
+    
+    .btn,
+    .button {
+        border: 1px solid #000;
+    }
+    
+    .no-print {
+        display: none !important;
+    }
+}
+
+/* ==========================================================================
+   접근성 개선
+   ========================================================================== */
+
+/* 고대비 모드 지원 */
+@media (prefers-contrast: high) {
+    .btn-common {
+        border: 2px solid currentColor;
+    }
+    
+    .table th {
+        background-color: #000;
+        color: #fff;
+    }
+}
+
+/* 애니메이션 감소 설정 */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ==========================================================================
+   IE 호환성
+   ========================================================================== */
+
+/* IE 10+ */
+@media screen and (-ms-high-contrast: active), (-ms-high-contrast: none) {
+    .container {
+        max-width: 100%;
+    }
+    
+    .btn-common {
+        display: inline-block;
+        zoom: 1;
+    }
+}
+
+/* ==========================================================================
+   유틸리티 클래스
+   ========================================================================== */
+
+/* 반응형 숨김/표시 */
+.hidden-mobile {
+    display: block;
+}
+
+.hidden-tablet {
+    display: block;
+}
+
+.hidden-desktop {
+    display: none;
+}
+
+@media screen and (max-width: 767px) {
+    .hidden-mobile {
+        display: none !important;
+    }
+    
+    .visible-mobile {
+        display: block !important;
+    }
+}
+
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+    .hidden-tablet {
+        display: none !important;
+    }
+    
+    .visible-tablet {
+        display: block !important;
+    }
+}
+
+@media screen and (min-width: 1024px) {
+    .hidden-desktop {
+        display: none !important;
+    }
+    
+    .visible-desktop {
+        display: block !important;
+    }
+}
+
+/* 텍스트 정렬 */
+.text-center-mobile {
+    text-align: left;
+}
+
+@media screen and (max-width: 767px) {
+    .text-center-mobile {
+        text-align: center;
+    }
+}
+
+/* 여백 조정 */
+.mobile-padding {
+    padding: 10px;
+}
+
+@media screen and (min-width: 768px) {
+    .mobile-padding {
+        padding: 20px;
+    }
+}
+
+/* ==========================================================================
+   성능 최적화
+   ========================================================================== */
+
+/* GPU 가속 활성화 */
+.gpu-accelerated {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+}
+
+/* 스크롤 최적화 */
+.smooth-scroll {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 선택 방지 */
+.no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* ==========================================================================
+   디버깅 도구 (개발 환경에서만 사용)
+   ========================================================================== */
+
+@media screen and (max-width: 767px) {
+    .debug-mobile::before {
+        content: "MOBILE";
+        position: fixed;
+        top: 0;
+        right: 0;
+        background: red;
+        color: white;
+        padding: 2px 5px;
+        font-size: 10px;
+        z-index: 9999;
+    }
+}
+
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+    .debug-tablet::before {
+        content: "TABLET";
+        position: fixed;
+        top: 0;
+        right: 0;
+        background: blue;
+        color: white;
+        padding: 2px 5px;
+        font-size: 10px;
+        z-index: 9999;
+    }
+}
+
+@media screen and (min-width: 1024px) {
+    .debug-desktop::before {
+        content: "DESKTOP";
+        position: fixed;
+        top: 0;
+        right: 0;
+        background: green;
+        color: white;
+        padding: 2px 5px;
+        font-size: 10px;
+        z-index: 9999;
+    }
+}

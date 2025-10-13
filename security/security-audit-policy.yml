@@ -1,0 +1,310 @@
+# HnT Sensor API 보안 감사 정책
+# 작성일: 2025-09-26
+# 목적: 보안 감사, 취약점 스캔, 침투 테스트 정책 정의
+
+# 보안 감사 정책
+security_audit:
+  # 일일 보안 감사
+  daily_audit:
+    enabled: true
+    schedule: "0 0 3 * * ?"  # 매일 새벽 3시
+    retention_days: 90
+    notification: true
+    
+  # 주간 보안 감사
+  weekly_audit:
+    enabled: true
+    schedule: "0 0 2 * * SUN"  # 매주 일요일 새벽 2시
+    retention_days: 365
+    notification: true
+    
+  # 월간 보안 감사
+  monthly_audit:
+    enabled: true
+    schedule: "0 0 1 1 * ?"  # 매월 1일 새벽 1시
+    retention_days: 2555  # 7년
+    notification: true
+
+# 취약점 스캔 정책
+vulnerability_scanning:
+  # 의존성 취약점 스캔
+  dependency_scan:
+    enabled: true
+    schedule: "0 0 4 * * ?"  # 매일 새벽 4시
+    tools:
+      - "OWASP Dependency Check"
+      - "Snyk"
+    severity_threshold: "MEDIUM"
+    
+  # 코드 취약점 스캔
+  code_scan:
+    enabled: true
+    schedule: "0 0 5 * * ?"  # 매일 새벽 5시
+    tools:
+      - "SonarQube"
+      - "SpotBugs"
+      - "PMD"
+    severity_threshold: "HIGH"
+    
+  # 설정 취약점 스캔
+  config_scan:
+    enabled: true
+    schedule: "0 0 6 * * ?"  # 매일 새벽 6시
+    tools:
+      - "Lynis"
+      - "OpenVAS"
+    severity_threshold: "MEDIUM"
+
+# 침투 테스트 정책
+penetration_testing:
+  # 자동 침투 테스트
+  automated_testing:
+    enabled: true
+    schedule: "0 0 7 * * SUN"  # 매주 일요일 새벽 7시
+    tools:
+      - "OWASP ZAP"
+      - "Nessus"
+      - "Burp Suite"
+    scope:
+      - "웹 애플리케이션"
+      - "API 엔드포인트"
+      - "인증 시스템"
+      
+  # 수동 침투 테스트
+  manual_testing:
+    enabled: false
+    schedule: "quarterly"  # 분기별
+    scope:
+      - "전체 시스템"
+      - "네트워크 인프라"
+      - "데이터베이스"
+    team: "외부 보안 전문가"
+
+# 보안 이벤트 모니터링
+security_monitoring:
+  # 실시간 모니터링
+  real_time_monitoring:
+    enabled: true
+    events:
+      - "FAILED_LOGIN"
+      - "SUSPICIOUS_ACTIVITY"
+      - "UNAUTHORIZED_ACCESS"
+      - "DATA_BREACH_ATTEMPT"
+      - "MALWARE_DETECTION"
+      
+  # 로그 분석
+  log_analysis:
+    enabled: true
+    sources:
+      - "application_logs"
+      - "access_logs"
+      - "error_logs"
+      - "security_logs"
+    patterns:
+      - "SQL_INJECTION"
+      - "XSS_ATTACK"
+      - "CSRF_ATTACK"
+      - "BRUTE_FORCE"
+      - "PRIVILEGE_ESCALATION"
+
+# 보안 알림 설정
+security_notifications:
+  # 즉시 알림 (긴급)
+  immediate_alerts:
+    events:
+      - "CRITICAL_VULNERABILITY"
+      - "DATA_BREACH"
+      - "UNAUTHORIZED_ACCESS"
+      - "MALWARE_DETECTION"
+    channels:
+      - "email"
+      - "slack"
+      - "sms"
+    escalation_time: "5 minutes"
+    
+  # 일일 알림
+  daily_alerts:
+    events:
+      - "HIGH_VULNERABILITY"
+      - "FAILED_LOGIN_SPIKE"
+      - "SUSPICIOUS_ACTIVITY"
+    channels:
+      - "email"
+      - "slack"
+    time: "09:00"
+    
+  # 주간 알림
+  weekly_alerts:
+    events:
+      - "SECURITY_AUDIT_SUMMARY"
+      - "VULNERABILITY_SCAN_RESULTS"
+      - "COMPLIANCE_STATUS"
+    channels:
+      - "email"
+    day: "MONDAY"
+    time: "09:00"
+
+# 보안 정책 위반 처리
+policy_violations:
+  # 로그인 실패 처리
+  failed_login:
+    threshold: 5
+    lockout_duration: "30 minutes"
+    escalation_threshold: 10
+    escalation_action: "ACCOUNT_LOCK"
+    
+  # 의심스러운 활동 처리
+  suspicious_activity:
+    threshold: 10
+    action: "INVESTIGATE"
+    escalation_threshold: 20
+    escalation_action: "BLOCK_IP"
+    
+  # 취약점 발견 처리
+  vulnerability_discovery:
+    critical: "IMMEDIATE_PATCH"
+    high: "PATCH_WITHIN_24H"
+    medium: "PATCH_WITHIN_7D"
+    low: "PATCH_WITHIN_30D"
+
+# 보안 준수성 검사
+compliance_checks:
+  # OWASP Top 10 검사
+  owasp_top10:
+    enabled: true
+    schedule: "weekly"
+    checks:
+      - "A01_BROKEN_ACCESS_CONTROL"
+      - "A02_CRYPTOGRAPHIC_FAILURES"
+      - "A03_INJECTION"
+      - "A04_INSECURE_DESIGN"
+      - "A05_SECURITY_MISCONFIGURATION"
+      - "A06_VULNERABLE_COMPONENTS"
+      - "A07_IDENTIFICATION_FAILURES"
+      - "A08_SOFTWARE_DATA_INTEGRITY"
+      - "A09_LOGGING_MONITORING_FAILURES"
+      - "A10_SSRF"
+      
+  # GDPR 준수성 검사
+  gdpr_compliance:
+    enabled: true
+    schedule: "monthly"
+    checks:
+      - "DATA_ENCRYPTION"
+      - "DATA_ANONYMIZATION"
+      - "CONSENT_MANAGEMENT"
+      - "DATA_RETENTION"
+      - "DATA_PORTABILITY"
+      - "RIGHT_TO_BE_FORGOTTEN"
+      
+  # PCI DSS 준수성 검사
+  pci_dss_compliance:
+    enabled: false
+    schedule: "quarterly"
+    checks:
+      - "SECURE_NETWORK"
+      - "VULNERABILITY_MANAGEMENT"
+      - "ACCESS_CONTROL"
+      - "ENCRYPTION"
+      - "SECURITY_MONITORING"
+      - "INCIDENT_RESPONSE"
+
+# 보안 교육 및 훈련
+security_training:
+  # 개발자 보안 교육
+  developer_training:
+    enabled: true
+    frequency: "quarterly"
+    topics:
+      - "Secure Coding Practices"
+      - "OWASP Top 10"
+      - "Threat Modeling"
+      - "Code Review"
+      
+  # 관리자 보안 교육
+  admin_training:
+    enabled: true
+    frequency: "monthly"
+    topics:
+      - "Security Policies"
+      - "Incident Response"
+      - "Vulnerability Management"
+      - "Compliance Requirements"
+
+# 보안 인시던트 대응
+incident_response:
+  # 인시던트 분류
+  incident_classification:
+    critical:
+      response_time: "15 minutes"
+      escalation: "immediate"
+      team: "security_team"
+    high:
+      response_time: "1 hour"
+      escalation: "within_2_hours"
+      team: "security_team"
+    medium:
+      response_time: "4 hours"
+      escalation: "within_8_hours"
+      team: "development_team"
+    low:
+      response_time: "24 hours"
+      escalation: "within_48_hours"
+      team: "development_team"
+      
+  # 대응 절차
+  response_procedures:
+    step1: "인시던트 확인 및 분류"
+    step2: "영향 범위 평가"
+    step3: "임시 조치 적용"
+    step4: "근본 원인 분석"
+    step5: "영구 수정 사항 적용"
+    step6: "사후 검토 및 개선"
+
+# 보안 메트릭 및 KPI
+security_metrics:
+  # 보안 지표
+  key_metrics:
+    - "평균 취약점 수정 시간"
+    - "보안 인시던트 발생 빈도"
+    - "침투 테스트 통과율"
+    - "보안 교육 완료율"
+    - "컴플라이언스 준수율"
+    
+  # 목표값
+  target_values:
+    critical_vulnerability_patch_time: "24 hours"
+    high_vulnerability_patch_time: "7 days"
+    security_incident_frequency: "< 1 per month"
+    penetration_test_pass_rate: "> 95%"
+    security_training_completion: "> 90%"
+    compliance_rate: "> 98%"
+
+# 보안 도구 통합
+security_tools:
+  # 정적 분석 도구
+  static_analysis:
+    - "SonarQube"
+    - "SpotBugs"
+    - "PMD"
+    - "Checkstyle"
+    
+  # 동적 분석 도구
+  dynamic_analysis:
+    - "OWASP ZAP"
+    - "Burp Suite"
+    - "Nessus"
+    - "OpenVAS"
+    
+  # 의존성 분석 도구
+  dependency_analysis:
+    - "OWASP Dependency Check"
+    - "Snyk"
+    - "WhiteSource"
+    
+  # 침투 테스트 도구
+  penetration_testing:
+    - "Metasploit"
+    - "Nmap"
+    - "Wireshark"
+    - "Aircrack-ng"

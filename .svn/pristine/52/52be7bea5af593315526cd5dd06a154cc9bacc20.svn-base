@@ -1,0 +1,220 @@
+package com.andrew.hnt.api.mqtt.common;
+
+import com.andrew.hnt.api.service.impl.MqttServiceImpl;
+import lombok.SneakyThrows;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
+import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
+
+public class MQTT implements MqttCallback {
+
+    private String Broker;
+    private String Client_ID;
+    private String UserName;
+    private String Password;
+    private MqttAsyncClient Client;
+    private MqttMessage message;
+    private MemoryPersistence persistence;
+    private MqttConnectOptions connOpts;
+    private String topic;
+
+    private String MqttServer1 = "tcp://iot.hntsolution.co.kr:1883";
+    private String MqttServer2 = "";
+    private String client_id = "";
+    private String userName = "hnt1";
+    private String password = "abcde";
+    private String topicStr = "#";
+    private String msg = "";
+    private String readMsg = "";
+
+	private MqttServiceImpl mqttService;
+	
+    	private String receiveMsg;
+	private String receiveTopic;
+	private volatile boolean hasNewMessage = false;  // 새 메시지 플래그 추가
+
+	public MQTT(String broker, String client_id, String userName, String password) {
+		this.Broker = broker;
+		this.Client_ID = client_id;
+		this.UserName = userName;
+		this.Password = password;
+	}
+	
+	public void init(String topic, String gu) {
+		this.topic = topic;
+		this.persistence = new MemoryPersistence();
+		
+		try {
+			Client = new MqttAsyncClient(this.Broker, this.Client_ID, this.persistence);
+
+			if(null != Client) {
+				if(!Client.isConnected()) {
+					Client.setCallback(this);
+					connOpts = new MqttConnectOptions();
+					connOpts.setUserName(this.UserName);
+					connOpts.setPassword(this.Password.toCharArray());
+					connOpts.setCleanSession(true);
+                    // 서버와의 연결 유지 (초)
+                    connOpts.setKeepAliveInterval(60);
+					connOpts.setMqttVersion(4);
+				}
+			} else {
+				Client.setCallback(this);
+				connOpts = new MqttConnectOptions();
+				connOpts.setUserName(this.UserName);
+				connOpts.setPassword(this.Password.toCharArray());
+                connOpts.setCleanSession(true);
+                connOpts.setKeepAliveInterval(60);
+				connOpts.setMqttVersion(4);
+			}
+        Client.connect(connOpts);
+
+			message = new MqttMessage();
+			
+		} catch(MqttException mqe) {
+			mqe.printStackTrace();
+		}
+		
+		try {
+			Thread.sleep(1000);
+		} catch(InterruptedException ite) {
+			ite.printStackTrace();
+		}
+
+        if(Client.isConnected() && "Y".equals(gu)) {
+            // 구독이 필요한 경우에만 구독 수행
+            this.subscribe(0);
+        }
+	}
+	
+	public void disconnect() {
+		try {
+			Client.disconnect();
+			Client.close();
+		} catch(MqttException mqe) {
+			mqe.printStackTrace();
+		}
+	}
+	
+	public void publish(String msg, int qos, String sendTopic) {
+		message.setQos(qos);
+		message.setPayload(msg.getBytes());
+
+		if(Client.isConnected()) {
+			try {
+				if (null != sendTopic && !"".equals(sendTopic)) {
+					Client.publish(sendTopic, message);
+				} else {
+					Client.publish(topic, message);
+				}
+			} catch (MqttPersistenceException mpe) {
+				mpe.printStackTrace();
+			} catch (MqttException mqe) {
+				mqe.printStackTrace();
+			}
+		}
+	}
+	
+	public void subscribe(int qos) {
+		try {
+			Client.subscribe(topic, qos);
+		} catch(MqttException mqe) {
+			System.out.println("===== Error : " + mqe.getMessage());
+			mqe.printStackTrace();
+		}
+	}
+	
+	public String getTopic() {
+		return topic;
+	}
+	
+	@Override
+	public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
+		// MqttService는 Spring Bean으로 주입받아야 하므로 여기서는 직접 호출하지 않음
+		// 대신 메시지를 저장하고 나중에 처리
+		if(mqttMessage != null && mqttMessage.getPayload() != null && mqttMessage.getPayload().length > 0) {
+			this.receiveMsg = new String(mqttMessage.getPayload());
+			this.receiveTopic = topic;
+			this.hasNewMessage = true;  // 새 메시지 플래그 설정
+			
+			if(this.receiveMsg.contains("setres")) {
+				this.setMsg(this.receiveMsg, topic);
+			}
+		}
+	}
+	
+	public void setMsg(String msg, String rcvTopic) {
+		if(msg != null && !msg.trim().isEmpty()) {
+			this.receiveMsg = msg;
+			this.receiveTopic = rcvTopic;
+			this.hasNewMessage = true;  // 플래그 설정
+		}
+	}
+	
+	public String getMsg() {
+		return this.receiveMsg;
+	}
+
+	public String getRcvTopic() {
+		return this.receiveTopic;
+	}
+	
+	public boolean hasNewMessage() {
+		return this.hasNewMessage;
+	}
+	
+	public void clearNewMessageFlag() {
+		this.hasNewMessage = false;
+	}
+	
+	@SneakyThrows
+	@Override
+	public void connectionLost(Throwable cause) {
+        System.out.println("===== Lost Connection - " + (cause != null ? cause.getMessage() : "unknown"));
+        try {
+            if (Client != null) {
+                Client.disconnectForcibly(1000, 1000);
+            }
+        } catch (Exception ignore) {}
+
+        // 지수 백오프로 재연결 시도 (최대 30초)
+        int attempt = 0;
+        while (true) {
+            try {
+                Thread.sleep(Math.min(1000 * (int)Math.pow(2, Math.max(0, attempt - 1)), 30000));
+                Client = new MqttAsyncClient(this.Broker, this.Client_ID, this.persistence);
+                Client.setCallback(this);
+                connOpts = new MqttConnectOptions();
+                connOpts.setUserName(this.UserName);
+                connOpts.setPassword(this.Password.toCharArray());
+                connOpts.setCleanSession(true);
+                connOpts.setKeepAliveInterval(60);
+                connOpts.setMqttVersion(4);
+                Client.connect(connOpts).waitForCompletion();
+                if (this.topic != null && !this.topic.isEmpty()) {
+                    this.subscribe(0);
+                }
+                System.out.println("===== MQTT reconnect success");
+                break;
+            } catch (Exception e) {
+                attempt++;
+                System.out.println("===== MQTT reconnect failed (attempt=" + attempt + "): " + e.getMessage());
+                if (attempt > 10) {
+                    System.out.println("===== MQTT reconnect give up");
+                    break;
+                }
+            }
+        }
+        message = new MqttMessage();
+	}
+	
+	@Override
+	public void deliveryComplete(IMqttDeliveryToken iMqttDeliveryToken) {
+	}
+
+}

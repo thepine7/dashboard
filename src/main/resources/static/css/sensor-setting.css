@@ -1,0 +1,262 @@
+/**
+ * 장치설정페이지 전용 CSS
+ * HnT Sensor API 프로젝트
+ */
+
+/* 상태표시등 스타일은 common-buttons.css로 이동됨 */
+
+/* 현재온도 폰트 크기 조정 (중복 제거) */
+@media (max-width: 768px) {
+    #curTemp,
+    #setTemp {
+        font-size: 20px !important;
+        line-height: 1.1 !important;
+    }
+}
+
+/* 장치설정페이지 전용 스타일 */
+.sensor-setting-container {
+    background-color: #333333;
+    color: #f0f8ff;
+}
+
+.device-info-panel {
+    background-color: #d9edf7;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    color: #222;
+}
+
+.device-info-panel .info-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.device-info-panel .info-content {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.temperature-display {
+    font-size: 30px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.current-temp {
+    color: #c9302c;
+}
+
+.set-temp {
+    color: #3c763d;
+}
+
+.status-table {
+    background-color: #c7254e;
+    color: #f0f8ff;
+    font-size: 10pt;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.defrost-button-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding-right: 12px;
+}
+
+.defrost-btn {
+    font-size: 13px;
+    width: 140px;
+}
+
+/* 버튼 스타일은 common-buttons.css로 이동됨 */
+
+/* 파라미터 설정 테이블 */
+.parameter-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.parameter-table th,
+.parameter-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.parameter-table th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+.parameter-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.parameter-table tr:hover {
+    background-color: #f5f5f5;
+}
+
+/* 알람 설정 섹션 */
+.alarm-section {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.alarm-section h4 {
+    color: #495057;
+    margin-bottom: 15px;
+}
+
+.alarm-form-group {
+    margin-bottom: 15px;
+}
+
+.alarm-form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #495057;
+}
+
+.alarm-form-group input,
+.alarm-form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.alarm-form-group input:focus,
+.alarm-form-group select:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* 반응형 디자인은 responsive-common.css에서 관리됨 */
+
+/* 장치설정페이지 전용 반응형 스타일 */
+@media screen and (max-width: 767px) {
+    .defrost-button-container {
+        flex-direction: row;
+        gap: 4px;
+        justify-content: center;
+    }
+    
+    .parameter-table {
+        font-size: 12px;
+        overflow-x: auto; /* 가로 스크롤 */
+        display: block;
+        white-space: nowrap;
+    }
+    
+    .parameter-table th,
+    .parameter-table td {
+        padding: 4px;
+        min-width: 80px;
+    }
+    
+    /* 온도 표시 최적화 */
+    .temperature-display {
+        font-size: 24px;
+        text-align: center;
+    }
+    
+    /* 장치 정보 패널 최적화 */
+    .device-info-panel {
+        padding: 8px;
+        margin-bottom: 10px;
+    }
+    
+    .device-info-panel .info-content {
+        font-size: 11px;
+    }
+}
+
+/* 소형 모바일 - 320px ~ 480px */
+@media screen and (max-width: 480px) {
+    .defrost-button-container {
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+    }
+    
+    .temperature-display {
+        font-size: 20px;
+    }
+    
+    /* 파라미터 테이블 최적화 */
+    .parameter-table {
+        font-size: 10px;
+    }
+    
+    .parameter-table th,
+    .parameter-table td {
+        padding: 2px;
+        min-width: 60px;
+    }
+    
+    /* 알람 섹션 최적화 */
+    .alarm-section {
+        padding: 10px;
+        margin-top: 15px;
+    }
+    
+    .alarm-form-group input,
+    .alarm-form-group select {
+        font-size: 12px;
+        padding: 6px;
+    }
+}
+
+/* 태블릿 - 768px ~ 1023px */
+@media screen and (min-width: 768px) and (max-width: 1023px) {
+    .defrost-button-container {
+        flex-direction: row;
+        gap: 6px;
+    }
+    
+    .parameter-table {
+        font-size: 13px;
+    }
+    
+    .parameter-table th,
+    .parameter-table td {
+        padding: 6px;
+    }
+    
+    .temperature-display {
+        font-size: 28px;
+    }
+}
+
+/* 데스크톱 - 1024px 이상 */
+@media screen and (min-width: 1024px) {
+    .defrost-button-container {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .parameter-table {
+        font-size: 14px;
+    }
+    
+    .parameter-table th,
+    .parameter-table td {
+        padding: 8px;
+    }
+    
+    .temperature-display {
+        font-size: 30px;
+    }
+}

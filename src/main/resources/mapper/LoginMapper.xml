@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.andrew.hnt.api.mapper.LoginMapper">
+
+    <!-- 최적화된 사용자 목록 조회 - 공통 SQL 적용 -->
+    <select id="getUserList" parameterType="java.util.HashMap" resultType="com.andrew.hnt.api.model.UserInfo">
+        select
+            <include refid="com.andrew.hnt.api.mapper.CommonSql.userBasicColumns" />
+        from hnt_user
+        where <include refid="com.andrew.hnt.api.mapper.CommonSql.notDeletedCondition" />
+        <include refid="com.andrew.hnt.api.mapper.CommonSql.orderByUserNoDesc" />
+        <include refid="com.andrew.hnt.api.mapper.CommonSql.defaultLimit" />
+    </select>
+
+    <!-- 최적화된 사용자 목록 조회 (활동 상태 포함) - N+1 쿼리 문제 해결 -->
+    <select id="getUserListWithActivityStatus" parameterType="java.util.HashMap" resultType="com.andrew.hnt.api.model.UserInfo">
+        select
+            u.no
+            , u.user_nm as userNm
+            , u.user_tel as userTel
+            , u.user_email as userEmail
+            , u.user_id as userId
+            , u.user_pass as userPass
+            , u.user_grade as userGrade
+            , u.use_yn as useYn
+            , u.del_yn as delYn
+            , u.last_login_dtm as loginDtm
+            , u.logout_dtm as logoutDtm
+            , u.token
+            , case 
+                when u.user_id = #{currentUserId} then 'Y'
+                when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then 'Y'
+                else 'N'
+              end as activityStatus
+        from hnt_user u
+        where u.del_yn = 'N'
+        order by u.no desc
+        limit 100
+    </select>
+
+    <!-- 최적화된 부계정 목록 조회 - JOIN 최적화 -->
+    <select id="getSubUserList" parameterType="java.lang.String" resultType="com.andrew.hnt.api.model.UserInfo">
+        select distinct
+            u.no
+            , u.user_nm as userNm
+            , u.user_tel as userTel
+            , u.user_email as userEmail
+            , u.user_id as userId
+            , u.user_pass as userPass
+            , u.user_grade as userGrade
+            , u.use_yn as useYn
+            , u.del_yn as delYn
+            , u.last_login_dtm as loginDtm
+            , u.logout_dtm as logoutDtm
+        from hnt_user u
+        left join hnt_sensor_info s on u.user_id = s.user_id and s.sensor_id = #{userId}
+        where u.del_yn = 'N'
+        and u.user_grade = 'B'
+        and (s.sensor_id = #{userId} or s.sensor_id is null)
+        order by u.no desc
+        limit 100
+    </select>
+
+    <!-- 최적화된 사용자 및 부계정 목록 조회 - JOIN 최적화 -->
+    <select id="getUserAndSubUserList" parameterType="java.lang.String" resultType="com.andrew.hnt.api.model.UserInfo">
+        select distinct
+            u.no
+            , u.user_nm as userNm
+            , u.user_tel as userTel
+            , u.user_email as userEmail
+            , u.user_id as userId
+            , u.user_pass as userPass
+            , u.user_grade as userGrade
+            , u.use_yn as useYn
+            , u.del_yn as delYn
+            , u.last_login_dtm as loginDtm
+            , u.logout_dtm as logoutDtm
+        from hnt_user u
+        left join hnt_sensor_info s on u.user_id = s.user_id and s.sensor_id = #{userId}
+        where u.del_yn = 'N'
+        and (u.user_id = #{userId} or (u.user_grade = 'B' and (s.sensor_id = #{userId} or s.sensor_id is null)))
+        order by u.no desc
+        limit 100
+    </select>
+
+    <!-- 최적화된 사용자 및 부계정 목록 조회 (활동 상태 포함) - N+1 쿼리 문제 해결 -->
+    <select id="getUserAndSubUserListWithActivityStatus" parameterType="java.util.HashMap" resultType="com.andrew.hnt.api.model.UserInfo">
+        select distinct
+            u.no
+            , u.user_nm as userNm
+            , u.user_tel as userTel
+            , u.user_email as userEmail
+            , u.user_id as userId
+            , u.user_pass as userPass
+            , u.user_grade as userGrade
+            , u.use_yn as useYn
+            , u.del_yn as delYn
+            , u.last_login_dtm as loginDtm
+            , u.logout_dtm as logoutDtm
+            , u.token
+            , case 
+                when u.user_id = #{currentUserId} then 'Y'
+                when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then 'Y'
+                else 'N'
+              end as activityStatus
+        from hnt_user u
+        left join hnt_sensor_info s on u.user_id = s.user_id and s.sensor_id = #{userId}
+        where u.del_yn = 'N'
+        and (u.user_id = #{userId} or (u.user_grade = 'B' and (s.sensor_id = #{userId} or s.sensor_id is null)))
+        order by u.no desc
+        limit 100
+    </select>
+
+    <select id="getUserInfo" parameterType="com.andrew.hnt.api.model.LoginVO" resultType="com.andrew.hnt.api.model.UserInfo">
+        select
+            user_id as userId,
+            user_nm as userNm,
+            user_tel as userTel,
+            user_email as userEmail,
+            user_grade as userGrade,
+            use_yn as useYn,
+            del_yn as delYn,
+            last_login_dtm as loginDtm,
+            logout_dtm as logoutDtm,
+            token
+        from hnt_user
+        where user_id = #{userId}
+        and user_pass = #{userPass}
+        and del_yn = 'N'
+    </select>
+
+    <select id="getUserInfoByUserId" parameterType="java.lang.String" resultType="com.andrew.hnt.api.model.UserInfo">
+        select
+            user_id as userId,
+            user_nm as userNm,
+            user_tel as userTel,
+            user_email as userEmail,
+            user_grade as userGrade,
+            use_yn as useYn,
+            del_yn as delYn,
+            last_login_dtm as loginDtm,
+            logout_dtm as logoutDtm,
+            token
+        from hnt_user
+        where user_id = #{userId}
+        and del_yn = 'N'
+    </select>
+
+    <!-- 최적화된 메인 ID 조회 -->
+    <select id="getMainId" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select max(sensor_id) as mainId
+        from hnt_sensor_info
+        where user_id = #{userId}
+        limit 1
+    </select>
+
+    <insert id="insertUser" parameterType="com.andrew.hnt.api.model.UserInfo">
+        insert into hnt_user
+            (user_nm, user_tel, user_email, user_id, user_pass, user_grade, use_yn, del_yn, inst_id, inst_dtm, mdf_id, mdf_dtm, token)
+        values
+            (#{userNm}, #{userTel}, #{userEmail}, #{userId}, #{userPass}, #{userGrade}, #{useYn}, #{delYn}, #{instId}, now(), #{mdfId}, now(), #{token})
+    </insert>
+
+    <update id="updateUserInfo" parameterType="com.andrew.hnt.api.model.LoginVO">
+        update hnt_user set
+            token = #{token}
+        where user_id = #{userId}
+    </update>
+
+    <update id="updateLoginDtm" parameterType="com.andrew.hnt.api.model.LoginVO">
+        update hnt_user set
+            last_login_dtm = 'Y'
+            , logout_dtm = 'N'
+            , mdf_dtm = now()
+        where user_id = #{userId}
+    </update>
+    
+    <update id="updateLastLoginTime" parameterType="map">
+        update hnt_user set
+            login_dtm = #{loginDtm}
+            , mdf_dtm = now()
+        where user_id = #{userId}
+    </update>
+
+    <update id="updateLogoutDtm" parameterType="com.andrew.hnt.api.model.LoginVO">
+        update hnt_user set
+            logout_dtm = 'Y'
+            , last_login_dtm = 'N'
+        where user_id = #{userId}
+    </update>
+
+    <update id="removeLogoutDtm" parameterType="com.andrew.hnt.api.model.LoginVO">
+        update hnt_user set
+            logout_dtm = 'N'
+        where user_id = #{userId}
+    </update>
+
+    <!-- 사용자 활동 상태 업데이트 -->
+    <update id="updateUserActivityStatus" parameterType="java.util.HashMap">
+        update hnt_user set
+            last_login_dtm = #{activityStatus}
+            , logout_dtm = #{focusStatus}
+            , mdf_dtm = now()
+        where user_id = #{userId}
+    </update>
+
+    <!-- 사용자 포커스 상태 업데이트 -->
+    <update id="updateUserFocusStatus" parameterType="java.util.HashMap">
+        update hnt_user set
+            logout_dtm = #{focusStatus}
+            , mdf_dtm = now()
+        where user_id = #{userId}
+    </update>
+
+    <update id="resetAllUserActivityStatus">
+        UPDATE hnt_user 
+        SET 
+            last_login_dtm = 'N',
+            logout_dtm = 'N',
+            mdf_dtm = NOW()
+        WHERE del_yn = 'N'
+    </update>
+    
+    <update id="resetSpecificUserActivityStatus">
+        UPDATE hnt_user 
+        SET 
+            last_login_dtm = 'N',
+            logout_dtm = 'N',
+            mdf_dtm = NOW()
+        WHERE user_id = #{userId} AND del_yn = 'N'
+    </update>
+
+    <!-- 세션 타임아웃으로 인한 비활성 사용자 업데이트 -->
+    <update id="updateInactiveUsersByTimeout">
+        UPDATE hnt_user 
+        SET 
+            last_login_dtm = 'N',
+            logout_dtm = 'Y',
+            mdf_dtm = NOW()
+        WHERE 1=1 
+        AND del_yn = 'N'
+        AND last_login_dtm = 'Y'
+        AND logout_dtm = 'N'
+        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 120
+    </update>
+
+    <!-- 타임아웃 대상 사용자 조회 (로그용) -->
+    <select id="getTimeoutUsers" resultType="com.andrew.hnt.api.model.UserInfo">
+        SELECT 
+            user_id as userId,
+            user_nm as userNm,
+            mdf_dtm
+        FROM hnt_user 
+        WHERE 1=1 
+        AND del_yn = 'N'
+        AND last_login_dtm = 'Y'
+        AND logout_dtm = 'N'
+        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 120
+    </select>
+
+    <!-- 특정 사용자 타임아웃 처리 -->
+    <update id="updateSpecificUserTimeout" parameterType="java.util.HashMap">
+        UPDATE hnt_user 
+        SET 
+            last_login_dtm = 'N',
+            logout_dtm = 'Y',
+            mdf_dtm = NOW()
+        WHERE user_id = #{userId}
+ 
+        AND del_yn = 'N'
+        AND last_login_dtm = 'Y'
+        AND logout_dtm = 'N'
+        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 120
+    </update>
+
+    <delete id="deleteAlarm" parameterType="com.andrew.hnt.api.model.LoginVO">
+        delete from hnt_alarm
+        where user_id = #{userId}
+        and (urgent_yn = 'N' or urgent_yn = '')
+    </delete>
+
+    <!-- 최적화된 부계정의 메인 사용자 ID 조회 -->
+    <select id="getMainUserIdForSubUser" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select sensor_id
+        from hnt_sensor_info
+        where user_id = #{subUserId}
+        limit 1
+    </select>
+
+</mapper>

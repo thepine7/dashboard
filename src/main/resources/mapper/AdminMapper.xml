@@ -1,0 +1,658 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.andrew.hnt.api.mapper.AdminMapper">
+
+    <select id="getSensorInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+		    user_id
+		    , sensor_id
+		    , sensor_uuid
+            , sensor_name
+		    , sensor_loc
+		    , sensor_type
+		    , sensor_gu
+            , chart_type
+		from hnt_sensor_info
+		where 1 = 1
+		and user_id = #{userId}
+		<if test= "sensorUuid != null and sensorUuid != ''">
+		    and sensor_uuid = #{sensorUuid}
+		</if>
+    </select>
+
+    <select id="getSensorInfoByUuid" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+		    user_id
+		    , sensor_id
+		    , sensor_uuid
+            , sensor_name
+		    , sensor_loc
+		    , sensor_type
+		    , sensor_gu
+            , chart_type
+		from hnt_sensor_info
+		where sensor_uuid = #{sensorUuid}
+		<if test="userId != null and userId != ''">
+		and user_id = #{userId}
+		</if>
+		limit 1
+    </select>
+
+	<select id="getSensorList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			user_id
+			, sensor_id
+			, sensor_uuid
+		    , sensor_name
+			, sensor_loc
+			, sensor_type
+			, sensor_gu
+			, chart_type
+		from hnt_sensor_info
+		where 1 = 1
+		and user_id = #{userId}
+	</select>
+
+	<!-- 특정 센서 ID로 센서 리스트 조회 -->
+	<select id="getSensorListBySensorId" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			user_id
+			, sensor_id
+			, sensor_uuid
+		    , sensor_name
+			, sensor_loc
+			, sensor_type
+			, sensor_gu
+			, chart_type
+		from hnt_sensor_info
+		where 1 = 1
+		and user_id = #{userId}
+		and sensor_id = #{sensorId}
+	</select>
+
+	<!-- 부계정 센서 리스트 조회 (UNION 최적화) -->
+	<select id="getSubSensorList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		-- 주계정이 소유한 센서 (부계정이 공유 사용)
+		SELECT
+			s.user_id,
+			s.sensor_id,
+			s.sensor_uuid,
+			s.sensor_name,
+			s.sensor_loc,
+			s.sensor_type,
+			s.sensor_gu,
+			s.chart_type
+		FROM hnt_sensor_info s
+		WHERE s.sensor_id = #{mainUserId} 
+			AND s.user_id = s.sensor_id
+		
+		UNION ALL
+		
+		-- 부계정이 직접 소유한 센서
+		SELECT
+			s.user_id,
+			s.sensor_id,
+			s.sensor_uuid,
+			s.sensor_name,
+			s.sensor_loc,
+			s.sensor_type,
+			s.sensor_gu,
+			s.chart_type
+		FROM hnt_sensor_info s
+		WHERE s.user_id = #{subUserId} 
+			AND s.user_id = s.sensor_id
+		
+		ORDER BY sensor_name
+	</select>
+
+	<!-- 사용자 관리에서 주계정의 모든 센서 조회 -->
+	<select id="getUserSensorList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			s.user_id
+			, s.sensor_id
+			, s.sensor_uuid
+			, s.sensor_name
+			, s.sensor_loc
+			, s.sensor_type
+			, s.sensor_gu
+			, s.chart_type
+		from hnt_sensor_info s
+		where s.sensor_id = #{userId}
+		  and s.user_id = s.sensor_id
+	</select>
+
+	<!-- selectSetting 쿼리는 MqttMapper.xml에서 공통 사용 -->
+
+	<select id="selectSensorId" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select sensor_id from hnt_sensor_info
+        where 1 = 1
+        and sensor_uuid = #{sensorUuid}
+        and user_id = sensor_id
+	</select>
+
+	<select id="selectSettingByUuid" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			user_id
+			, sensor_id
+			, sensor_uuid
+			, topic
+			, alarm_yn1
+			, alarm_yn2
+			, alarm_yn3
+			, alarm_yn4
+			, alarm_yn5
+			, set_val1
+			, set_val2
+			, set_val3
+			, set_val4
+			, delay_time1
+			, delay_time2
+			, delay_time3
+			, delay_time4
+			, delay_time5
+			, re_delay_time1
+			, re_delay_time2
+			, re_delay_time3
+			, re_delay_time4
+			, re_delay_time5
+		from hnt_config
+		where sensor_uuid = #{sensorUuid}
+		limit 1
+	</select>
+
+	<insert id="insertSetting" parameterType="java.util.HashMap">
+		insert into hnt_config
+        (user_id, sensor_id, sensor_uuid, topic, alarm_yn1, alarm_yn2, alarm_yn3, alarm_yn4, alarm_yn5, set_val1, set_val2, set_val3, set_val4, delay_time1, delay_time2, delay_time3, delay_time4, delay_time5, re_delay_time1, re_delay_time2, re_delay_time3, re_delay_time4, re_delay_time5, inst_id, inst_dtm, mdf_id, mdf_dtm)
+        values
+        (#{userId}, #{sensorId}, #{sensorUuid}, #{topic}, #{alarmYn1}, #{alarmYn2}, #{alarmYn3}, #{alarmYn4}, #{alarmYn5}, #{setVal1}, #{setVal2}, #{setVal3}, #{setVal4}, #{delayHour1}+#{delayMin1}, #{delayHour2}+#{delayMin2}, #{delayHour3}+#{delayMin3}, #{delayHour4}+#{delayMin4}, #{delayHour5}+#{delayMin5}, #{reDelayHour1}+#{reDelayMin1}, #{reDelayHour2}+#{reDelayMin2}, #{reDelayHour3}+#{reDelayMin3}, #{reDelayHour4}+#{reDelayMin4}, #{reDelayHour5}+#{reDelayMin5}, 'hnt', now(), 'hnt', now())
+	</insert>
+
+	<!-- 최적화된 설정 업데이트 쿼리 - 리팩토링 버전 -->
+	<update id="updateSetting" parameterType="java.util.HashMap">
+		update hnt_config set
+			<include refid="updateAlarmSettings" />
+			<include refid="updateSetValues" />
+			<include refid="updateDelayTimes" />
+			<include refid="updateReDelayTimes" />
+        where sensor_uuid = #{sensorUuid}
+	</update>
+
+	<!-- 알람 설정 업데이트 -->
+	<sql id="updateAlarmSettings">
+		alarm_yn1 = #{alarmYn1}
+		, alarm_yn2 = #{alarmYn2}
+		, alarm_yn3 = #{alarmYn3}
+		, alarm_yn4 = #{alarmYn4}
+		, alarm_yn5 = #{alarmYn5}
+	</sql>
+
+	<!-- 설정값 업데이트 (조건부) -->
+	<sql id="updateSetValues">
+		<if test='setVal1 != null and setVal1 != ""'>
+			, set_val1 = #{setVal1}
+		</if>
+		<if test='setVal2 != null and setVal2 != ""'>
+			, set_val2 = #{setVal2}
+		</if>
+		<if test='setVal3 != null and setVal3 != ""'>
+			, set_val3 = #{setVal3}
+		</if>
+		<if test='setVal4 != null and setVal4 != ""'>
+			, set_val4 = #{setVal4}
+		</if>
+	</sql>
+
+	<!-- 지연시간 업데이트 -->
+	<sql id="updateDelayTimes">
+		, delay_time1 = #{delayHour1}+#{delayMin1}
+		, delay_time2 = #{delayHour2}+#{delayMin2}
+		, delay_time3 = #{delayHour3}+#{delayMin3}
+		, delay_time4 = #{delayHour4}+#{delayMin4}
+		, delay_time5 = #{delayHour5}+#{delayMin5}
+	</sql>
+
+	<!-- 재지연시간 업데이트 -->
+	<sql id="updateReDelayTimes">
+		, re_delay_time1 = #{reDelayHour1}+#{reDelayMin1}
+		, re_delay_time2 = #{reDelayHour2}+#{reDelayMin2}
+		, re_delay_time3 = #{reDelayHour3}+#{reDelayMin3}
+		, re_delay_time4 = #{reDelayHour4}+#{reDelayMin4}
+		, re_delay_time5 = #{reDelayHour5}+#{reDelayMin5}
+	</sql>
+
+	<select id="getTime" resultType="java.util.HashMap">
+		select now() as curTime from dual
+	</select>
+
+	<select id="getNotiInfo" resultType="java.util.HashMap">
+		select
+			 no
+		     ,user_token
+			 , user_id
+			 , sensor_uuid
+			 , alarm_time
+		     , alarm_type
+		     , cur_temp
+		     , in_temp
+		from
+			hnt_alarm
+		where 1  = 1
+		and date_format(alarm_time, '%H%i') = date_format(now(), '%H%i')
+
+	</select>
+
+	<update id="deleteNoti" parameterType="java.util.HashMap">
+        update hnt_alarm set
+            use_yn = 'N'
+		where user_id = #{userId}
+		  and user_token = #{userToken}
+		  and sensor_uuid = #{sensorUuid}
+		  and (urgent_yn != 'Y' or urgent_yn is null)
+	</update>
+
+	<!-- 최적화된 센서 값 조회 - 인덱스 활용 (uuid 우선) -->
+	<select id="getSensorVal" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select sensor_value from hnt_sensor_data
+		where uuid = #{sensorUuid}
+		order by inst_dtm desc
+		limit 1
+	</select>
+
+	<delete id="deleteNoti2" parameterType="java.util.HashMap">
+		delete from hnt_alarm
+        where user_id = #{userId}
+        and sensor_uuid = #{sensorUuid}
+        and alarm_type = #{alarnType}
+	</delete>
+
+	<update id="updateUrgentNoti2" parameterType="java.util.HashMap">
+		update hnt_alarm set
+			use_yn = 'N'
+			, mdf_dtm = now()
+		where user_id = #{userId}
+		  and sensor_uuid = #{sensorUuid}
+		  and urgent_yn = 'Y'
+	</update>
+
+	<delete id="updateNoti" parameterType="java.util.HashMap">
+		delete from hnt_alarm
+		where user_id = #{userId}
+		  and user_token = #{userToken}
+		  and sensor_uuid = #{sensorUuid}
+          and no = #{no}
+	</delete>
+
+	<delete id="deleteDeviceAlarm" parameterType="java.util.HashMap">
+		delete from hnt_alarm
+		where user_id = #{userId}
+		  and sensor_uuid = #{sensorUuid}
+	</delete>
+
+	<delete id="updateUrgentNoti" parameterType="java.util.HashMap">
+		delete from hnt_alarm
+		where user_id = #{userId}
+		  and sensor_uuid = #{sensorUuid}
+		  and alarm_type = #{alarmType}
+		  and urgent_yn = 'Y'
+	</delete>
+
+	<insert id="insertNoti" parameterType="java.util.HashMap">
+		insert into hnt_alarm
+        (user_id, user_token, sensor_uuid, alarm_time, inst_id, inst_dtm, mdf_id, mdf_dtm, use_yn, alarm_type, cur_temp, in_temp, urgent_yn)
+        values
+        (#{userId}, #{userToken}, #{sensorUuid}, date_add(now(), interval #{addTime} minute), 'hnt', now(), 'hnt', now(), 'Y', #{alarmType}, #{curTemp}, #{inTemp}, #{urgentYn});
+	</insert>
+
+	<insert id="insertUrgentNoti" parameterType="java.util.HashMap">
+		insert into hnt_alarm
+		(user_id, user_token, sensor_uuid, alarm_time, inst_id, inst_dtm, mdf_id, mdf_dtm, use_yn, alarm_type, cur_temp, in_temp, urgent_yn, release_yn)
+		values
+		(#{userId}, #{userToken}, #{sensorUuid}, date_add(now(), interval #{addTime} minute), 'hnt', now(), 'hnt', now(), 'N', #{alarmType}, #{curTemp}, #{inTemp}, #{urgentYn}, #{releaseYn});
+	</insert>
+
+	<select id="selectNoti" parameterType="java.util.HashMap"  resultType="java.util.HashMap">
+		select
+			no
+			,user_token
+			, user_id
+			, sensor_uuid
+			, alarm_time
+        from  hnt_alarm
+        where 1 = 1
+        and user_id = #{userId}
+        and user_token = #{userToken}
+		and sensor_uuid = #{sensorUuid}
+        and alarm_type = #{alarmType}
+
+        limit 1
+	</select>
+
+	<select id="selectNoti2" parameterType="java.util.HashMap"  resultType="java.util.HashMap">
+		select
+			no
+				,user_token
+				, user_id
+				, sensor_uuid
+				, alarm_time
+		from  hnt_alarm
+		where 1 = 1
+		  and user_id = #{userId}
+		  and user_token = #{userToken}
+		  and sensor_uuid = #{sensorUuid}
+		  and alarm_type = #{alarmType}
+		  and alarm_time >= DATE_ADD(NOW(), INTERVAL -#{addTime} MINUTE)
+		  and alarm_time <![CDATA[<=]]> now()
+
+		  limit 1
+	</select>
+
+	<select id="selectChkNoti" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			no
+				,user_token
+				, user_id
+				, sensor_uuid
+				, alarm_time
+		from  hnt_alarm
+		where 1 = 1
+		  and user_id = #{userId}
+		  and user_token = #{userToken}
+		  and sensor_uuid = #{sensorUuid}
+		  and alarm_type = #{alarmType}
+          and urgent_yn = 'Y'
+          limit 1
+	</select>
+
+	<select id="selectUrgentNoti" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+            count(*) as cnt
+		from  hnt_alarm
+		where 1 = 1
+		  and user_id = #{userId}
+		  and user_token = #{userToken}
+		  and sensor_uuid = #{sensorUuid}
+		  and alarm_type = #{alarmType}
+          and urgent_yn = 'Y'
+		  and inst_dtm >= DATE_ADD(NOW(), INTERVAL -12 HOUR)
+          and inst_dtm <![CDATA[<=]]> now()
+	</select>
+
+	<select id="selectReleaseNoti" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			count(*) as cnt
+		from  hnt_alarm
+		where 1 = 1
+		  and user_id = #{userId}
+		  and user_token = #{userToken}
+		  and sensor_uuid = #{sensorUuid}
+		  and alarm_type = #{alarmType}
+		  and use_yn = 'N'
+		  and release_yn = 'Y'
+		  and inst_dtm >= DATE_ADD(NOW(), INTERVAL -#{reDelayTime} MINUTE)
+	</select>
+
+	<update id="updateSensorInfo" parameterType="java.util.HashMap">
+		update hnt_sensor_info set
+            chart_type = #{chartType}
+            , mdf_id = 'hnt'
+            , mdf_dtm = now()
+        where 1 = 1
+        and sensor_uuid = #{sensorUuid}
+	</update>
+
+	<select id="getAlarmSetting" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			user_id
+			, sensor_id
+			, sensor_uuid
+			, alarm_yn1
+			, alarm_yn2
+			, alarm_yn3
+			, alarm_yn4
+			, alarm_yn5
+			, set_val1
+			, set_val2
+			, set_val3
+			, ifnull((delay_time1 div 60), 0) * 60 as delay_hour1
+			, ifnull((delay_time1 mod 60), 0) as delay_min1
+			, ifnull((delay_time2 div 60), 0) * 60 as delay_hour2
+			, ifnull((delay_time2 mod 60), 0) as delay_min2
+			, ifnull((delay_time3 div 60), 0) * 60 as delay_hour3
+			, ifnull((delay_time3 mod 60), 0) as delay_min3
+			, ifnull((delay_time4 div 60), 0) * 60 as delay_hour4
+			, ifnull((delay_time4 mod 60), 0) as delay_min4
+			, ifnull((delay_time5 div 60), 0) * 60 as delay_hour5
+			, ifnull((delay_time5 mod 60), 0) as delay_min5
+			, ifnull((re_delay_time1 div 60), 0) * 60 as re_delay_hour1
+			, ifnull((re_delay_time1 mod 60), 0) as re_delay_min1
+			, ifnull((re_delay_time2 div 60), 0) * 60 as re_delay_hour2
+			, ifnull((re_delay_time2 mod 60), 0) as re_delay_min2
+			, ifnull((re_delay_time3 div 60), 0) * 60 as re_delay_hour3
+			, ifnull((re_delay_time3 mod 60), 0) as re_delay_min3
+			, ifnull((re_delay_time4 div 60), 0) * 60 as re_delay_hour4
+			, ifnull((re_delay_time4 mod 60), 0) as re_delay_min4
+			, ifnull((re_delay_time5 div 60), 0) * 60 as re_delay_hour5
+			, ifnull((re_delay_time5 mod 60), 0) as re_delay_min5
+		from hnt_config
+		where user_id = #{userId}
+		and sensor_uuid = #{sensorUuid}
+        limit 1
+	</select>
+
+
+
+	<!-- 최적화된 현재 온도 조회 - 인덱스 활용 (uuid 우선) -->
+	<select id="getCurTemp" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select sensor_value from hnt_sensor_data
+		where uuid = #{sensorUuid}
+		  and inst_dtm >= DATE_ADD(NOW(), INTERVAL - 1 HOUR)
+		  and raw_data like '%ain%'
+		order by inst_dtm desc
+		limit 1
+	</select>
+
+	<!-- 최적화된 에러 체크 - 인덱스 활용 -->
+	<select id="chkError" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select count(*) as cnt from hnt_sensor_data
+		where uuid = #{sensorUuid}
+		  and raw_data like '%ain%'
+		  and inst_dtm >= DATE_ADD(NOW(), INTERVAL - 5 MINUTE)
+	</select>
+	
+	<!-- 사용자 수 조회 (헬스체크용) -->
+	<select id="getUserCount" resultType="int">
+		select count(*) from hnt_user where del_yn = 'N'
+	</select>
+	
+	<!-- 설정 정보 삽입 -->
+	<insert id="insertConfig" parameterType="java.util.HashMap">
+		insert into hnt_config (
+			user_id, sensor_id, sensor_uuid, set_val1, set_val2, set_val3, inst_id, mdf_id, inst_dtm, mdf_dtm
+		) values (
+			#{userId}, #{sensorId}, #{sensorUuid}, #{setVal1}, #{setVal2}, #{setVal3}, #{instId}, #{mdfId}, now(), now()
+		)
+	</insert>
+	
+	<!-- 설정 정보 조회 -->
+	<select id="getConfig" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select * from hnt_config 
+		where user_id = #{user_id} 
+		  and sensor_uuid = #{sensor_uuid}
+	</select>
+
+	<delete id="deleteUser" parameterType="java.lang.String">
+		delete from hnt_user where user_id = #{userId}
+	</delete>
+
+	<delete id="deleteSensor" parameterType="java.lang.String">
+		delete from hnt_sensor_info where user_id = #{userId}
+	</delete>
+
+	<delete id="deleteConfig" parameterType="java.util.HashMap">
+		delete from hnt_config
+		where user_id = #{userId}
+        <if test='sensorUuid != null and sensorUuid != ""'>
+			and sensor_uuid = #{sensorUuid}
+		</if>
+	</delete>
+
+	<delete id="deleteUserSensorData" parameterType="java.lang.String">
+		delete from hnt_sensor_data
+		where user_id = #{userId}
+	</delete>
+
+	<delete id="deleteSubUser" parameterType="java.lang.String">
+		<!-- 부계정 사용자 정보만 삭제 (장치 정보는 보존) -->
+		delete from hnt_user 
+		where user_id = #{userId} 
+		and user_grade = 'B'
+	</delete>
+
+	<update id="updateUser" parameterType="java.util.HashMap">
+		update hnt_user set
+            user_tel = #{userTel}
+            , user_email = #{userEmail}
+            , user_grade = #{userGrade}
+        where user_id = #{userId}
+	</update>
+
+	<update id="updateUserGrade" parameterType="java.util.HashMap">
+		update hnt_user set
+            user_grade = #{userGrade}
+            , mdf_id = 'hnt'
+            , mdf_dtm = now()
+        where user_id = #{userId}
+	</update>
+
+	<insert id="insertSubSensorInfo" parameterType="java.util.HashMap">
+		insert into hnt_sensor_info
+		(user_id, sensor_id, sensor_uuid, sensor_type, sensor_name, chart_type, inst_id, inst_dtm, mdf_id, mdf_dtm)
+		select
+            #{subId}, #{userId}, sensor_uuid, sensor_type, sensor_name, chart_type, 'hnt', now(), 'hnt', now()
+        from hnt_sensor_info
+        where user_id = #{userId}
+	</insert>
+
+	<!-- 모든 사용자의 활동 상태를 비활성으로 초기화 -->
+	<update id="resetAllUserActivityStatus">
+		UPDATE hnt_user 
+		SET 
+			last_login_dtm = 'N',
+			logout_dtm = 'N',
+			mdf_dtm = NOW()
+		WHERE del_yn = 'N'
+	</update>
+
+	<!-- 부계정 여부 확인 (parent_user_id 컬럼 사용) -->
+	<select id="isSubAccount" parameterType="java.util.HashMap" resultType="boolean">
+		select count(*) > 0
+		from hnt_user 
+		where user_id = #{userId}
+		  and parent_user_id is not null
+		  and del_yn = 'N'
+	</select>
+
+	<!-- 부계정의 메인 사용자 ID 조회 (parent_user_id 기반) -->
+	<select id="getMainUserIdForSubUser" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select parent_user_id
+		from hnt_user
+		where user_id = #{subUserId}
+		  and parent_user_id is not null
+		  and del_yn = 'N'
+		limit 1
+	</select>
+
+	<!-- 부계정의 메인 사용자 ID 조회 (hnt_sensor_info 기반) - 최적화 -->
+	<select id="getMainUserIdForSubUserBySensorInfo" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select sensor_id
+		from hnt_sensor_info
+		where user_id = #{subUserId}
+		  and user_id != sensor_id
+		limit 1
+	</select>
+
+	<!-- 부계정 여부 확인 (hnt_sensor_info 기반) - 최적화 -->
+	<select id="isSubAccountBySensorInfo" parameterType="java.util.HashMap" resultType="boolean">
+		select exists(
+			select 1
+			from hnt_sensor_info
+			where user_id = #{userId}
+			  and user_id != sensor_id
+			limit 1
+		)
+	</select>
+
+	<insert id="saveAlarmSetting" parameterType="java.util.HashMap">
+		INSERT INTO hnt_config (
+			user_id,
+			sensor_id,
+			sensor_uuid,
+			alarm_yn1,
+			alarm_yn2,
+			alarm_yn3,
+			alarm_yn4,
+			alarm_yn5,
+			set_val1,
+			set_val2,
+			set_val3,
+			delay_time1,
+			delay_time2,
+			delay_time3,
+			delay_time4,
+			delay_time5,
+			re_delay_time1,
+			re_delay_time2,
+			re_delay_time3,
+			re_delay_time4,
+			re_delay_time5,
+			inst_dtm,
+			mdf_dtm
+		) VALUES (
+			#{userId},
+			#{sensorId},
+			#{sensorUuid},
+			#{alarmYn1},
+			#{alarmYn2},
+			#{alarmYn3},
+			#{alarmYn4},
+			#{alarmYn5},
+			#{setVal1},
+			#{setVal2},
+			#{setVal3},
+			#{delay_time1},
+			#{delay_time2},
+			#{delay_time3},
+			#{delay_time4},
+			#{delay_time5},
+			#{re_delay_time1},
+			#{re_delay_time2},
+			#{re_delay_time3},
+			#{re_delay_time4},
+			#{re_delay_time5},
+			NOW(),
+			NOW()
+		)
+		ON DUPLICATE KEY UPDATE
+			alarm_yn1 = VALUES(alarm_yn1),
+			alarm_yn2 = VALUES(alarm_yn2),
+			alarm_yn3 = VALUES(alarm_yn3),
+			alarm_yn4 = VALUES(alarm_yn4),
+			alarm_yn5 = VALUES(alarm_yn5),
+			set_val1 = VALUES(set_val1),
+			set_val2 = VALUES(set_val2),
+			set_val3 = VALUES(set_val3),
+			delay_time1 = VALUES(delay_time1),
+			delay_time2 = VALUES(delay_time2),
+			delay_time3 = VALUES(delay_time3),
+			delay_time4 = VALUES(delay_time4),
+			delay_time5 = VALUES(delay_time5),
+			re_delay_time1 = VALUES(re_delay_time1),
+			re_delay_time2 = VALUES(re_delay_time2),
+			re_delay_time3 = VALUES(re_delay_time3),
+			re_delay_time4 = VALUES(re_delay_time4),
+			re_delay_time5 = VALUES(re_delay_time5),
+			mdf_dtm = NOW()
+	</insert>
+
+</mapper>

@@ -1,0 +1,312 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="x" uri="http://java.sun.com/jsp/jstl/xml" %>
+<%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
+<%@ taglib prefix="sql" uri="http://java.sun.com/jsp/jstl/sql" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
+
+<!DOCTYPE html>
+<html lang="ko" class="">
+  <head>
+    <meta charset="UTF-8">
+    <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"><![endif]-->
+    <title>H&T Solutions</title>
+    <link rel="icon" href="/images/hntbi.png" type="image/png">
+    <meta name="keywords" content="" />
+    <meta name="description" content="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="/css/templatemo_main.css">
+    <link rel="stylesheet" href="/css/responsive-common.css">
+    
+    <!-- jQuery 먼저 로드 -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    
+    <!-- 로그인 페이지는 세션 정보가 없어야 하므로 session-info.jsp 제외 -->
+
+    <!-- 기타 스크립트들 -->
+    <script src="/js/bootstrap.min.js"></script>
+    
+    <!-- 공통 에러 차단 시스템 -->
+    <script src="/js/error-blocking-system.js"></script>
+    
+    <!-- 공통 유틸리티 파일들 -->
+    <!-- 통합 AJAX 및 검증 관리자 -->
+    <script src="/js/unified-ajax-manager.js"></script>
+    <script src="/js/unified-validation-manager.js"></script>
+    
+    <script>
+    // 즉시 실행 (jQuery 로딩 대기 없음)
+    (function() {
+        console.log('initLoginPage 함수 시작 - jQuery 사용 가능');
+        
+        // 세션 만료 메시지 표시
+        var urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('timeout') === 'true') {
+            var reason = urlParams.get('reason') || 'expired';
+            var message = '';
+            
+            if (reason === 'expired') {
+                message = '세션이 만료되어 자동으로 로그아웃되었습니다. 다시 로그인해주세요.';
+            } else {
+                message = '세션이 만료되었습니다. 다시 로그인해주세요.';
+            }
+            
+            // 세션 만료 메시지 표시
+            setTimeout(function() {
+                if (typeof showErrorMessage === 'function') {
+                    showErrorMessage(message);
+                } else {
+                    alert(message);
+                }
+            }, 500);
+        }
+        
+        // 회원가입
+        var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent) ? true : false;
+
+        $('#join').click(function() {
+                 //console.log("join");
+                 var userNm = $('#userNm').val();
+                 var userId = $('#userId').val();
+                 var userPass = $('#userPass').val();
+                 var userTel = $('#userTel').val();
+                 var userEmail = $('#userEmail').val();
+                 var result = "";
+
+                 if(userId !== '' && userPass !== '' && userNm !== '') {
+                     var sendData = {
+                         userNm: userNm,
+                         userId: userId,
+                         userPass: userPass,
+                         userTel: userTel,
+                         userEmail: userEmail
+                     }
+
+                     $.ajax({
+                         url: '/login/joinProcess',
+                         async: true,
+                         type: 'POST',
+                         data: JSON.stringify(sendData),
+                         dataType: 'json',
+                         contentType: 'application/json',
+                         success: function(result) {
+                             if(result.resultCode == "200") {
+                               showSuccess("회원가입 성공");
+                               if(isMobile) { saveUserInfo(userId);}
+                               console.log("회원가입 결과:", result);
+                               
+                               // 회원가입 성공 시 세션 기반으로 메인 페이지 이동
+                               console.log("회원가입 성공 - 메인 페이지로 이동");
+                               try {
+                                   window.location.href = '/main/main';
+                                   console.log("회원가입 리다이렉트 실행 완료");
+                               } catch (error) {
+                                   console.error("회원가입 리다이렉트 오류:", error);
+                               }
+                             } else {
+                               showError("회원가입 실패");
+                             }
+                         },
+                         error: function(result) {
+                           showError("회원가입 실패");
+                           window.location.href = '/login/login';
+                         }
+                     });
+                 } else {
+                     showWarning("회원가입에 필요한 정보가 없습니다.");
+                 }
+             });
+
+             $('#joinBtn').click(function() {
+                window.location.href = '/login/login';
+             });
+
+             // 로그인 버튼 이벤트 핸들러 등록
+             $(document).on('click', '#login', function() {
+                 console.log("=== 로그인 버튼 클릭 ===");
+                 
+                 // DOM 요소 존재 여부 확인
+                 var userIdElement = $('#userId');
+                 var userPassElement = $('#userPass');
+                 var saveIdElement = $('#saveId');
+                 
+                 console.log("DOM 요소 확인:");
+                 console.log("- userId 요소:", userIdElement.length > 0 ? "존재" : "없음");
+                 console.log("- userPass 요소:", userPassElement.length > 0 ? "존재" : "없음");
+                 console.log("- saveId 요소:", saveIdElement.length > 0 ? "존재" : "없음");
+                 
+                 // 요소가 존재하는지 확인
+                 if (userIdElement.length === 0) {
+                     console.error("userId 요소를 찾을 수 없습니다!");
+                     alert("로그인 폼이 올바르게 로드되지 않았습니다. 페이지를 새로고침해주세요.");
+                     return;
+                 }
+                 
+                 var userId = userIdElement.val();
+                 var userPass = userPassElement.val();
+                 var saveId = saveIdElement.is(':checked') ? 'Y' : 'N'; // 체크박스 체크 상태 확인
+                 var result = "";
+
+                 console.log("입력 데이터:", {userId: userId, userPass: "***", saveId: saveId});
+                 console.log("userId 길이:", userId ? userId.length : 0);
+                 console.log("userPass 길이:", userPass ? userPass.length : 0);
+
+                 if(userId !== '' && userPass !== '') {
+                     var sendData = {
+                         userId: userId,
+                         userPass: userPass,
+                         saveId: saveId
+                     }
+
+                     console.log("AJAX 요청 시작:", sendData);
+
+                     $.ajax({
+                         url: '/login/loginProcess',
+                         async: true,
+                         type: 'POST',
+                         data: JSON.stringify(sendData),
+                         dataType: 'json',
+                         contentType: 'application/json',
+                         beforeSend: function() {
+                             console.log("AJAX 요청 전송 중...");
+                         },
+                         success: function(result) {
+                             console.log("AJAX 성공 응답:", result);
+                             if(result.resultCode == "200") {
+                               //alert(isMobile);
+                               if(isMobile) {saveUserInfo(userId);}
+                               
+                               // 로그인 성공 시 세션 스토리지에 첫 방문 표시
+                               sessionStorage.setItem('mainPageFirstVisit', 'true');
+                               
+                               // 서버에서 제공하는 리다이렉트 URL 사용
+                               var redirectUrl = result.redirectUrl || '/main/main';
+                               console.log("로그인 성공 - 리다이렉트 URL:", redirectUrl);
+                               
+                               // 로그인 성공 시 리다이렉트 URL로 이동
+                               console.log("리다이렉트 시작:", redirectUrl);
+                               try {
+                                   // 지연된 리다이렉트 실행 (브라우저 호환성 개선)
+                                   setTimeout(function() {
+                                       console.log("지연된 리다이렉트 실행:", redirectUrl);
+                                       window.location.replace(redirectUrl);
+                                   }, 100);
+                                   console.log("리다이렉트 스케줄 완료");
+                               } catch (error) {
+                                   console.error("리다이렉트 오류:", error);
+                                   // 오류 발생 시 기본 경로로 이동
+                                   setTimeout(function() {
+                                       window.location.replace('/main/main');
+                                   }, 100);
+                               }
+                             } else {
+                               console.error("로그인 실패 - 응답 코드:", result.resultCode);
+                               showError("로그인 실패: " + (result.resultMessage || "알 수 없는 오류"));
+                             }
+                         },
+                         error: function(xhr, status, error) {
+                             console.error("AJAX 오류 발생:", {
+                                 status: status,
+                                 error: error,
+                                 xhr: xhr,
+                                 responseText: xhr.responseText
+                             });
+                             showError("로그인 실패: " + error);
+                             window.location.href = '/login/login';
+                         }
+                     });
+                 } else {
+                     console.warn("입력 데이터 부족:", {userId: userId, userPass: userPass});
+                     showWarning("로그인에 필요한 정보가 없습니다.");
+                 }
+             });
+    })();
+    
+    // jQuery 로딩 확인 후 함수 실행
+    function waitForJQuery() {
+        if (typeof $ !== 'undefined' && typeof $.fn !== 'undefined') {
+            console.log('jQuery 로딩 완료 - 초기화 시작');
+            // initLoginPage()는 이미 즉시 실행됨
+        } else {
+            console.log('jQuery 로딩 대기 중...');
+            setTimeout(waitForJQuery, 50);
+        }
+    }
+    
+    // 즉시 jQuery 대기 시작
+    waitForJQuery();
+
+    // 에러 메시지 표시 함수 정의
+    function showError(message) {
+        console.error('에러:', message);
+        alert('오류: ' + message);
+    }
+    
+    function showWarning(message) {
+        console.warn('경고:', message);
+        alert('경고: ' + message);
+    }
+    
+    function showSuccess(message) {
+        console.log('성공:', message);
+        alert('성공: ' + message);
+    }
+
+        function saveUserInfo(str) {
+        	window.hntInterface.saveUserInfo(str);
+        }
+    </script>
+  </head>
+  <body style="background-color: #ffffff">
+    <div id="main-wrapper">
+      <div class="navbar navbar-inverse" role="navigation">
+        <div class="navbar-header">
+          <div class="logo"><h1>H&T Solutions</h1></div>
+        </div>
+      </div>
+      <div class="template-page-wrapper" style="background-color: #ffffff">
+        <form class="form-horizontal templatemo-signin-form" style="background-color: #ffffff">
+          <div>
+            		<p align="center"><img src="/images/hntbi.png" width="200" height="90"></p>
+            <br/><br/>
+          </div>
+          <div class="form-group">
+            <div class="col-md-12">
+              <label for="userId" class="col-sm-2 control-label">아이디</label>
+              <div class="col-sm-10">
+                <input type="text" class="form-control" id="userId" placeholder="Username" autocomplete="username">
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-md-12">
+              <label for="userPass" class="col-sm-2 control-label">비밀번호</label>
+              <div class="col-sm-10">
+                <input type="password" class="form-control" id="userPass" placeholder="Password" autocomplete="current-password">
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-md-12">
+              <div class="col-sm-offset-2 col-sm-10">
+                <div class="checkbox">
+                  <label>
+                    <input type="checkbox" id="saveId" name="saveId" value="Y"> Save ID
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="col-md-12">
+              <div class="col-sm-offset-2 col-sm-10" align="right">
+                <input type="button" id="login" name="login" value="로그인" class="btn btn-default">
+                <!--input type="button" id="joinBtn" name="joinBtn" value="회원가입" class="btn btn-default"-->
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,111 @@
+spring:
+    # 테스트 환경 설정
+    profiles:
+        active: test
+    
+    # Spring Boot 설정
+    main:
+        allow-bean-definition-overriding: true
+        banner-mode: off
+    
+    # 테스트용 데이터베이스 설정
+    datasource:
+        driver-class-name: org.h2.Driver
+        url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+        username: sa
+        password: 
+        hikari:
+            maximum-pool-size: 5
+            minimum-idle: 1
+            connection-timeout: 20000
+            idle-timeout: 300000
+            max-lifetime: 1200000
+            leak-detection-threshold: 60000
+
+    # JPA 설정 (테스트용)
+    jpa:
+        hibernate:
+            ddl-auto: create-drop
+        show-sql: false
+        properties:
+            "[hibernate]":
+                format_sql: false
+                dialect: org.hibernate.dialect.H2Dialect
+
+    # MyBatis 설정 (Spring Boot 2.7에서는 mybatis-spring-boot-starter 사용)
+    # mybatis:
+    #     mapper-locations: classpath:mapper/*.xml
+    #     type-aliases-package: com.andrew.hnt.api.model
+    #     configuration:
+    #         map-underscore-to-camel-case: true
+    #         default-fetch-size: 100
+    #         default-statement-timeout: 30
+
+# 커스텀 설정 (테스트용)
+custom:
+    mqtt:
+        server: tcp://localhost:1883
+        username: test
+        password: test
+        default-topic: test/#
+        connection-timeout: 10
+        keep-alive-interval: 30
+        max-reconnect-attempts: 3
+        base-reconnect-delay: 1000
+        max-reconnect-delay: 5000
+    security:
+        fcm:
+            api-key: test-api-key
+            sender-id: test-sender-id
+            project-id: test-project
+            service-account-key-path: test-key.json
+    backup:
+        enabled: false
+        database:
+            enabled: false
+        file:
+            enabled: false
+    notification:
+        email:
+            enabled: false
+        slack:
+            enabled: false
+        discord:
+            enabled: false
+    monitoring:
+        enabled: false
+        performance:
+            enabled: false
+        security:
+            enabled: false
+    test:
+        mock:
+            enabled: true
+        data:
+            cleanup: true
+
+# 로그 설정 (테스트용)
+logging:
+    level:
+        "[com.andrew.hnt.api]": DEBUG
+        "[org.springframework]": WARN
+        "[org.springframework.web]": WARN
+        "[org.springframework.web.servlet.mvc.method.annotation]": WARN
+        "[org.apache.ibatis]": WARN
+        "[org.hibernate]": ERROR
+        "[org.h2]": WARN
+    pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 서버 설정 (테스트용)
+server:
+    port: 0  # 랜덤 포트 사용
+    servlet:
+        context-path: /
+    error:
+        whitelabel:
+            enabled: false
+        include-stacktrace: never
+        include-message: never
+
+# Spring Boot 설정 (위의 spring 설정에 통합)

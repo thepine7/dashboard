@@ -1,0 +1,1208 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
+
+<!DOCTYPE html>
+
+<html lang="ko" class="">
+<head>
+    <meta charset="UTF-8">
+    <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"><![endif]-->
+    <title>H&T Technology</title>
+    	<link rel="icon" href="/static/images/hntbi.png" type="image/png">
+    <meta name="keywords" content="" />
+    <meta name="description" content="" />
+    <meta name="viewport" content="width=device-width">
+    	<link rel="stylesheet" href="/static/css/templatemo_main.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" media="print" onload="this.media='all'">
+    
+    <!-- 앱 레이아웃 개선 스타일 -->
+    <style>
+        /* 모바일에서 현재온도 폰트 크기만 조정 */
+        @media (max-width: 768px) {
+            #sensorVal {
+                font-size: 18px !important;
+                line-height: 1.2 !important;
+            }
+            
+            /* 레이아웃 개선 (색상 변경 없음) */
+            .templatemo-content-wrapper {
+                margin-left: 0 !important;
+                padding: 10px !important;
+            }
+            
+            .templatemo-sidebar {
+                display: none !important;
+            }
+            
+            .col-md-6, .col-sm-6 {
+                width: 100% !important;
+                float: none !important;
+                margin-bottom: 15px !important;
+            }
+            
+            .panel-body {
+                padding: 10px !important;
+            }
+            
+            .table td {
+                padding: 8px 4px !important;
+                font-size: 12px !important;
+            }
+            
+            .table thead td {
+                font-size: 11px !important;
+                padding: 6px 4px !important;
+            }
+            
+            .btn {
+                font-size: 11px !important;
+                padding: 6px 8px !important;
+                margin: 2px !important;
+            }
+            
+            input[type="date"] {
+                font-size: 11px !important;
+                padding: 4px 6px !important;
+            }
+            
+            /* 차트 컨테이너 높이 조정 */
+            .panel-body[style*="height: 320px"] {
+                height: 280px !important;
+            }
+        }
+        
+        /* 강제 적용을 위한 추가 스타일 */
+        @media screen and (max-width: 768px) {
+            .templatemo-content-wrapper {
+                margin-left: 0 !important;
+                padding: 10px !important;
+            }
+            
+            .templatemo-sidebar {
+                display: none !important;
+            }
+            
+            .col-md-6, .col-sm-6 {
+                width: 100% !important;
+                float: none !important;
+                margin-bottom: 15px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+<input type="hidden" id="userId" name="userId" value="${userId}" />
+<input type="hidden" id="userNm" name="userNm" value="${userNm}" />
+<input type="hidden" id="userGrade" name="userGrade" value="${userGrade}" />
+<input type="hidden" id="loginUserId" name="loginUserId" value="${loginUserId}" />
+<!-- 디버깅용 출력 -->
+<!-- 모델 sensorId 값: ${model.sensorId} -->
+<!-- 세션 sensorId 값: ${sessionScope.sensorId} -->
+<!-- 요청 sensorId 값: ${param.sensorId} -->
+<input type="hidden" id="sensorId" name="sensorId" value="${sensorId}" />
+<input type="hidden" id="sensorUuid" name="sensorUuid" value="${sensorUuid}" />
+<input type="hidden" id="sensorName" name="sensorName" value="${sensorName}" />
+<input type="hidden" id="topicStr" name="topicStr" value="${topicStr}" />
+<input type="hidden" id="dailyList" name="dailyList" value="${dailyList}" />
+<input type="hidden" id="monthlyList" name="monthlyList" value="${monthlyList}" />
+<input type="hidden" id="yearlyList" name="yearlyList" value="${yearlyList}" />
+<input type="hidden" id="daily" name="daily" value="${daily}" />
+<input type="hidden" id="monthly" name="monthly" value="${monthly}" />
+<input type="hidden" id="yearly" name="yearly" value="${yearly}" />
+
+<div id="main-wrapper">
+    <div class="navbar navbar-inverse" role="navigation" style="background-color: #ffffff">
+        <div class="navbar-header">
+            		<div class="logo"><h1><a href="/main/main"><img src="/static/images/hntbi.png" width="70" height="32"></a></h1></div>
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse" style="background-color: #cccccc">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+        </div>
+    </div>
+    <div class="template-page-wrapper">
+        <div class="navbar-collapse collapse templatemo-sidebar">
+            <ul class="templatemo-sidebar-menu">
+                <li class="active"><a href="javascript:goMain();"><i class="fa fa-home"></i>Dashboard</a></li>
+                <li class="sub open">
+                    <ul style="background-color: #afd9ee; height: 40px; padding-top: 10px">
+                        <strong>${userNm}님 안녕하세요.</strong>
+                    </ul>
+                    <c:if test="${userGrade eq 'A' || userGrade eq 'U'}">
+                        <a href="javascript:;">
+                            <i class="fa fa-database"></i> 관리 메뉴보기 <div class="pull-right"><span class="caret"></span></div>
+                        </a>
+                        <ul class="templatemo-submenu">
+                            <li><a href="/admin/userList">사용자 관리</a></li>
+                        </ul>
+                        <ul class="templatemo-submenu">
+                            <li><a href="/admin/createSub">부계정 생성</a></li>
+                        </ul>
+                    </c:if>
+                </li>
+                <li><a href="" data-toggle="modal" data-target="#confirmModal"><i class="fa fa-sign-out"></i>로그아웃</a></li>
+            </ul>
+        </div><!--/.navbar-collapse -->
+
+        <div class="templatemo-content-wrapper" style="background-color: #333333">
+            <div class="templatemo-content" style="background-color: #333333">
+                <ol class="breadcrumb">
+                    <li><a href="#" onclick="goMain()">Main</a></li>
+                </ol>
+                <h1><span style="color: #f0f8ff; ">챠트 데이터</span></h1>
+                <p><span style="color: #f0f8ff; ">챠트 데이터 조회 화면입니다.</span></p>
+
+                <div class="templatemo-charts">
+                    <div class="row">
+                                                 <div class="col-md-6 col-sm-6 margin-bottom-30">
+                             <div class="panel panel-primary">
+                                 <div class="panel-heading">${sensorName}</div>
+                                 <div class="panel-body">
+                                     <table class="table table-striped" style="width: 100%; table-layout: fixed;">
+                                         <thead>
+                                             <tr>
+                                                 <td align="center" style="background-color: #c7254e; width: 30%;"><strong><span style="color: #f0f8ff; ">구분</span></strong></td>
+                                                 <td align="center" style="background-color: #c7254e; width: 70%;"><strong><span style="color: #f0f8ff; ">온도</span></strong></td>
+                                             </tr>
+                                         </thead>
+                                         <tbody>
+                                             <tr>
+                                                 <td align="center" style="width: 30%;">설정온도</td>
+                                                 <td align="center" style="width: 70%;">
+                                                     <strong><span align="center" id="setTmp" name="setTmp" style="color: #4cae4c"></span></strong>
+                                                 </td>
+                                             </tr>
+                                             <tr>
+                                                 <td align="center" valign="middle" style="width: 30%;">현재온도</td>
+                                                 <td align="center" style="width: 70%;">
+                                                     <strong><span align="center" id="sensorVal" name="sensorVal" style="color: #c7254e"></span></strong>
+                                                 </td>
+                                             </tr>
+                                             <tr><td colspan="2" height="1"></td></tr>
+                                             <tr>
+                                                 <td colspan="2" align="center" style="background-color: #c7254e;">
+                                                     <strong><span style="color: #f0f8ff; font-size:10pt;">날짜</span></strong>
+                                                 </td>
+                                             </tr>
+                                             <tr>
+                                                 <td colspan="2" align="center" style="width: 100%;">
+                                                     <div style="display: flex; align-items: center; justify-content: center; gap: 5px;">
+                                                         <button type="button" class="btn btn-sm btn-default" id="prevDay" title="이전 날짜" style="padding: 2px 6px; max-width: 100%;">
+                                                             <i class="bi bi-chevron-left"></i>
+                                                         </button>
+                                                         <input type="date" id="startDate" name="startDate" value="${todayStr}" style="width: 110px; height: 22px; text-align: center; max-width: 100%;"> ~ <input type="date" id="endDate" name="endDate" value="${todayStr}" style="width: 110px; height: 22px; text-align: center; max-width: 100%;">
+                                                         <button type="button" class="btn btn-sm btn-default" id="nextDay" title="다음 날짜" style="padding: 2px 6px; max-width: 100%;">
+                                                             <i class="bi bi-chevron-right"></i>
+                                                         </button>
+                                                     </div>
+                                                 </td>
+                                             </tr>
+                                             <tr>
+                                                 <td colspan="2" align="center" style="width: 100%;">
+                                                     <button type="button" class="btn btn-default" id="1mon" name="1mon" style="max-width: 100%; margin: 2px;">1개월</button>
+                                                     <button type="button" class="btn btn-default" id="3mon" name="3mon" style="max-width: 100%; margin: 2px;">3개월</button>
+                                                     <button type="button" class="btn btn-default" id="6mon" name="6mon" style="max-width: 100%; margin: 2px;">6개월</button>
+                                                     <button type="button" class="btn btn-default" id="12mon" name="12mon" style="max-width: 100%; margin: 2px;">1년</button>
+                                                 </td>
+                                             </tr>
+                                             <tr>
+                                                 <td colspan="2" align="center" style="width: 100%;"><button type="button" class="btn btn-default" id="excelDownload" name="excelDownload" style="max-width: 100%;">다운로드</button></td>
+                                             </tr>
+                                         </tbody>
+                                     </table>
+                                 </div>
+                             </div>
+                         </div>
+                                                                                                     <div class="col-md-6 col-sm-6 margin-bottom-30">
+                               <div class="panel panel-primary">
+                                   <div class="panel-heading">장치 챠트</div>
+                                                                       <div class="panel-body" style="height: 320px;">
+                                        <div style="position: relative; height: 100%; width: 100%;">
+                                            <canvas id="dailyChart" style="max-height: 100%; max-width: 100%;"></canvas>
+                                        </div>
+                                    </div>
+                               </div>
+                           </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal -->
+        <div class="modal fade" id="confirmModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+                        <h4 class="modal-title" id="myModalLabel">로그아웃 하시겠습니까?</h4>
+                    </div>
+                    <div class="modal-footer">
+                        <a href="/login/logout" class="btn btn-primary">Yes</a>
+                        <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="templatemo-footer">
+            <div class="templatemo-copyright">
+                <p>Copyright &copy; 2022 H&T Solutions</p>
+            </div>
+        </footer>
+    </div>
+
+</div>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+	<script src="/static/js/bootstrap.min.js"></script>
+	<script src="/static/js/templatemo_script.js"></script>
+	<script src="/static/js/mqttws31-min.js"></script>
+	<script src="/static/js/mqtt_lib.js"></script>
+
+<!-- 로컬 Chart.js 2.9.4 사용 (외부 의존성 제거) -->
+	<script src="/static/js/chart-2.9.4.min.js"></script>
+<script type="text/javascript">
+    var setp01 = 0;
+
+    // MQTT 실시간 데이터만 사용하므로 getData AJAX 함수 비활성화
+    // function getData() {
+    //     var loginUserId = $('#userId').val();
+    //     var sensorUuid = $('#sensorUuid').val();
+
+    //     var sendData = {
+    //         userId: loginUserId,
+    //         sensorUuid: sensorUuid
+    //     }
+
+    //     $.ajax({
+    //         url: '/main/getData',
+    //         async: true,
+    //         type: 'POST',
+    //         data: JSON.stringify(sendData),
+    //         dataType: 'json',
+    //         contentType: 'application/json',
+    //         success: function(result) {
+    //             if(result.resultCode == "200") {
+    //                 yval = result.dataVal;
+    //                 xval = result.num;
+    //                 titleStr = result.titleStr;
+    //                 if(result.dataVal != "") {
+    //                     $('#sensorVal').html('<font size="50px">' + result.dataVal + '</font> °C');
+    //                 }
+    //             }
+    //         },
+    //         error: function(result) {
+
+    //         }
+    //     });
+
+    // }
+
+    function getParam() {
+        var sendData2 = {
+            userId: $('#sensorId').val(),  // 실제 장치 소유자 ID 사용
+            topicStr: $('#topicStr').val(),
+            setGu: "readparam"
+        }
+
+        $.ajax({
+            url: '/admin/setSensor',
+            async: true,
+            type: 'POST',
+            data: JSON.stringify(sendData2),
+            dataType: 'json',
+            contentType: 'application/json',
+            success: function (result) {
+                if (result.resultCode == "200") {
+                }
+            },
+            error: function (reuslt) {
+
+            }
+        });
+    }
+
+    function setSensor() {
+        var sendData2 = {
+            userId: $('#sensorId').val(),  // 실제 장치 소유자 ID 사용
+            topicStr: $('#topicStr').val(),
+            setGu: "readparam",
+            type: "1"  // type=1: parameter 요청
+        }
+        
+        // console.log("챠트데이터 - setSensor 요청 데이터:", sendData2);
+
+        $.ajax({
+            url: '/admin/setSensor',
+            async: true,
+            type: 'POST',
+            data: JSON.stringify(sendData2),
+            dataType: 'json',
+            contentType: 'application/json',
+            success: function (result) {
+                if (result.resultCode == "200") {
+                    
+                }
+            },
+            error: function (result) {
+                
+            }
+        });
+    }
+
+    function getStatus() {
+        var sendData2 = {
+            userId: $('#sensorId').val(),  // 실제 장치 소유자 ID 사용
+            topicStr: $('#topicStr').val(),
+            setGu: "readstatus",
+            type: "2"  // type=2: status 요청
+        }
+
+        $.ajax({
+            url: '/admin/setSensor',
+            async: true,
+            type: 'POST',
+            data: JSON.stringify(sendData2),
+            dataType: 'json',
+            contentType: 'application/json',
+            success: function (result) {
+                if (result.resultCode == "200") {
+                    
+                }
+            },
+            error: function (result) {
+                
+            }
+        });
+    }
+
+    function startInterval(seconds, callback) {
+        callback();
+        return setInterval(callback, seconds * 1000);
+    }
+
+    $('#excelDownload').click(function() {
+       var userId = $('#userId').val();
+       var sensorId = $('#sensorId').val();
+       var sensorUuid = $('#sensorUuid').val();
+       var sensorName = $('#sensorName').val();
+       
+       // 실제 날짜 입력 필드에서 값을 가져옴
+       var startDate = $('#startDate').val();
+       var endDate = $('#endDate').val();
+
+       console.log('엑셀 다운로드 파라미터:', {
+           userId: userId,
+           sensorId: sensorId,
+           sensorUuid: sensorUuid,
+           startDate: startDate,
+           endDate: endDate,
+           sensorName: sensorName
+       });
+
+       location.href = "/data/excelDownload?userId="+userId+"&sensorId="+sensorId+"&sensorUuid="+sensorUuid+"&startDate="+startDate+"&endDate="+endDate+"&sensorName="+sensorName;
+    });
+
+    function goMain() {
+        // 원래 작동 방식: 세션 검증 없이 메인 페이지로 이동
+        location.href = "/main/main";
+    }
+
+    window.onload = function() {
+
+        // 에러 체크 변수 초기화
+        deviceLastDataTime = Date.now();
+        deviceErrorCounters = 0;
+        deviceErrorStates = false;
+        deviceStatusStates = 'gray';
+        deviceErrorDisplayStates = 'gray';
+        deviceDinErrorStates = false;
+
+        // MQTT 실시간 데이터만 사용하므로 getData AJAX 호출 제거
+        // startInterval(0.5, getData);
+        getParam();
+        startConnect();
+        
+        // 초기 페이지 로딩 시 GET&type=1, GET&type=2 2초 간격으로 한 번만 요청
+        setTimeout(function() {
+                            // console.log("챠트데이터 - topicStr 값:", $('#topicStr').val());
+        // console.log("챠트데이터 - sensorId 값:", $('#sensorId').val());
+        // console.log("챠트데이터 - hidden input sensorId HTML:", $('#sensorId').prop('outerHTML'));
+                    setSensor();
+                    // console.log("챠트데이터 - 에러 해제 후 GET&type=1 요청");
+                }, 2000);
+                
+                setTimeout(function() {
+                    
+                    getStatus();
+                    // console.log("챠트데이터 - 에러 해제 후 GET&type=2 요청");
+                }, 4000); // 2초 + 2초 = 4초 후
+        
+        // 에러 체크 시작 (5초마다)
+        setTimeout(function() {
+            startInterval(5, chkError);
+        }, 5000);
+
+        // 아이들(가시성 숨김) 시 에러 체크 일시 정지 / 복귀 시 재개 및 초기 동기화
+        document.addEventListener('visibilitychange', function() {
+          if (document.hidden) {
+            // 에러 체크 일시 정지: 오탐 방지
+            if (window.__errorTimer) {
+              clearInterval(window.__errorTimer);
+              window.__errorTimer = null;
+            }
+          } else {
+            // 복귀: 차트는 사용자가 선택한 날짜를 유지하고, 불필요한 재조회 방지
+            deviceLastDataTime = Date.now();
+            window.__errorTimer = startInterval(5, chkError);
+            // 상태/설정 재동기화는 차트 데이터에 영향 없음 (주석 처리)
+            // setTimeout(function() { getStatus(); }, 2000);
+            // setTimeout(function() { setSensor(); }, 4000);
+            // 만약 이전에 선택한 날짜 데이터가 있다면 그대로 유지하여 재그리기 없음
+            // 필요 시 아래 한 줄로 강제 유지 가능: updateDailyChart(window.dailyChart.data.labels, window.dailyChart.data.datasets[0].data);
+          }
+        });
+
+        var dailyArr = [];
+        var monthlyArr = [];
+        var yearlyArr = [];
+        var dailyX = [];
+        var dailyY = [];
+        var monthlyX = [];
+        var monthlyY = [];
+        var yearlyX = [];
+        var yearlyY = [];
+
+        var daily = $('#daily').val();
+        var monthly = $('#monthly').val();
+        var yearly = $('#yearly').val();
+
+        // 현재 차트 날짜/데이터 전역 보관 (툴팁/복구용)
+        window._currentChartDate = ($('#endDate').val() || selectedEndDate);
+        // console.log("챠트데이터 - dailyArr 길이:", dailyArr.length);
+
+        daily = daily.replace("[", "");
+        daily = daily.replace("]", "");
+        dailyArr = daily.split(",");
+
+        monthly = monthly.replace("[", "");
+        monthly = monthly.replace("]", "");
+        monthlyArr = monthly.split(",");
+
+        yearly = yearly.replace("[", "");
+        yearly = yearly.replace("]", "");
+        yearlyArr = yearly.split(",");
+
+        // 선택된 날짜(없으면 오늘) 기준으로 00:00~23:59 데이터만 표시
+        var today = new Date();
+        var todayStr = today.getFullYear() + '-' + 
+                      String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                      String(today.getDate()).padStart(2, '0');
+        var selectedEndDate = ($('#endDate').val() && $('#endDate').val().length === 10) ? $('#endDate').val() : todayStr;
+        
+        // 24시간 X축 라벨 생성 (00:00 ~ 23:30, 30분 간격)
+        var timeLabels = [];
+        for(var hour = 0; hour < 24; hour++) {
+            for(var minute = 0; minute < 60; minute += 30) {
+                var timeStr = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+                timeLabels.push(timeStr);
+            }
+        }
+        
+                 // DB에서 읽어온 데이터를 시간별로 매핑
+         var dataMap = {};
+         
+         for(var i=0; i < dailyArr.length; i++) {
+             if(dailyArr[i] && dailyArr[i].trim() !== '') {
+                 var tmp = [];
+                 tmp = dailyArr[i].split("^");
+                 
+                 if(tmp.length >= 2) {
+                     var fullDateTime = tmp[0];
+                     var sensorValue = tmp[1];
+                     
+                      // SQL에서 이미 날짜 범위를 제한했으므로, 날짜 비교 없이 시간만 추출하여 사용
+                      var cleanFullDateTime = fullDateTime.trim();
+                      var timeOnly = cleanFullDateTime.length > 10 ? cleanFullDateTime.substring(11, 16) : cleanFullDateTime;
+                      var timeParts = timeOnly.split(':');
+                      if(timeParts.length >= 2) {
+                        // 해당 시간 데이터 저장
+                        dataMap[timeOnly] = parseFloat(sensorValue);
+                      }
+                 }
+             }
+         }
+         
+                 // 24시간 X축에 맞춰 데이터 배열 생성
+        for(var i=0; i < timeLabels.length; i++) {
+            dailyX.push(timeLabels[i]);
+            
+            if(dataMap[timeLabels[i]]) {
+                dailyY.push(dataMap[timeLabels[i]]);
+            } else {
+                dailyY.push(null); // 데이터가 없는 시간대는 null로 표시
+            }
+        }
+
+        // 전역에 현재 raw daily 배열 보관 (툴팁에서 사용)
+        window._currentDailyArr = dailyArr.slice();
+        // console.log("챠트데이터 - dailyX 길이:", dailyX.length);
+        // console.log("챠트데이터 - dailyY 길이:", dailyY.length);
+        // console.log("챠트데이터 - dailyY 데이터:", dailyY);
+
+        for(var j=0; j < monthlyArr.length; j++) {
+            var tmp = [];
+            tmp = monthlyArr[j].split("^");
+            monthlyX.push(tmp[0]);
+            monthlyY.push(tmp[1]);
+        }
+
+        for(var k=0; k < yearlyArr.length; k++) {
+            var tmp = [];
+            tmp = yearlyArr[k].split("^");
+            yearlyX.push(tmp[0]);
+            yearlyY.push(tmp[1]);
+        }
+
+                
+        
+        // 차트 생성 전 캔버스 확인
+        var canvas = document.getElementById("dailyChart");
+        if (!canvas) {
+            console.error("캔버스 요소를 찾을 수 없습니다!");
+            return;
+        }
+        
+        var ctx = canvas.getContext("2d");
+        if (!ctx) {
+            console.error("캔버스 컨텍스트를 가져올 수 없습니다!");
+            return;
+        }
+        
+        // 중복 인스턴스 방지: 기존 차트 모두 제거
+        try { if (window.dailyChart && typeof window.dailyChart.destroy === 'function') { window.dailyChart.destroy(); } } catch(e) {}
+        try { if (window.myChart && typeof window.myChart.destroy === 'function') { window.myChart.destroy(); } } catch(e) {}
+
+        window.dailyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dailyX,
+                datasets: [{
+                    label: '일간 데이터',
+                    data: dailyY,
+                     spanGaps: true,
+                     borderColor: "rgba(255, 201, 14, 1)",
+                     backgroundColor: "rgba(255, 201, 14, 0.5)",
+                     fill: false,
+                     lineTension: 0.1,
+                     pointRadius: 2,
+                     pointHoverRadius: 4,
+                     pointBackgroundColor: "rgba(255, 201, 14, 1)",
+                     pointBorderColor: "rgba(255, 201, 14, 1)",
+                     pointBorderWidth: 1
+                }]
+            },
+            options: {
+                 responsive: true,
+                // 마우스 상호작용이 차트 데이터 변경을 유발하지 않도록 유지
+                 maintainAspectRatio: false,
+                 aspectRatio: 2,
+                 title: {
+                     display: true,
+                     text: '일간 데이터'
+                 },
+                tooltips: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        title: function(tooltipItems, data) {
+                            // 선택된 날짜 고정 + 현재 라벨 시간 결합
+                            var idx = tooltipItems[0].index;
+                            var dateStr = window._currentChartDate;
+                            var timeStr = data.labels[idx] || '';
+                            if (dateStr && timeStr) return dateStr + ' ' + timeStr;
+                            return timeStr || dateStr || '';
+                        },
+                        label: function(tooltipItem, data) {
+                            if (tooltipItem.yLabel !== null) {
+                                return '온도: ' + tooltipItem.yLabel + '°C';
+                            }
+                            return '데이터 없음';
+                        }
+                    }
+                },
+                hover: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                scales: {
+                    xAxes: [{
+                        display: true,
+                        scaleLabel: {
+                            display: true,
+                            labelString: '시간 (24시간)'
+                        },
+                                                 ticks: {
+                             maxTicksLimit: 12, // 12시간 표시 (더 조밀하게)
+                             maxRotation: 45,   // 라벨 회전
+                             minRotation: 0,
+                             callback: function(value, index, values) {
+                                 // 1시간마다 라벨 표시 (00:00, 01:00, 02:00, ...)
+                                 if(index % 2 === 0) {
+                                     return value;
+                                 }
+                                 return '';
+                             }
+                         }
+                    }],
+                    yAxes: [{
+                        display: true,
+                        ticks: {
+                            // DB 데이터에 맞게 자동 범위 조정
+                            beginAtZero: false,
+                            // 최소값과 최대값을 자동으로 계산
+                            callback: function(value, index, values) {
+                                return value + '°C';
+                            }
+                        },
+                        scaleLabel: {
+                            display: true,
+                            labelString: '온도 (°C)'
+                        }
+                    }]
+                }
+            }
+        });
+        
+        
+    }
+
+    $('#1mon').click(function() {
+        var now = new Date();	// 현재 날짜 및 시간
+        var oneMon = new Date(now.setMonth(now.getMonth() - 1));	// 한달 전
+        $('#startDate').val(dateFormat(oneMon));
+    });
+
+    $('#3mon').click(function() {
+        var now = new Date();	// 현재 날짜 및 시간
+        var oneMon = new Date(now.setMonth(now.getMonth() - 3));	// 한달 전
+        $('#startDate').val(dateFormat(oneMon));
+    });
+
+    $('#6mon').click(function() {
+        var now = new Date();	// 현재 날짜 및 시간
+        var oneMon = new Date(now.setMonth(now.getMonth() - 6));	// 한달 전
+        $('#startDate').val(dateFormat(oneMon));
+    });
+
+    $('#12mon').click(function() {
+        var now = new Date();	// 현재 날짜 및 시간
+        var oneMon = new Date(now.setMonth(now.getMonth() - 12));	// 한달 전
+        $('#startDate').val(dateFormat(oneMon));
+    });
+
+    function dateFormat(date) {
+        let dateFormat2 = date.getFullYear() +
+            '-' + ( (date.getMonth()+1) < 10 ? "0" + (date.getMonth()+1) : (date.getMonth()+1) )+
+            '-' + ( (date.getDate()) < 10 ? "0" + (date.getDate()) : (date.getDate()) );
+        return dateFormat2;
+    }
+
+    function IsJsonString(str) {
+        try {
+            var json = JSON.parse(str);
+            return (typeof json === 'object');
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function validateJson(str) {
+        try {
+            var json = JSON.parse(str);
+            return (typeof json === 'object');
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function updateCurrentTemperature(uuid, value, isError) {
+        if (isError) {
+            $('#sensorVal').html('<font size="50px">Error</font>');
+        } else {
+            $('#sensorVal').html('<font size="50px">' + value + '</font> °C');
+        }
+    }
+
+    function rcvMsg(topic, message) {
+        // console.log("챠트데이터 - MQTT 메시지 수신:", topic, message);
+        
+        if(topic) {
+            var topicArr = new Array();
+            topicArr = topic.split("/");
+            var uuid = topicArr[3];
+            var userId = topicArr[1];
+
+            // console.log("챠트데이터 - 토픽 파싱:", "uuid=" + uuid, "userId=" + userId);
+            // console.log("챠트데이터 - 현재 장치:", "sensorUuid=" + $('#sensorUuid').val(), "sensorId=" + $('#sensorId').val());
+
+            // 현재 장치만 처리 (sensor_uuid만 확인)
+            if(uuid == $('#sensorUuid').val()) {
+                if(message) {
+                    if(validateJson(message)) {
+                        var msg = JSON.parse(message);
+                        if (msg.actcode == 'live') {
+                            if (msg.name == 'ain') {
+                                // 현재 온도 알림 - 공통 함수 사용
+                                var isError = (msg.value == 'Error');
+                                
+                                // 공통 현재온도 처리 함수 호출 (단일 장치 페이지이므로 uuid는 빈 문자열)
+                                updateCurrentTemperature('', msg.value, isError);
+                                
+                                                                 // 현재온도만 업데이트 (그래프는 실시간 업데이트하지 않음)
+                                 if (!isError) {
+    
+                                 }
+                                
+                                if (isError) {
+                                    $('#status').html('<img src="/images/red.png" width="25" height="25">');
+                                } else {
+                                    $('#status').html('<img src="/images/green.png" width="25" height="25">');
+                                    
+                                    // 정상 온도 데이터 수신 시 에러 상태 해제
+                                    if (deviceErrorStates) {
+                                        deviceErrorStates = false;
+                                        deviceErrorCounters = 0;
+                                        
+                                        // 상태표시등 업데이트
+                                        // DIN 이상이 활성 중이면 통신정상이어도 이상표시는 유지한다
+                                        if (!deviceDinErrorStates) {
+                                          if ($('#error img').attr('src') !== '/images/gray.png') {
+                                              $('#error').html('<img src="/images/gray.png" width="25" height="25">');
+                                          }
+                                        }
+                                        
+                                        
+                                        
+                                        // 에러 해제 후 GET&type=1, GET&type=2 2초 간격으로 한 번만 요청
+                                        setTimeout(function() {
+                                            setSensor();
+                       
+                                        }, 2000);
+                                        
+                                        setTimeout(function() {
+                                            getStatus();
+                   
+                                        }, 4000); // 2초 + 2초 = 4초 후
+                                    }
+                                    
+                                    // 마지막 데이터 수신 시간 업데이트
+                                    deviceLastDataTime = Date.now();
+                                    
+                                    // 온도 데이터 수신 시점에 바로 에러 체크
+                                    chkError();
+                                }
+                            } else if (msg.name == 'din') {
+                                // input 상태 변화 알림
+                                if (msg.type == '1') {
+                                    if (msg.value == '1') {
+                                        deviceDinErrorStates = true;
+                                        $('#error').html('<img src="/images/red.png" width="25" height="25">');
+                                    } else {
+                                        deviceDinErrorStates = false;
+                                        // 통신이상이 아닐 때만 회색으로 변경
+                                        if (!deviceErrorStates) {
+                                          $('#error').html('<img src="/images/gray.png" width="25" height="25">');
+                                        }
+                                    }
+                                }
+                            } else if (msg.name == 'output') {
+                                // output 상태 변화 알림
+                                if (msg.value == '1') {
+                                    if (msg.type == '1') {
+                                        // comp 이상
+                                        $('#comp').html('<img src="/images/red.png" width="25" height="25">');
+                                    } else if (msg.type == '2') {
+                                        // def 이상
+                                        $('#defr').html('<img src="/images/red.png" width="25" height="25">');
+                                    } else if (msg.type == '3') {
+                                        // fan 이상
+                                        $('#fan').html('<img src="/images/red.png" width="25" height="25">');
+                                    }
+                                } else if (msg.value == '0') {
+                                    if (msg.type == '1') {
+                                        $('#comp').html('<img src="/images/gray.png" width="25" height="25">');
+                                    } else if (msg.type == '2') {
+                                        $('#defr').html('<img src="/images/gray.png" width="25" height="25">');
+                                    } else if (msg.type == '3') {
+                                        $('#fan').html('<img src="/images/gray.png" width="25" height="25">');
+                                    }
+                                }
+                            }
+                        } else if (msg.actcode == "setres") {
+                            if(msg.p01.length == 1) {
+                                msg.p01 = "0." + msg.p01;
+                            } else if(msg.p01.length == 2) {
+                                msg.p01 = msg.p01.substr(0, 1) + "." + msg.p01.substr(1, 2);
+                            } else if(msg.p01.length == 3) {
+                                msg.p01 = msg.p01.substr(0, 2) + "." + msg.p01.substr(2, 3);
+                            } else if(msg.p01.length == 4) {
+                                msg.p01 = msg.p01.substr(0, 3) + "." + msg.p01.substr(3, 4);
+                            }
+                            $('#setTmp').html(msg.p01 + '°C');
+                            $('#p01').val(msg.p01);
+                            $('#p02').val(msg.p02);
+                            $('#p03').val(msg.p03);
+                            if(msg.p04.length > 2) {
+                                if(msg.p04.indexOf("-") >= 0) {
+
+                                } else {
+                                    msg.p04 = msg.p04.substr(0, 2) + "." + msg.p04.substr(2, 3);
+                                }
+                            }
+                            $('#p04').val(msg.p04);
+                            $('#p05').val(msg.p05);
+                            $('#p06').val(msg.p06);
+                            $('#p07').val(msg.p07).prop("selected", true);
+                            $('#p08').val(msg.p08);
+                            $('#p09').val(msg.p09);
+                            if(msg.p10.length > 2) {
+                                if(msg.p10.indexOf("-") >= 0) {
+
+                                } else {
+                                    msg.p10 = msg.p10.substr(0, 2) + "." + msg.p10.substr(2, 3);
+                                }
+                            }
+                            $('#p10').val(msg.p10);
+                            $('#p11').val(msg.p11).prop("selected", true);
+                            $('#p12').val(msg.p12).prop("selected", true);
+                            $('#p13').val(msg.p13).prop("selected", true);
+                            $('#p14').val(msg.p14).prop("selected", true);
+                            $('#p15').val(msg.p15).prop("selected", true);
+                        } else if (msg.actcode == "actres") {
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 에러 체크 함수
+    function chkError() {
+        var currentTime = Date.now();
+        var timeDiff = currentTime - deviceLastDataTime;
+        
+        // 15초 동안 온도 데이터 미수신 시 에러 체크 (cursorrules 규칙)
+        if (timeDiff > 15000 && !deviceErrorStates) {
+            deviceErrorCounters++;
+            
+            
+            // 3번 연속 미수신 시 에러 상태로 변경
+            if (deviceErrorCounters >= 3) {
+                deviceErrorStates = true;
+                deviceStatusStates = 'gray';
+                deviceErrorDisplayStates = 'red';
+                
+                // 상태표시등 업데이트
+                if ($('#status img').attr('src') !== '/images/gray.png') {
+                    $('#status').html('<img src="/images/gray.png" width="25" height="25">');
+                }
+                if ($('#error img').attr('src') !== '/images/red.png') {
+                    $('#error').html('<img src="/images/red.png" width="25" height="25">');
+                }
+                
+                $('#curTemp').html('Error');
+                
+            }
+        }
+    }
+    
+    // 날짜 이동 함수들
+    $(document).ready(function() {
+        // URL 파라미터에서 날짜 정보 읽어오기
+        setDateFromUrl();
+        
+        // 이전 날짜 버튼 클릭 이벤트
+        $('#prevDay').click(function() {
+            moveDate(-1);
+        });
+        
+        // 다음 날짜 버튼 클릭 이벤트
+        $('#nextDay').click(function() {
+            moveDate(1);
+        });
+    });
+    
+    // URL 파라미터에서 날짜 정보를 읽어와서 입력 필드에 설정
+    function setDateFromUrl() {
+        var urlParams = new URLSearchParams(window.location.search);
+        var startDate = urlParams.get('startDate');
+        var endDate = urlParams.get('endDate');
+        
+        // console.log('URL 파라미터에서 읽은 날짜 - startDate:', startDate, 'endDate:', endDate);
+        
+        if(startDate) {
+            $('#startDate').val(startDate);
+        }
+        if(endDate) {
+            $('#endDate').val(endDate);
+        }
+        
+        // console.log('입력 필드 설정 후 - startDate:', $('#startDate').val(), 'endDate:', $('#endDate').val());
+    }
+    
+    // 날짜 이동 함수
+    function moveDate(direction) {
+        var startDate = new Date($('#startDate').val());
+        var endDate = new Date($('#endDate').val());
+        var today = new Date();
+        
+        // console.log('날짜 이동 시작 - 현재 startDate:', $('#startDate').val(), 'endDate:', $('#endDate').val());
+        
+        // 오늘 날짜를 YYYY-MM-DD 형식으로 변환
+        var todayStr = today.getFullYear() + '-' + 
+                      String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                      String(today.getDate()).padStart(2, '0');
+        
+        // 날짜 이동
+        startDate.setDate(startDate.getDate() + direction);
+        endDate.setDate(endDate.getDate() + direction);
+        
+        // 오늘 날짜를 넘어가지 않도록 제한
+        if (endDate > today) {
+            endDate = new Date(today);
+            startDate = new Date(today);
+        }
+        
+        // 날짜를 YYYY-MM-DD 형식으로 변환
+        var newStartDate = startDate.getFullYear() + '-' + 
+                          String(startDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                          String(startDate.getDate()).padStart(2, '0');
+        var newEndDate = endDate.getFullYear() + '-' + 
+                        String(endDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                        String(endDate.getDate()).padStart(2, '0');
+        
+        // console.log('날짜 이동 후 - newStartDate:', newStartDate, 'newEndDate:', newEndDate);
+        
+        // 입력 필드 업데이트
+        $('#startDate').val(newStartDate);
+        $('#endDate').val(newEndDate);
+        
+        // 입력 필드 값 확인
+        // console.log('입력 필드 업데이트 후 - startDate:', $('#startDate').val(), 'endDate:', $('#endDate').val());
+        
+        // 다음 날짜 버튼 비활성화/활성화
+        if (newEndDate >= todayStr) {
+            $('#nextDay').prop('disabled', true).css('opacity', '0.5');
+        } else {
+            $('#nextDay').prop('disabled', false).css('opacity', '1');
+        }
+        
+        // 날짜 변경 후 데이터 새로고침
+        refreshChartData();
+    }
+    
+    // 차트 데이터 새로고침 함수 (AJAX 방식)
+    function refreshChartData() {
+        var userId = $('#userId').val();
+        var sensorId = $('#sensorId').val();
+        var sensorUuid = $('#sensorUuid').val();
+        var endDate = $('#endDate').val();
+        
+        // 값이 비어있으면 경고
+        if(!userId || !sensorId || !sensorUuid || !endDate) {
+            console.error('필수 파라미터가 비어있습니다!');
+            return;
+        }
+        
+        // AJAX로 데이터 요청 (성능 최적화)
+        $.ajax({
+            url: '/data/getDailyData',
+            type: 'POST',
+            cache: false,
+            timeout: 10000,
+            data: {
+                userId: userId,
+                sensorId: sensorId,
+                sensorUuid: sensorUuid,
+                startDate: endDate,  // endDate를 startDate로 전달
+                endDate: endDate
+            },
+            success: function(response) {
+                if(response.resultCode === '200') {
+                    updateChartWithNewData(response.dailyData);
+                } else {
+                    console.error('데이터 조회 실패:', response.resultMessage);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX 요청 실패:', error);
+            }
+        });
+    }
+    
+    // 새로운 데이터로 차트 업데이트
+    function updateChartWithNewData(dailyData) {
+        if(!dailyData || dailyData.length === 0) {
+            return;
+        }
+        
+        // 데이터 파싱
+        var dailyArr = dailyData.split(',');
+        // 선택된 날짜 상태 고정
+        window._currentChartDate = $('#endDate').val();
+        window._currentDailyArr = dailyArr.slice();
+        
+        // dailyX, dailyY 배열 초기화
+        var dailyX = [];
+        var dailyY = [];
+        
+        // 30분 단위로 48개 데이터 포인트 생성
+        for(var i = 0; i < 48; i++) {
+            var hour = Math.floor(i / 2);
+            var minute = (i % 2) * 30;
+            dailyX.push(String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0'));
+            dailyY.push(null);
+        }
+        
+        // 실제 데이터로 dailyY 업데이트
+        for(var i = 0; i < dailyArr.length; i++) {
+            if(dailyArr[i] && dailyArr[i].includes('^')) {
+                var parts = dailyArr[i].split('^');
+                var timeStr = parts[0];
+                var tempValue = parseFloat(parts[1]);
+                
+                // 시간 문자열에서 시간 추출 (예: "2025-08-06 14:30" -> "14:30")
+                var timeMatch = timeStr.match(/(\d{2}):(\d{2})/);
+                if(timeMatch) {
+                    var hour = parseInt(timeMatch[1]);
+                    var minute = parseInt(timeMatch[2]);
+                    var index = hour * 2 + (minute >= 30 ? 1 : 0);
+                    
+                    if(index >= 0 && index < 48 && !isNaN(tempValue)) {
+                        dailyY[index] = tempValue;
+                    }
+                }
+            }
+        }
+        
+        // 차트 업데이트
+        updateDailyChart(dailyX, dailyY);
+    }
+    
+    // 차트 업데이트 함수
+    function updateDailyChart(dailyX, dailyY) {
+        // 기존 차트가 있으면 제거
+        if(window.dailyChart && typeof window.dailyChart.destroy === 'function') {
+            try {
+                window.dailyChart.destroy();
+            } catch(e) {
+                // 차트 제거 오류 무시
+            }
+        }
+        // 예전 레거시 인스턴스가 남아있을 경우 대비
+        if(window.myChart && typeof window.myChart.destroy === 'function') {
+            try { window.myChart.destroy(); } catch(e) {}
+        }
+        
+        // 새로운 차트 생성
+        var ctx = document.getElementById('dailyChart').getContext('2d');
+        window.dailyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dailyX,
+                datasets: [{
+                    label: '일간 데이터',
+                    data: dailyY,
+                    borderColor: 'rgb(255, 205, 86)',
+                    backgroundColor: 'rgba(255, 205, 86, 0.2)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '온도 (°C)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: '시간 (24시간)'
+                        },
+                        ticks: {
+                            maxTicksLimit: 10,  // 최대 10개의 틱만 표시
+                            maxRotation: 45,    // 라벨 회전 각도
+                            minRotation: 0
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // ===== 간단한 앱 복구 기능 =====
+    
+    // 앱 포커스 시 간단한 새로고침
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            console.log("앱 포커스됨");
+        }
+    });
+    
+    // 차트 페이지 뒤로가기 처리 설정
+    function setupChartBackNavigation() {
+        // 페이지 로드 시 히스토리 상태 추가
+        history.pushState({page: 'chart'}, '차트', window.location.href);
+        
+        // 뒤로가기 시도 시 메인 페이지로 이동
+        window.addEventListener('popstate', function(event) {
+            console.log('차트 페이지에서 뒤로가기 감지 - 메인 페이지로 이동');
+            window.location.replace('/main/main');
+        });
+        
+        // 키보드 뒤로가기 단축키 처리
+        document.addEventListener('keydown', function(event) {
+            if (event.altKey && event.keyCode === 37) { // Alt + Left Arrow
+                event.preventDefault();
+                event.stopPropagation();
+                console.log('Alt+Left 감지 - 메인 페이지로 이동');
+                window.location.replace('/main/main');
+                return false;
+            }
+        });
+        
+        // 마우스 뒤로가기 버튼 처리
+        document.addEventListener('mousedown', function(event) {
+            if (event.button === 3 || event.button === 4) { // 뒤로가기/앞으로가기 버튼
+                event.preventDefault();
+                event.stopPropagation();
+                console.log('마우스 뒤로가기 버튼 감지 - 메인 페이지로 이동');
+                window.location.replace('/main/main');
+                return false;
+            }
+        });
+        
+        // 페이지 이탈 시 히스토리 정리
+        window.addEventListener('beforeunload', function(event) {
+            console.log('차트 페이지 이탈 - 히스토리 정리');
+            history.replaceState({page: 'main'}, '메인', '/main/main');
+        });
+    }
+    
+    // 차트 페이지 뒤로가기 처리 설정 실행
+    setupChartBackNavigation();
+
+</script>
+</body>
+</html>

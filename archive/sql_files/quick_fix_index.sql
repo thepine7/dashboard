@@ -1,0 +1,118 @@
+-- =====================================================
+-- 빠른 인덱스 생성 수정 SQL
+-- =====================================================
+
+-- 연결 타임아웃 설정
+SET SESSION wait_timeout = 28800;
+SET SESSION interactive_timeout = 28800;
+SET SESSION net_read_timeout = 1800;
+SET SESSION net_write_timeout = 1800;
+
+-- 현재 인덱스 확인
+SELECT '현재 인덱스 상태:' as info;
+SELECT 
+    INDEX_NAME,
+    GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as COLUMNS
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = 'hnt' 
+  AND TABLE_NAME = 'hnt_sensor_data'
+  AND INDEX_NAME LIKE 'idx_hnt_sensor_data_%'
+GROUP BY INDEX_NAME
+ORDER BY INDEX_NAME;
+
+-- =====================================================
+-- 인덱스 1: 장치별 시간 범위 조회용
+-- =====================================================
+SELECT '인덱스 1 처리 중...' as status;
+
+-- 인덱스 존재 여부 확인
+SET @index1_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS 
+    WHERE TABLE_SCHEMA = 'hnt' AND TABLE_NAME = 'hnt_sensor_data' 
+    AND INDEX_NAME = 'idx_hnt_sensor_data_uuid_inst_dtm'
+);
+
+-- 디버깅: 존재 여부 확인
+SELECT @index1_exists as index1_exists_count;
+
+SET @sql = IF(@index1_exists = 0,
+    'CREATE INDEX idx_hnt_sensor_data_uuid_inst_dtm ON hnt_sensor_data (uuid, inst_dtm)',
+    'SELECT ''인덱스 1이 이미 존재합니다'' as message'
+);
+
+-- 디버깅: 생성될 SQL 확인
+SELECT @sql as sql_to_execute;
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- =====================================================
+-- 인덱스 2: 사용자별 장치 조회용
+-- =====================================================
+SELECT '인덱스 2 처리 중...' as status;
+
+-- 인덱스 존재 여부 확인
+SET @index2_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS 
+    WHERE TABLE_SCHEMA = 'hnt' AND TABLE_NAME = 'hnt_sensor_data' 
+    AND INDEX_NAME = 'idx_hnt_sensor_data_user_id_uuid'
+);
+
+-- 디버깅: 존재 여부 확인
+SELECT @index2_exists as index2_exists_count;
+
+SET @sql = IF(@index2_exists = 0,
+    'CREATE INDEX idx_hnt_sensor_data_user_id_uuid ON hnt_sensor_data (user_id, uuid)',
+    'SELECT ''인덱스 2가 이미 존재합니다'' as message'
+);
+
+-- 디버깅: 생성될 SQL 확인
+SELECT @sql as sql_to_execute;
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- =====================================================
+-- 인덱스 3: 시간 기반 조회용
+-- =====================================================
+SELECT '인덱스 3 처리 중...' as status;
+
+-- 인덱스 존재 여부 확인
+SET @index3_exists = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS 
+    WHERE TABLE_SCHEMA = 'hnt' AND TABLE_NAME = 'hnt_sensor_data' 
+    AND INDEX_NAME = 'idx_hnt_sensor_data_inst_dtm'
+);
+
+-- 디버깅: 존재 여부 확인
+SELECT @index3_exists as index3_exists_count;
+
+SET @sql = IF(@index3_exists = 0,
+    'CREATE INDEX idx_hnt_sensor_data_inst_dtm ON hnt_sensor_data (inst_dtm)',
+    'SELECT ''인덱스 3이 이미 존재합니다'' as message'
+);
+
+-- 디버깅: 생성될 SQL 확인
+SELECT @sql as sql_to_execute;
+
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- =====================================================
+-- 완료 확인
+-- =====================================================
+SELECT '모든 인덱스 생성 완료!' as status;
+
+SELECT 
+    INDEX_NAME,
+    GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as COLUMNS,
+    '생성 완료' as status
+FROM INFORMATION_SCHEMA.STATISTICS 
+WHERE TABLE_SCHEMA = 'hnt' 
+  AND TABLE_NAME = 'hnt_sensor_data'
+  AND INDEX_NAME LIKE 'idx_hnt_sensor_data_%'
+GROUP BY INDEX_NAME
+ORDER BY INDEX_NAME;

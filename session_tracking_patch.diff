@@ -1,0 +1,286 @@
+=== 세션 추적을 위한 Servlet Filter + HandlerInterceptor 패치 ===
+
+## 📁 새로 생성된 파일들
+
+### 1. SessionTrackingFilter.java
+```diff
++ package com.andrew.hnt.api.filter;
++ 
++ import org.slf4j.Logger;
++ import org.slf4j.LoggerFactory;
++ import org.springframework.core.annotation.Order;
++ import org.springframework.stereotype.Component;
++ 
++ import javax.servlet.*;
++ import javax.servlet.http.HttpServletRequest;
++ import javax.servlet.http.HttpServletResponse;
++ import javax.servlet.http.HttpSession;
++ import java.io.IOException;
++ import java.util.Enumeration;
++ import java.util.HashMap;
++ import java.util.Map;
++ 
++ /**
++  * 세션 추적을 위한 Servlet Filter
++  * 로그인 → 메인 페이지 흐름에서 세션 변화를 추적합니다.
++  */
++ @Component
++ @Order(1) // 가장 먼저 실행되도록 설정
++ public class SessionTrackingFilter implements Filter {
++     
++     private static final Logger logger = LoggerFactory.getLogger(SessionTrackingFilter.class);
++     
++     // ... (전체 구현 내용)
++ }
+```
+
+### 2. SessionTrackingInterceptor.java
+```diff
++ package com.andrew.hnt.api.interceptor;
++ 
++ import org.slf4j.Logger;
++ import org.slf4j.LoggerFactory;
++ import org.springframework.stereotype.Component;
++ import org.springframework.web.servlet.HandlerInterceptor;
++ import org.springframework.web.servlet.ModelAndView;
++ 
++ import javax.servlet.http.HttpServletRequest;
++ import javax.servlet.http.HttpServletResponse;
++ import javax.servlet.http.HttpSession;
++ import java.util.Enumeration;
++ import java.util.HashMap;
++ import java.util.Map;
++ import java.util.Objects;
++ 
++ /**
++  * 세션 추적을 위한 HandlerInterceptor
++  * 컨트롤러 진입 전/후 세션 변화를 추적합니다.
++  */
++ @Component
++ public class SessionTrackingInterceptor implements HandlerInterceptor {
++     
++     // ... (전체 구현 내용)
++ }
+```
+
+## 📝 수정된 파일들
+
+### 3. WebConfig.java
+```diff
+  import com.andrew.hnt.api.interceptor.PerformanceInterceptor;
++ import com.andrew.hnt.api.interceptor.SessionTrackingInterceptor;
+- import com.andrew.hnt.api.service.PerformanceMonitoringService;
+- import org.springframework.beans.factory.annotation.Autowired;
+  import org.springframework.context.annotation.Bean;
+  import org.springframework.context.annotation.Configuration;
+  import org.springframework.web.servlet.config.annotation.CorsRegistry;
+  import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+  import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+  import org.springframework.web.servlet.view.InternalResourceViewResolver;
+
+  @Configuration
+  public class WebConfig implements WebMvcConfigurer {
+
+      @Bean
+      public PerformanceInterceptor performanceInterceptor() {
+          return new PerformanceInterceptor();
+      }
++     
++     @Bean
++     public SessionTrackingInterceptor sessionTrackingInterceptor() {
++         return new SessionTrackingInterceptor();
++     }
+
+      // ... (기존 코드)
+
+      @Override
+      public void addInterceptors(InterceptorRegistry registry) {
++         // 세션 추적 인터셉터 등록 (로그인/메인 페이지 추적)
++         registry.addInterceptor(sessionTrackingInterceptor())
++                 .addPathPatterns(
++                     "/login/loginProcess",
++                     "/main/main",
++                     "/api/auth/me"
++                 );
++         
+          // 성능 모니터링 인터셉터 등록
+          registry.addInterceptor(performanceInterceptor())
+                  .addPathPatterns("/**")
+                  .excludePathPatterns(
+                      "/css/**",
+                      "/js/**", 
+                      "/images/**",
+                      "/fonts/**",
+                      "/plugins/**",
+                      "/dist/**",
+                      "/favicon.ico"
+                  );
+      }
+  }
+```
+
+## 🔧 기능 설명
+
+### SessionTrackingFilter 기능
+- **요청별 세션 스냅샷**: sessionId, isNew, attributeNames/values (최대 10개)
+- **요청 태그 구분**: LOGIN_POST, LOGIN_GET, MAIN_GET, MAIN_REDIRECT, AUTH_ME 등
+- **쿠키 추적**: JSESSIONID 쿠키 상세 정보 (Domain, Path, Secure, HttpOnly)
+- **리다이렉트 체인 추적**: Location 헤더, 상태코드, 동일/교차 도메인 여부
+- **Set-Cookie 헤더 확인**: 쿠키 재설정 여부 및 상세 내용
+
+### SessionTrackingInterceptor 기능
+- **컨트롤러 진입 전/후 비교**: preHandle/postHandle에서 세션 diff 분석
+- **핵심 키 강조**: SESSION_USER_ID, userId 등 중요 속성 변화 추적
+- **ThreadLocal 사용**: 요청별 세션 스냅샷 안전하게 저장
+- **변화 분석**: 추가/삭제/변경된 속성 상세 로깅
+
+## 🚀 사용 방법
+
+### 1. 적용
+```bash
+# 빌드
+mvn clean package -DskipTests
+
+# 배포 (tomcat2)
+copy target\hnt-sensor-api-0.0.1-SNAPSHOT.war Y:\docker\tomcat2\ROOT.war
+```
+
+### 2. 로그 확인
+로그인 → 메인 페이지 흐름에서 다음과 같은 로그가 출력됩니다:
+
+```
+=== [LOGIN_POST] 요청 시작 ===
+URL: POST /login/loginProcess
+[LOGIN_POST] 요청 전 세션: 없음
+[LOGIN_POST] 요청 후 세션 스냅샷:
+  - 세션 ID: ABC123
+  - isNew: true
+  🔑 SESSION_USER_ID: thepine
+  🔑 userId: thepine
+
+=== [INTERCEPTOR] 컨트롤러 진입 전 ===
+[INTERCEPTOR] preHandle 세션 스냅샷 저장 완료
+🔑 SESSION_USER_ID: thepine
+
+=== [INTERCEPTOR] 컨트롤러 처리 후 ===
+📝 핵심 속성 변화:
+  ➕ SESSION_USER_ID: null → thepine
+  ➕ userId: null → thepine
+
+=== [MAIN_GET] 요청 시작 ===
+URL: GET /main/main
+[MAIN_GET] 요청 전 세션 스냅샷:
+  - 세션 ID: ABC123
+  - isNew: false
+  🔑 SESSION_USER_ID: thepine
+  🔑 userId: thepine
+```
+
+## 🔄 되돌리기 방법
+
+### 1. 파일 삭제
+```bash
+# 생성된 파일들 삭제
+rm src/main/java/com/andrew/hnt/api/filter/SessionTrackingFilter.java
+rm src/main/java/com/andrew/hnt/api/interceptor/SessionTrackingInterceptor.java
+```
+
+### 2. WebConfig.java 되돌리기
+```diff
+  import com.andrew.hnt.api.interceptor.PerformanceInterceptor;
+- import com.andrew.hnt.api.interceptor.SessionTrackingInterceptor;
+  import org.springframework.context.annotation.Bean;
+  import org.springframework.context.annotation.Configuration;
+  import org.springframework.web.servlet.config.annotation.CorsRegistry;
+  import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+  import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+  import org.springframework.web.servlet.view.InternalResourceViewResolver;
+
+  @Configuration
+  public class WebConfig implements WebMvcConfigurer {
+
+      @Bean
+      public PerformanceInterceptor performanceInterceptor() {
+          return new PerformanceInterceptor();
+      }
+-     
+-     @Bean
+-     public SessionTrackingInterceptor sessionTrackingInterceptor() {
+-         return new SessionTrackingInterceptor();
+-     }
+
+      // ... (기존 코드)
+
+      @Override
+      public void addInterceptors(InterceptorRegistry registry) {
+-         // 세션 추적 인터셉터 등록 (로그인/메인 페이지 추적)
+-         registry.addInterceptor(sessionTrackingInterceptor())
+-                 .addPathPatterns(
+-                     "/login/loginProcess",
+-                     "/main/main",
+-                     "/api/auth/me"
+-                 );
+-         
+          // 성능 모니터링 인터셉터 등록
+          registry.addInterceptor(performanceInterceptor())
+                  .addPathPatterns("/**")
+                  .excludePathPatterns(
+                      "/css/**",
+                      "/js/**", 
+                      "/images/**",
+                      "/fonts/**",
+                      "/plugins/**",
+                      "/dist/**",
+                      "/favicon.ico"
+                  );
+      }
+  }
+```
+
+### 3. 재빌드 및 배포
+```bash
+mvn clean package -DskipTests
+copy target\hnt-sensor-api-0.0.1-SNAPSHOT.war Y:\docker\tomcat2\ROOT.war
+```
+
+## 📊 예상 로그 출력 예시
+
+### 로그인 성공 시
+```
+=== [LOGIN_POST] 요청 시작 ===
+URL: POST /login/loginProcess
+[LOGIN_POST] 요청 전 세션: 없음
+[LOGIN_POST] 요청 후 세션 스냅샷:
+  - 세션 ID: 1A2B3C4D5E6F7G8H
+  - isNew: true
+  🔑 SESSION_USER_ID: thepine
+  🔑 SESSION_USER_GRADE: A
+  🔑 userId: thepine
+  🔑 userGrade: A
+[LOGIN_POST] 응답 상태: 200
+[LOGIN_POST] Set-Cookie: 있음
+Set-Cookie: JSESSIONID=1A2B3C4D5E6F7G8H; Path=/; HttpOnly; SameSite=Lax
+
+=== [MAIN_GET] 요청 시작 ===
+URL: GET /main/main
+[MAIN_GET] 요청 전 세션 스냅샷:
+  - 세션 ID: 1A2B3C4D5E6F7G8H
+  - isNew: false
+  🔑 SESSION_USER_ID: thepine
+  🔑 userId: thepine
+[MAIN_GET] 응답 상태: 200
+[MAIN_GET] Set-Cookie: 없음
+```
+
+### 세션 검증 실패 시
+```
+=== [MAIN_GET] 요청 시작 ===
+URL: GET /main/main
+[MAIN_GET] 요청 전 세션: 없음
+[MAIN_GET] 응답 상태: 302
+🔄 리다이렉트: 302 → /login/login
+도메인: 동일
+[MAIN_GET] Set-Cookie: 없음
+```
+
+이 패치를 통해 로그인 → 메인 페이지 흐름에서 세션 정보가 언제, 어디서, 어떻게 변화하는지 정확히 추적할 수 있습니다.

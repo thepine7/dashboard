@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.andrew.hnt.api.mapper.DataMapper">
+
+    <select id="getDeviceList" parameterType="java.lang.String" resultType="java.util.HashMap">
+        select 
+            sensor_name
+            , sensor_uuid
+            , user_id
+        from hnt_sensor_info
+        where user_id = #{userId}
+    </select>
+
+    <update id="updateSensorInfo" parameterType="java.util.HashMap">
+        update hnt_sensor_info set
+            sensor_name = #{chgSensorName}
+        where user_id = #{userId}
+        and sensor_uuid = #{sensorUuid}
+    </update>
+
+    <delete id="deleteSensorInfo" parameterType="java.util.HashMap">
+        delete from hnt_sensor_info
+        where sensor_uuid = #{sensorUuid}
+    </delete>
+
+    <delete id="deleteSensorData" parameterType="java.util.HashMap">
+        delete from hnt_sensor_data
+        where user_id = #{userId}
+        and uuid = #{sensorUuid}
+    </delete>
+
+    <!-- 
+    최적화된 센서 데이터 조회 쿼리 - 리팩토링 버전
+    
+    개선사항:
+    1. 복잡한 중첩 조건문을 별도 쿼리로 분리
+    2. 가독성 향상 및 유지보수성 개선
+    3. 기존 인덱스 활용 (idx_hnt_sensor_data_uuid_inst_dtm)
+    4. 성능 최적화
+    
+    사용법:
+    - gu: "d"(일간), "w"(주간), "y"(연간)
+    - startDateTime, endDateTime: 사용자 지정 기간
+    - setDate1, setDate2: 기존 형식 기간
+    -->
+    <select id="selectSensorData" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        <choose>
+            <when test='gu == "d"'>
+                <include refid="selectDailySensorData" />
+            </when>
+            <when test='gu == "w"'>
+                <include refid="selectWeeklySensorData" />
+            </when>
+            <when test='gu == "y"'>
+                <include refid="selectYearlySensorData" />
+            </when>
+            <otherwise>
+                <include refid="selectDefaultSensorData" />
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 일간 데이터 조회 쿼리 (30분 단위 그룹화 최적화) -->
+    <sql id="selectDailySensorData">
+        select
+            date_format(inst_dtm, '%Y-%m-%d') as getDate
+            , date_format(inst_dtm, '%Y-%m-%d %H:%i') as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        <include refid="commonTimeCondition" />
+        group by 
+            date_format(inst_dtm, '%Y-%m-%d'),
+            date_format(inst_dtm, '%Y-%m-%d %H'),
+            floor(minute(inst_dtm) / 30) * 30
+        order by getDate asc, inst_dtm asc
+        limit 200
+    </sql>
+    
+    <!-- 최적화된 일간 데이터 조회 쿼리 (인덱스 활용) -->
+    <sql id="selectDailySensorDataOptimized">
+        select
+            date_format(inst_dtm, '%Y-%m-%d') as getDate
+            , concat(date_format(inst_dtm, '%Y-%m-%d %H:'), lpad(floor(minute(inst_dtm) / 30) * 30, 2, '0')) as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        and inst_dtm >= #{startDateTime}
+        and inst_dtm &lt;= #{endDateTime}
+        group by 
+            date_format(inst_dtm, '%Y-%m-%d'),
+            date_format(inst_dtm, '%Y-%m-%d %H'),
+            floor(minute(inst_dtm) / 30) * 30
+        order by getDate asc, inst_dtm asc
+        limit 200
+    </sql>
+
+    <!-- 주간 데이터 조회 쿼리 -->
+    <sql id="selectWeeklySensorData">
+        select
+            date_format(inst_dtm, '%Y-%m-%d') as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        <include refid="commonTimeCondition" />
+        group by date_format(inst_dtm, '%Y-%m-%d')
+        order by inst_dtm asc
+    </sql>
+
+    <!-- 연간 데이터 조회 쿼리 -->
+    <sql id="selectYearlySensorData">
+        select
+            date_format(inst_dtm, '%Y-%m') as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        <include refid="commonTimeCondition" />
+        group by date_format(inst_dtm, '%Y-%m')
+        order by inst_dtm asc
+    </sql>
+
+    <!-- 기본 데이터 조회 쿼리 -->
+    <sql id="selectDefaultSensorData">
+        select
+            date_format(inst_dtm, '%Y-%m-%d %H') as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        <include refid="commonTimeCondition" />
+        group by date_format(inst_dtm, '%Y-%m-%d %H')
+        order by inst_dtm asc
+    </sql>
+
+    <!-- 공통 시간 조건 -->
+    <sql id="commonTimeCondition">
+        <choose>
+            <when test='startDateTime != null and startDateTime != "" and endDateTime != null and endDateTime != ""'>
+                and inst_dtm between #{startDateTime} and #{endDateTime}
+            </when>
+            <when test='setDate1 != null and setDate1 != "" and setDate2 != null and setDate2 != ""'>
+                and inst_dtm between str_to_date(#{setDate1}, '%Y%m%d%H%i%s') and str_to_date(#{setDate2}, '%Y%m%d%H%i%s')
+            </when>
+            <when test='gu == "d"'>
+                and inst_dtm between date_format(now(), '%Y-%m-%d 00:00:00') and now()
+            </when>
+            <when test='gu == "w"'>
+                and inst_dtm between date_add(now(), interval -1 month) and now()
+            </when>
+            <when test='gu == "y"'>
+                and inst_dtm between date_add(now(), interval -1 year) and now()
+            </when>
+            <otherwise>
+                and inst_dtm between date_add(now(), interval -1 day) and now()
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!-- 최적화된 일간 데이터 조회 - 인덱스 활용 (30분 단위) -->
+    <select id="selectDailyData" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+            concat(date_format(inst_dtm, '%Y-%m-%d %H:'), lpad(floor(minute(inst_dtm) / 30) * 30, 2, '0')) as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        and inst_dtm between #{startDateTime} and #{endDateTime}
+        group by 
+            date_format(inst_dtm, '%Y-%m-%d'),
+            date_format(inst_dtm, '%Y-%m-%d %H'),
+            floor(minute(inst_dtm) / 30) * 30,
+            concat(date_format(inst_dtm, '%Y-%m-%d %H:'), lpad(floor(minute(inst_dtm) / 30) * 30, 2, '0'))
+        order by concat(date_format(inst_dtm, '%Y-%m-%d %H:'), lpad(floor(minute(inst_dtm) / 30) * 30, 2, '0')) asc
+        limit 200
+    </select>
+    
+    <!-- 고성능 일간 데이터 조회 (커서 기반 페이징) -->
+    <select id="selectDailyDataWithCursor" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+            concat(date_format(inst_dtm, '%Y-%m-%d %H:'), lpad(floor(minute(inst_dtm) / 30) * 30, 2, '0')) as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+            , inst_dtm as raw_inst_dtm
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        and inst_dtm >= #{startDateTime}
+        and inst_dtm &lt;= #{endDateTime}
+        <if test="lastCursor != null and lastCursor != ''">
+            and inst_dtm > #{lastCursor}
+        </if>
+        group by 
+            date_format(inst_dtm, '%Y-%m-%d'),
+            date_format(inst_dtm, '%Y-%m-%d %H'),
+            floor(minute(inst_dtm) / 30) * 30,
+            concat(date_format(inst_dtm, '%Y-%m-%d %H:'), lpad(floor(minute(inst_dtm) / 30) * 30, 2, '0')),
+            inst_dtm
+        order by inst_dtm asc
+        limit #{pageSize}
+    </select>
+
+    <!-- 최적화된 주간 데이터 조회 - 인덱스 활용 -->
+    <select id="selectWeeklyData" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+            date_format(inst_dtm, '%Y-%m-%d') as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        and inst_dtm between #{startDateTime} and #{endDateTime}
+        group by date_format(inst_dtm, '%Y-%m-%d')
+        order by inst_dtm asc
+    </select>
+
+    <!-- 최적화된 연간 데이터 조회 - 인덱스 활용 -->
+    <select id="selectYearlyData" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+            date_format(inst_dtm, '%Y-%m') as inst_dtm
+            , round(avg(sensor_value), 1) as sensor_value
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        and inst_dtm between #{startDateTime} and #{endDateTime}
+        group by date_format(inst_dtm, '%Y-%m')
+        order by inst_dtm asc
+    </select>
+
+    <!-- 커서 기반 페이징 - 대용량 데이터 처리용 -->
+    <select id="selectSensorDataWithCursor" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+            inst_dtm
+            , sensor_value
+            , uuid
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        <if test="lastCursor != null and lastCursor != ''">
+            and inst_dtm > #{lastCursor}
+        </if>
+        <if test="startDateTime != null and startDateTime != ''">
+            and inst_dtm >= #{startDateTime}
+        </if>
+        <if test="endDateTime != null and endDateTime != ''">
+            and inst_dtm &lt;= #{endDateTime}
+        </if>
+        order by inst_dtm asc
+        limit #{pageSize}
+    </select>
+
+    <!-- 최적화된 페이징 - OFFSET 대신 ID 기반 -->
+    <select id="selectSensorDataWithIdPaging" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+            inst_dtm
+            , sensor_value
+            , uuid
+        from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        <if test="lastId != null and lastId != ''">
+            and id > #{lastId}
+        </if>
+        <if test="startDateTime != null and startDateTime != ''">
+            and inst_dtm >= #{startDateTime}
+        </if>
+        <if test="endDateTime != null and endDateTime != ''">
+            and inst_dtm &lt;= #{endDateTime}
+        </if>
+        order by id asc
+        limit #{pageSize}
+    </select>
+
+</mapper>

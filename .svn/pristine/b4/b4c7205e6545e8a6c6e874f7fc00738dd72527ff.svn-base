@@ -1,0 +1,1364 @@
+package com.andrew.hnt.api.controller;
+
+import com.andrew.hnt.api.model.LoginVO;
+import com.andrew.hnt.api.service.LoginService;
+import com.andrew.hnt.api.util.StringUtil;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import com.andrew.hnt.api.model.UserInfo;
+import com.andrew.hnt.api.mqtt.common.MQTT;
+import com.andrew.hnt.api.service.AdminService;
+
+import java.util.*;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+/**
+ * AdminController
+ * 관리자 화면 처리, 각종 설정 화면 처리 컨트롤러
+ */
+@Controller
+@RequestMapping("/admin")
+public class AdminController extends DefaultController {
+	
+	@Autowired
+	private AdminService adminService;
+
+	@Autowired
+	private LoginService loginService;
+	
+	@Autowired
+	private CommonController commonController;
+	
+	private Logger logger = LoggerFactory.getLogger(this.getClass());
+
+	/**
+	 * 장치 설정 화면
+	 * @param req
+	 * @param res
+	 * @param userId
+	 * @param sensorUuid
+	 * @param model
+	 * @return
+	 */
+    @RequestMapping(value = "/sensorSetting", method = RequestMethod.GET)
+    public String sensorSettiong(
+            HttpServletRequest req
+            , HttpServletResponse res
+            , @RequestParam(name = "userId", required = false) String userId
+            , @RequestParam(name = "sensorUuid", required = false) String sensorUuid
+            , Model model
+    		) {
+
+        String result = "admin/sensorSetting";
+        
+        HttpSession session = req.getSession();
+        
+        // 세션에서 사용자 정보 확인
+        String sessionUserId = (String) session.getAttribute("userId");
+        String sessionUserGrade = (String) session.getAttribute("userGrade");
+        String sessionUserNm = (String) session.getAttribute("userNm");
+        
+        logger.info("센서 설정 페이지 접근 - 세션 userId: {}, URL userId: {}, 세션 userGrade: {}", 
+                   sessionUserId, userId, sessionUserGrade);
+
+        // 세션 유효성 검사 (소프트 복구 시도)
+        if (!isValidSession(session)) {
+            String fallbackUserId = (String) session.getAttribute("loginUserId");
+            if (!StringUtil.isEmpty(fallbackUserId)) {
+                // 앱/웹 공통: 로그인 직후 세션 보완 전 단계에서 loginUserId가 존재할 수 있음
+                session.setAttribute("userId", fallbackUserId);
+                if (session.getAttribute("userGrade") == null) {
+                    // 기본값 U, 추후 CommonController.addSidebarData에서 보완
+                    session.setAttribute("userGrade", "U");
+                }
+                logger.info("센서 설정 페이지 접근 - isValidSession 실패, loginUserId로 세션 보완 후 진행: {}", fallbackUserId);
+            } else {
+                logger.warn("센서 설정 페이지 접근 - 세션 유효하지 않음, 로그인 페이지로 리다이렉트");
+                return "redirect:/login/login";
+            }
+        }
+        
+        // 권한 검사 (A, U 등급만 접근 가능, B 등급은 제외)
+        String userGrade = (String) session.getAttribute("userGrade");
+        if ("B".equals(userGrade)) {
+            logger.warn("센서 설정 페이지 접근 - 부계정은 접근 불가, 메인으로 리다이렉트");
+            return "redirect:/main/main";
+        }
+        
+        // 세션에서 사용자 정보 우선 사용
+        if(!StringUtil.isEmpty(sessionUserId)) {
+            userId = sessionUserId;
+            logger.info("userId를 세션에서 사용: {}", userId);
+        }
+        
+        // 세션에서 사용자 정보를 모델에 직접 설정
+        if(!StringUtil.isEmpty(sessionUserNm)) {
+            model.addAttribute("userNm", sessionUserNm);
+        }
+        
+        if(!StringUtil.isEmpty(sessionUserGrade)) {
+            model.addAttribute("userGrade", sessionUserGrade);
+        }
+        
+        // 세션 우선: DB에서 직접 사이드바 데이터 조회 (세션 userId 사용)
+        String effectiveUserId = (sessionUserId != null && !sessionUserId.isEmpty()) ? sessionUserId : userId;
+        commonController.addSidebarData(effectiveUserId, model, session);
+        
+        // userId가 없으면 기본값 설정
+        if(StringUtil.isEmpty(userId)) {
+            userId = (String) model.asMap().get("userId");
+        }
+        
+        UserInfo user = new UserInfo();
+        String topicStr = "";
+
+		try {
+			// 사용자 아이디가 있을 경우 사용자 아이디로 사용자 정보와 연결된 센서 정보를 가져온다.
+			model.addAttribute("userId", userId);
+			model.addAttribute("sensorUuid", sensorUuid);
+
+			Map<String, Object> userInfo = new HashMap<String, Object>();
+			userInfo = adminService.getUserInfo(userId, sensorUuid);
+
+			if(null != userInfo && !"".equals(userInfo)) {
+				user = (UserInfo) userInfo.get("userInfo");
+				Map<String, Object> sensor = (Map<String, Object>) userInfo.get("sensorInfo");
+
+                if(null != sensor && 0 < sensor.size()) {
+                    // 출력 제어 및 설정 전송 토픽은 'TC' 고정 세그먼트를 사용
+                    topicStr = "HBEE/"+String.valueOf(sensor.get("sensor_id"))+"/TC/"+String.valueOf(sensor.get("sensor_uuid"))+"/SER";
+                }
+
+				String sensorName = "";
+				sensorName = "장치";
+
+				model.addAttribute("user", user);
+				model.addAttribute("topicStr", topicStr);
+				model.addAttribute("sensorUuid", sensorUuid);
+				model.addAttribute("sensorName", sensorName);
+				model.addAttribute("token", session.getAttribute("token"));
+				model.addAttribute("sensorId", String.valueOf(sensor.get("sensor_id")));
+				
+				// 센서 정보 추가
+				if(null != sensor && 0 < sensor.size()) {
+					model.addAttribute("sensorInfo", sensor);
+					
+					// 센서 타입에 따른 온도 범위 설정
+					String sensorType = String.valueOf(sensor.get("sensor_type"));
+					String tempRange = "";
+					String sensorDisplayName = "";
+					
+					if("PT100".equals(sensorType)) {
+						tempRange = "-200°C ~ 850°C";
+						sensorDisplayName = "PT100(T3)";
+					} else if("NTC".equals(sensorType)) {
+						tempRange = "-50°C ~ 125°C";
+						sensorDisplayName = "NTC(T1)";
+					} else if("T3".equals(sensorType)) {
+						tempRange = "-200°C ~ 850°C";  // T3는 PT100과 동일한 범위
+						sensorDisplayName = "PT100(T3)";
+					} else if("T1".equals(sensorType)) {
+						tempRange = "-50°C ~ 125°C";  // T1은 NTC와 동일한 범위
+						sensorDisplayName = "NTC(T1)";
+					} else if("T2".equals(sensorType)) {
+						tempRange = "-50°C ~ 125°C";  // T2는 NTC와 동일한 범위
+						sensorDisplayName = "NTC(T2)";
+					} else {
+						tempRange = "-50°C ~ 125°C"; // 기본값
+						sensorDisplayName = "NTC(T1)";
+					}
+					model.addAttribute("tempRange", tempRange);
+					model.addAttribute("sensorType", sensorType);
+					model.addAttribute("sensorDisplayName", sensorDisplayName);
+				}
+
+				// DB에 저장된 알람 설정 정보를 가져온다.
+				Map<String, Object> alarmMap = new HashMap<String, Object>();
+				Map<String, Object> param = new HashMap<String, Object>();
+				// 부계정이 메인 계정의 장치 알람설정을 조회할 때는 sensorId를 실제 장치 소유자 ID로 설정
+				String actualSensorId = String.valueOf(sensor.get("sensor_id"));
+				param.put("userId", userId);
+				param.put("sensorId", actualSensorId);  // 실제 장치 소유자 ID 사용
+				param.put("sensorUuid", sensorUuid);
+				logger.info("userId : " + userId);
+				logger.info("loginUserId : " + session.getAttribute("loginUserId"));
+
+				try {
+					alarmMap = adminService.getAlarmSetting(param);
+
+					if(null != alarmMap && 0 < alarmMap.size()) {
+						JSONObject alarm = new JSONObject(alarmMap);
+						model.addAttribute("alarmMap", alarm);
+					}
+					
+
+				} catch(Exception e) {
+					logger.error("Error in getAlarmSetting: " + e.toString());
+					e.printStackTrace();
+				}
+
+			}
+		} catch(Exception e) {
+			logger.error("Error in sensorSetting: " + e.toString());
+			e.printStackTrace();
+		}
+
+        return result;
+    }
+
+	/**
+	 * 장치로 명령어 전송 처리
+	 * @param req
+	 * @param res
+	 * @param sensorMap
+	 * @return
+	 */
+	@RequestMapping(value = "/setSensor", method = RequestMethod.POST)
+    public @ResponseBody Map<String, Object> setSensor(
+    		HttpServletRequest req
+    		, HttpServletResponse res
+    		, @RequestBody Map<String, Object> sensorMap
+    		) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+    	
+    	HttpSession session = req.getSession();
+    	
+    	if(null != sensorMap && 0 < sensorMap.size()) {
+    		String sendTopic = "";
+    		String payload = "";
+    		String setGu = "";
+    		String userId = "";
+    		String p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11, p12, p13, p14, p15, p16;
+    		
+    		sendTopic = String.valueOf(sensorMap.get("topicStr"));
+    		setGu = String.valueOf(sensorMap.get("setGu"));
+    		userId = String.valueOf(sensorMap.get("userId"));
+    		p01 = String.valueOf(sensorMap.get("p01"));
+    		p02 = String.valueOf(sensorMap.get("p02"));
+    		p03 = String.valueOf(sensorMap.get("p03"));
+    		p04 = String.valueOf(sensorMap.get("p04"));
+    		p05 = String.valueOf(sensorMap.get("p05"));
+    		p06 = String.valueOf(sensorMap.get("p06"));
+    		p07 = String.valueOf(sensorMap.get("p07"));
+    		p08 = String.valueOf(sensorMap.get("p08"));
+    		p09 = String.valueOf(sensorMap.get("p09"));
+    		p10 = String.valueOf(sensorMap.get("p10"));
+			p11 = String.valueOf(sensorMap.get("p11"));
+			p12 = String.valueOf(sensorMap.get("p12"));
+			p13 = String.valueOf(sensorMap.get("p13"));
+			p14 = String.valueOf(sensorMap.get("p14"));
+			p15 = String.valueOf(sensorMap.get("p15"));
+			p16 = String.valueOf(sensorMap.get("p16"));
+    		
+    		if(null != setGu && !"".equals(setGu)) {
+    			if("param".equals(setGu)) {
+    				payload = "SET&p01="+p01+"&p02="+p02+"&p03="+p03+"&p04="+p04+"&p05="+p05+"&p06="+p06+"&p07="+p07+"&p08="+p08
+							+"&p09="+p09+"&p10="+p10+"&p11="+p11+"&p12="+p12+"&p13="+p13+"&p14="+p14+"&p15="+p15+"&p16="+p16;
+    			} else if("defrost".equals(setGu)) {
+					payload = "ACT&name=forcedef&value=1";    // 강제제상 시작
+				} else if("stopDefrost".equals(setGu)) {
+    				payload = "ACT&name=forcedef&value=0";    // 강제제상 종료
+    			} else if("readparam".equals(setGu)) {
+    				payload = "GET&type=1";
+            } else if("initdevice".equals(setGu)) {
+                // 장치 삭제 프로토콜: name은 고정 키 'userId'
+                payload = "ACT&name=userId&value=0";    // 기기 초기화(삭제)
+            } else if("readstatus".equals(setGu)) {
+    				payload = "GET&type=2";
+            } else if ("output".equals(setGu)) {
+                // 출력 단자 수동 제어: ACT&name=output&type={1~99}&ch={1~99}&value=0|1
+                String outType = String.valueOf(sensorMap.get("outType"));
+                String outCh = String.valueOf(sensorMap.get("outCh"));
+                String outValue = String.valueOf(sensorMap.get("outValue"));
+                if (outType == null || outType.isEmpty()) { outType = "1"; }
+                if (outCh == null || outCh.isEmpty()) { outCh = "1"; }
+                if (!"1".equals(outValue)) { outValue = "0"; }
+                payload = "ACT&name=output&type=" + outType + "&ch=" + outCh + "&value=" + outValue;
+				}
+    		}
+    		
+    		String MqttServer1 = "tcp://hntnas.diskstation.me:1883";
+    		String MqttServer2 = "";
+    		String client_id = "";
+    		String userName = "hnt1";
+    		String password = "abcde";
+        String topic = "#";
+    		String msg = "";
+    		String readMsg = "";
+    		
+    		client_id = UUID.randomUUID().toString();
+    		
+        MQTT client = new MQTT(MqttServer1, client_id, userName, password);
+        if(null != sendTopic && !"".equals(sendTopic)) {
+            // 응답 구독 토픽은 DEV로 전환
+            if (sendTopic.endsWith("/SER")) {
+                topic = sendTopic.substring(0, sendTopic.length() - 3) + "DEV";
+            } else {
+                topic = sendTopic;
+            }
+        }
+
+        client.init(topic, "Y"); // 응답 수신을 위해 구독
+        client.publish(payload, 0, sendTopic); // 요청은 SER로 발행
+    		String resultMsg = client.getMsg();
+    		String rcvTopic = client.getRcvTopic();
+
+    		resultMap.put("resultCode", "200");
+    		resultMap.put("resultMsg", resultMsg);
+    		resultMap.put("rcvTopic", rcvTopic);
+    	}
+    	
+    	return resultMap;
+    }
+
+	/**
+	 * 장치 설정 저장
+	 * @param req
+	 * @param res
+	 * @param settingMap
+	 * @return
+	 */
+	@RequestMapping(value = "/saveSensorSetting", method = RequestMethod.POST)
+    public @ResponseBody Map<String, Object> saveSensorSetting(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> settingMap
+		) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+
+    	if(null != settingMap && 0 < settingMap.size()) {
+    		try {
+    			// 기존 알람설정 조회
+    			Map<String, Object> existingSetting = adminService.selectSetting(settingMap);
+    			
+    			// 변경된 항목 확인
+    			StringBuilder changedItems = new StringBuilder();
+    			boolean hasChanges = false;
+    			
+    			if(existingSetting != null && existingSetting.size() > 0) {
+    				// 알람 사용 여부 비교
+    				if(!String.valueOf(existingSetting.get("alarm_yn1")).equals(String.valueOf(settingMap.get("alarmYn1")))) {
+    					String oldValue = "Y".equals(String.valueOf(existingSetting.get("alarm_yn1"))) ? "사용" : "미사용";
+    					String newValue = "Y".equals(String.valueOf(settingMap.get("alarmYn1"))) ? "사용" : "미사용";
+    					changedItems.append("• 고온알람 사용여부: ").append(oldValue).append(" → ").append(newValue).append("\n");
+    					hasChanges = true;
+    				}
+    				if(!String.valueOf(existingSetting.get("alarm_yn2")).equals(String.valueOf(settingMap.get("alarmYn2")))) {
+    					String oldValue = "Y".equals(String.valueOf(existingSetting.get("alarm_yn2"))) ? "사용" : "미사용";
+    					String newValue = "Y".equals(String.valueOf(settingMap.get("alarmYn2"))) ? "사용" : "미사용";
+    					changedItems.append("• 저온알람 사용여부: ").append(oldValue).append(" → ").append(newValue).append("\n");
+    					hasChanges = true;
+    				}
+    				if(!String.valueOf(existingSetting.get("alarm_yn3")).equals(String.valueOf(settingMap.get("alarmYn3")))) {
+    					String oldValue = "Y".equals(String.valueOf(existingSetting.get("alarm_yn3"))) ? "사용" : "미사용";
+    					String newValue = "Y".equals(String.valueOf(settingMap.get("alarmYn3"))) ? "사용" : "미사용";
+    					changedItems.append("• 특정온도알람 사용여부: ").append(oldValue).append(" → ").append(newValue).append("\n");
+    					hasChanges = true;
+    				}
+    				if(!String.valueOf(existingSetting.get("alarm_yn4")).equals(String.valueOf(settingMap.get("alarmYn4")))) {
+    					String oldValue = "Y".equals(String.valueOf(existingSetting.get("alarm_yn4"))) ? "사용" : "미사용";
+    					String newValue = "Y".equals(String.valueOf(settingMap.get("alarmYn4"))) ? "사용" : "미사용";
+    					changedItems.append("• DI알람 사용여부: ").append(oldValue).append(" → ").append(newValue).append("\n");
+    					hasChanges = true;
+    				}
+    				if(!String.valueOf(existingSetting.get("alarm_yn5")).equals(String.valueOf(settingMap.get("alarmYn5")))) {
+    					String oldValue = "Y".equals(String.valueOf(existingSetting.get("alarm_yn5"))) ? "사용" : "미사용";
+    					String newValue = "Y".equals(String.valueOf(settingMap.get("alarmYn5"))) ? "사용" : "미사용";
+    					changedItems.append("• 통신이상알람 사용여부: ").append(oldValue).append(" → ").append(newValue).append("\n");
+    					hasChanges = true;
+    				}
+    				
+    				// 설정값 비교
+    				if(!String.valueOf(existingSetting.get("set_val1")).equals(String.valueOf(settingMap.get("setVal1")))) {
+    					changedItems.append("• 고온 설정값: ").append(existingSetting.get("set_val1")).append(" → ").append(settingMap.get("setVal1")).append("\n");
+    					hasChanges = true;
+    				}
+    				if(!String.valueOf(existingSetting.get("set_val2")).equals(String.valueOf(settingMap.get("setVal2")))) {
+    					changedItems.append("• 저온 설정값: ").append(existingSetting.get("set_val2")).append(" → ").append(settingMap.get("setVal2")).append("\n");
+    					hasChanges = true;
+    				}
+    				if(!String.valueOf(existingSetting.get("set_val3")).equals(String.valueOf(settingMap.get("setVal3")))) {
+    					changedItems.append("• 특정온도 설정값: ").append(existingSetting.get("set_val3")).append(" → ").append(settingMap.get("setVal3")).append("\n");
+    					hasChanges = true;
+    				}
+    				
+    				// 지연시간 비교 (시간+분을 분으로 변환하여 비교)
+    				int existingDelay1 = Integer.parseInt(String.valueOf(existingSetting.get("delay_time1")));
+    				int newDelay1 = Integer.parseInt(String.valueOf(settingMap.get("delayHour1"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("delayMin1")));
+    				if(existingDelay1 != newDelay1) {
+    					int oldHour = existingDelay1 / 60;
+    					int oldMin = existingDelay1 % 60;
+    					int newHour = newDelay1 / 60;
+    					int newMin = newDelay1 % 60;
+    					changedItems.append("• 고온알람 지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingDelay2 = Integer.parseInt(String.valueOf(existingSetting.get("delay_time2")));
+    				int newDelay2 = Integer.parseInt(String.valueOf(settingMap.get("delayHour2"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("delayMin2")));
+    				if(existingDelay2 != newDelay2) {
+    					int oldHour = existingDelay2 / 60;
+    					int oldMin = existingDelay2 % 60;
+    					int newHour = newDelay2 / 60;
+    					int newMin = newDelay2 % 60;
+    					changedItems.append("• 저온알람 지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingDelay3 = Integer.parseInt(String.valueOf(existingSetting.get("delay_time3")));
+    				int newDelay3 = Integer.parseInt(String.valueOf(settingMap.get("delayHour3"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("delayMin3")));
+    				if(existingDelay3 != newDelay3) {
+    					int oldHour = existingDelay3 / 60;
+    					int oldMin = existingDelay3 % 60;
+    					int newHour = newDelay3 / 60;
+    					int newMin = newDelay3 % 60;
+    					changedItems.append("• 특정온도알람 지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingDelay4 = Integer.parseInt(String.valueOf(existingSetting.get("delay_time4")));
+    				int newDelay4 = Integer.parseInt(String.valueOf(settingMap.get("delayHour4"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("delayMin4")));
+    				if(existingDelay4 != newDelay4) {
+    					int oldHour = existingDelay4 / 60;
+    					int oldMin = existingDelay4 % 60;
+    					int newHour = newDelay4 / 60;
+    					int newMin = newDelay4 % 60;
+    					changedItems.append("• DI알람 지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingDelay5 = Integer.parseInt(String.valueOf(existingSetting.get("delay_time5")));
+    				int newDelay5 = Integer.parseInt(String.valueOf(settingMap.get("delayHour5"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("delayMin5")));
+    				if(existingDelay5 != newDelay5) {
+    					int oldHour = existingDelay5 / 60;
+    					int oldMin = existingDelay5 % 60;
+    					int newHour = newDelay5 / 60;
+    					int newMin = newDelay5 % 60;
+    					changedItems.append("• 통신이상알람 지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				// 재전송지연시간 비교
+    				int existingReDelay1 = Integer.parseInt(String.valueOf(existingSetting.get("re_delay_time1")));
+    				int newReDelay1 = Integer.parseInt(String.valueOf(settingMap.get("reDelayHour1"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("reDelayMin1")));
+    				if(existingReDelay1 != newReDelay1) {
+    					int oldHour = existingReDelay1 / 60;
+    					int oldMin = existingReDelay1 % 60;
+    					int newHour = newReDelay1 / 60;
+    					int newMin = newReDelay1 % 60;
+    					changedItems.append("• 고온알람 재전송지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingReDelay2 = Integer.parseInt(String.valueOf(existingSetting.get("re_delay_time2")));
+    				int newReDelay2 = Integer.parseInt(String.valueOf(settingMap.get("reDelayHour2"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("reDelayMin2")));
+    				if(existingReDelay2 != newReDelay2) {
+    					int oldHour = existingReDelay2 / 60;
+    					int oldMin = existingReDelay2 % 60;
+    					int newHour = newReDelay2 / 60;
+    					int newMin = newReDelay2 % 60;
+    					changedItems.append("• 저온알람 재전송지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingReDelay3 = Integer.parseInt(String.valueOf(existingSetting.get("re_delay_time3")));
+    				int newReDelay3 = Integer.parseInt(String.valueOf(settingMap.get("reDelayHour3"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("reDelayMin3")));
+    				if(existingReDelay3 != newReDelay3) {
+    					int oldHour = existingReDelay3 / 60;
+    					int oldMin = existingReDelay3 % 60;
+    					int newHour = newReDelay3 / 60;
+    					int newMin = newReDelay3 % 60;
+    					changedItems.append("• 특정온도알람 재전송지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingReDelay4 = Integer.parseInt(String.valueOf(existingSetting.get("re_delay_time4")));
+    				int newReDelay4 = Integer.parseInt(String.valueOf(settingMap.get("reDelayHour4"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("reDelayMin4")));
+    				if(existingReDelay4 != newReDelay4) {
+    					int oldHour = existingReDelay4 / 60;
+    					int oldMin = existingReDelay4 % 60;
+    					int newHour = newReDelay4 / 60;
+    					int newMin = newReDelay4 % 60;
+    					changedItems.append("• DI알람 재전송지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    				
+    				int existingReDelay5 = Integer.parseInt(String.valueOf(existingSetting.get("re_delay_time5")));
+    				int newReDelay5 = Integer.parseInt(String.valueOf(settingMap.get("reDelayHour5"))) * 60 + Integer.parseInt(String.valueOf(settingMap.get("reDelayMin5")));
+    				if(existingReDelay5 != newReDelay5) {
+    					int oldHour = existingReDelay5 / 60;
+    					int oldMin = existingReDelay5 % 60;
+    					int newHour = newReDelay5 / 60;
+    					int newMin = newReDelay5 % 60;
+    					changedItems.append("• 통신이상알람 재전송지연시간: ").append(oldHour).append("시간").append(oldMin).append("분 → ").append(newHour).append("시간").append(newMin).append("분\n");
+    					hasChanges = true;
+    				}
+    			}
+    			
+				if(hasChanges) {
+					// 변경사항이 있을 때만 저장
+					adminService.insertSetting(settingMap);
+					
+					// 마지막 줄바꿈 제거
+					String changedItemsStr = changedItems.toString();
+					if(changedItemsStr.length() > 1) {
+						changedItemsStr = changedItemsStr.substring(0, changedItemsStr.length() - 1);
+					}
+					resultMap.put("resultCode", "200");
+					resultMap.put("resultMessage", "알람설정이 저장되었습니다.\n\n변경된 항목:\n" + changedItemsStr);
+				} else {
+					// 변경사항이 없으면 저장하지 않음
+					resultMap.put("resultCode", "200");
+					resultMap.put("resultMessage", "변경된 항목이 없습니다. 저장하지 않았습니다.");
+				}
+			} catch(Exception e) {
+    			e.printStackTrace();
+    			logger.error("ERROR : " + e.toString());
+				resultMap.put("resultCode", "999");
+				resultMap.put("resultMessage", "fail");
+			}
+		} else {
+			resultMap.put("resultCode", "998");
+			resultMap.put("resultMessage", "fail");
+		}
+    	
+    	return resultMap;
+    }
+
+	/**
+	 * 챠트 설정 화면
+	 * @param req
+	 * @param res
+	 * @param userId
+	 * @param sensorUuid
+	 * @param model
+	 * @return
+	 */
+    @RequestMapping(value = "/chartSetting", method = RequestMethod.GET)
+	public String chartSetting(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestParam(name = "userId", required = false) String userId
+			, @RequestParam(name = "sensorUuid", required = false) String sensorUuid
+			, Model model
+		) {
+
+    	String result = "admin/chartSetting";
+    	HttpSession session = req.getSession();
+
+        // 세션 우선: DB에서 직접 사이드바 데이터 조회 (세션 userId 사용)
+        String effectiveUserId2 = (String) session.getAttribute("userId");
+        commonController.addSidebarData(effectiveUserId2, model, session);
+        model.addAttribute("userId", effectiveUserId2);
+        model.addAttribute("loginUserId", effectiveUserId2);
+        model.addAttribute("userNm", String.valueOf(session.getAttribute("userNm")));
+        model.addAttribute("userGrade", String.valueOf(session.getAttribute("userGrade")));
+		
+		// userId가 없으면 기본값 설정
+		if(StringUtil.isEmpty(userId)) {
+			userId = (String) model.asMap().get("userId");
+		}
+
+		UserInfo user = new UserInfo();
+		String topicStr = "";
+		String chartType = "";
+
+		if(null != userId && !"".equals(userId)) {
+			// 사용자 아이디가 있을 경우 사용자 아이디로 사용자 정보와 연결된 센서 정보를 가져온다.
+			model.addAttribute("userId", userId);
+			model.addAttribute("sensorUuid", sensorUuid);
+
+			Map<String, Object> userInfo = new HashMap<String, Object>();
+			userInfo = adminService.getUserInfo(userId, sensorUuid);
+
+			if(null != userInfo && !"".equals(userInfo)) {
+				user = (UserInfo) userInfo.get("userInfo");
+				Map<String, Object> sensor = (Map<String, Object>) userInfo.get("sensorInfo");
+
+                if(null != sensor && 0 < sensor.size()) {
+                    // 설정/출력 제어 요청 토픽은 'TC' 세그먼트 사용
+                    topicStr = "HBEE/"+String.valueOf(sensor.get("sensor_id"))+"/TC/"+String.valueOf(sensor.get("sensor_uuid"))+"/SER";
+                    chartType = String.valueOf(sensor.get("chart_type"));
+                }
+
+				model.addAttribute("user", user);
+				model.addAttribute("topicStr", topicStr);
+				model.addAttribute("sensorUuid", sensorUuid);
+				model.addAttribute("chartType", chartType);
+			}
+		} else {
+			result = "redirect:/login/login";
+		}
+
+    	return result;
+	}
+
+	/**
+	 * 챠트 설정 저장 처리
+	 * @param req
+	 * @param res
+	 * @param settingMap
+	 * @return
+	 */
+	@RequestMapping(value = "/setChart", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> setChart(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> settingMap
+		) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+
+    	if(null != settingMap && 0 < settingMap.size()) {
+    		try {
+    			adminService.updateSensorInfo(settingMap);
+
+    			resultMap.put("resultCode", "200");
+    			resultMap.put("resultMsg", "챠트 설정 저장 성공");
+			} catch(Exception e) {
+				resultMap.put("resultCode", "999");
+				resultMap.put("resultMsg", "챠트 설정 저장 실패");
+			}
+		} else {
+			resultMap.put("resultCode", "998");
+			resultMap.put("resultMsg", "챠트 설정 저장에 필요한 필수 정보 누락");
+		}
+
+    	return resultMap;
+	}
+
+	/**
+	 * 통신 에러 체크
+	 * @param req
+	 * @param res
+	 * @param chkMap
+	 * @return
+	 */
+	@RequestMapping(value = "/chkError", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> chkError(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> chkMap
+		) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+
+    	if(null != chkMap && 0 < chkMap.size()) {
+    		try {
+    			int result = 0;
+    			result = adminService.chkError(chkMap);
+
+    			if(result > 0) {
+    				resultMap.put("resultCode", "200");
+    				resultMap.put("resultMessage", "ok");
+				} else {
+					resultMap.put("resultCode", "200");
+					resultMap.put("resultMessage", "Error");
+				}
+			} catch(Exception e) {
+				resultMap.put("resultCode", "200");
+				resultMap.put("resultMessage", "Error");
+			}
+		}
+
+    	return resultMap;
+	}
+
+	/**
+	 * 사용자 목록 (관리자 화면)
+	 * @param req
+	 * @param res
+	 * @param userId
+	 * @param userGrade
+	 * @param model
+	 * @return
+	 */
+	@RequestMapping(value = "/userList", method = RequestMethod.GET)
+	public String userList(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestParam(name = "userId", required = false) String userId
+			, @RequestParam(name = "userGrade", required = false) String userGrade
+			, Model model
+	    ) {
+    	String result = "admin/userList";
+    	
+    	HttpSession session = req.getSession();
+    	
+    	// 세션에서 사용자 정보 확인
+    	String sessionUserId = (String) session.getAttribute("userId");
+    	String sessionUserGrade = (String) session.getAttribute("userGrade");
+    	String sessionUserNm = (String) session.getAttribute("userNm");
+    	
+    	// 세션 유효성 검사
+    	if (!isValidSession(session)) {
+    		return "redirect:/login/login";
+    	}
+    	
+    	// 권한 검사 (A, U 등급만 접근 가능, B 등급은 제외)
+    	if ("B".equals(sessionUserGrade)) {
+    		return "redirect:/login/login";
+    	}
+    	
+    	// 세션에서 사용자 정보 우선 사용
+    	if(!StringUtil.isEmpty(sessionUserId)) {
+    		userId = sessionUserId;
+    	}
+    	
+    	if(!StringUtil.isEmpty(sessionUserGrade)) {
+    		userGrade = sessionUserGrade;
+    	}
+    	
+    	// 세션에서 사용자 정보를 모델에 직접 설정
+    	if(!StringUtil.isEmpty(sessionUserNm)) {
+    		model.addAttribute("userNm", sessionUserNm);
+    	}
+
+        // 세션 우선: DB에서 직접 사이드바 데이터 조회 (세션 userId 사용)
+        String effectiveUserId3 = (String) session.getAttribute("userId");
+        commonController.addSidebarData(effectiveUserId3, model, session);
+    	
+    	// userId가 없으면 기본값 설정
+    	if(StringUtil.isEmpty(userId)) {
+    		userId = (String) model.asMap().get("userId");
+    	}
+    	
+    	// userGrade가 없으면 기본값 설정
+    	if(StringUtil.isEmpty(userGrade)) {
+    		userGrade = (String) model.asMap().get("userGrade");
+    	}
+
+    	if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+    		if(null != userGrade && !"".equals(userGrade) && 0 < userGrade.length()) {
+    			if("A".equals(userGrade) || "U".equals(userGrade)) {
+    				// A(관리자) 또는 U(일반사용자)인 경우 사용자 목록 조회 및 화면 표시
+					List<UserInfo> userList = new ArrayList<UserInfo>();
+					Map<String, Object> userMap = new HashMap<String, Object>();
+
+					try {
+						if("A".equals(userGrade)) {
+							// A(관리자)인 경우 모든 사용자 목록 조회
+							userMap = loginService.getUserList();
+						} else {
+							// U(일반사용자)인 경우 자신과 자신이 생성한 B계정 조회
+							userMap = loginService.getUserAndSubUserList(userId);
+						}
+					} catch(Exception e) {
+						logger.error("Error : " + e.toString());
+					}
+
+					if(null != userMap && 0 < userMap.size()) {
+						userList = (List<UserInfo>) userMap.get("userList");
+						
+						// 각 사용자의 활동 상태 확인 및 업데이트
+						if(userList != null && userList.size() > 0) {
+							String currentUserId = (String) session.getAttribute("userId");
+							
+							for(UserInfo user : userList) {
+								try {
+									// 모든 사용자의 활동 상태를 DB에서 확인 (세션 기반 제거)
+									String activityStatus = loginService.getUserActivityStatus(user.getUserId(), session);
+									
+									// 활동 상태에 따라 표시 텍스트 변경
+									if("Y".equals(activityStatus)) {
+										user.setLoginYn("활성");
+									} else {
+										user.setLoginYn("비활성");
+									}
+								} catch(Exception e) {
+									logger.error("사용자 활동 상태 확인 실패 - userId: {}, error: {}", user.getUserId(), e.getMessage());
+									user.setLoginYn("비활성");
+								}
+							}
+						}
+						
+						model.addAttribute("userList", userList);
+					}
+				} else {
+					result = "redirect:/main/main";
+				}
+			} else {
+				result = "redirect:/main/main";
+			}
+		} else {
+    		result = "redirect:/login/login";
+		}
+
+    	return result;
+	}
+
+	@RequestMapping(value = "getChangeList", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> getChangeList(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> changeMap
+		) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != changeMap && 0 < changeMap.size()) {
+			String userId = String.valueOf(changeMap.get("userId"));
+			String userGrade = String.valueOf(changeMap.get("userGrade"));
+
+			if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+				if(null != userGrade && !"".equals(userGrade) && 0 < userGrade.length()) {
+					if("A".equals(userGrade) || "U".equals(userGrade)) {
+						List<UserInfo> userList = new ArrayList<UserInfo>();
+						Map<String, Object> userMap = new HashMap<String, Object>();
+
+						try {
+							if("A".equals(userGrade)) {
+								// A(관리자)인 경우 모든 사용자 목록 조회
+								userMap = loginService.getUserList();
+							} else {
+								// U(일반사용자)인 경우 자신과 자신이 생성한 B계정 조회
+								userMap = loginService.getUserAndSubUserList(userId);
+							}
+						} catch(Exception e) {
+							logger.error("Error : " + e.toString());
+						}
+
+						if(null != userMap && 0 < userMap.size()) {
+							userList = (List<UserInfo>) userMap.get("userList");
+							
+							// 각 사용자의 활동 상태 확인 및 업데이트
+							if(userList != null && userList.size() > 0) {
+								HttpSession session = req.getSession();
+								String currentUserId = (String) session.getAttribute("userId");
+								
+								for(UserInfo user : userList) {
+									try {
+										// 모든 사용자의 활동 상태를 DB에서 확인 (세션 기반 제거)
+										String activityStatus = loginService.getUserActivityStatus(user.getUserId(), session);
+										
+										// 활동 상태에 따라 표시 텍스트 변경
+										if("Y".equals(activityStatus)) {
+											user.setLoginYn("활성");
+										} else {
+											user.setLoginYn("비활성");
+										}
+									} catch(Exception e) {
+										logger.error("사용자 활동 상태 확인 실패 - userId: {}, error: {}", user.getUserId(), e.getMessage());
+										user.setLoginYn("비활성");
+									}
+								}
+							}
+
+							resultMap.put("resultCode", "200");
+							resultMap.put("userList", userList);
+						}
+					} else {
+						resultMap.put("resultCode", "999");
+						resultMap.put("resultMessage", "등급 오류");
+					}
+				} else {
+					resultMap.put("resultCode", "999");
+					resultMap.put("resultMessage", "등급 오류");
+				}
+			} else {
+				resultMap.put("resultCode", "999");
+				resultMap.put("resultMessage", "아이디 없음");
+			}
+		} else {
+			resultMap.put("resultCode", "999");
+			resultMap.put("resultMessage", "필수정보 누락");
+		}
+
+		return resultMap;
+	}
+
+	/**
+	 * 사용자 삭제 (관리자 화면)
+	 * @param req
+	 * @param res
+	 * @param deleteMap
+	 * @return
+	 */
+	@RequestMapping(value = "/deleteUser", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> deleteUser(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> deleteMap
+		) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+
+    	if(null != deleteMap && 0 < deleteMap.size()) {
+    		String userId = String.valueOf(deleteMap.get("userId"));
+
+    		if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+    			try {
+    				// 삭제할 사용자의 등급 확인
+    				UserInfo userInfo = null;
+    				try {
+    					userInfo = loginService.getUserInfoByUserId(userId);
+    				} catch(Exception e) {
+    					logger.warn("사용자 정보 조회 실패 - userId: {}, error: {}", userId, e.getMessage());
+    				}
+    				
+    				if(userInfo != null) {
+    					String userGrade = userInfo.getUserGrade();
+    					
+    					if("B".equals(userGrade)) {
+    						// 부계정인 경우: 부계정 사용자 정보만 삭제 (장치 정보 보존)
+    						adminService.deleteSubUser(userId);
+    						logger.info("부계정 삭제 완료 - userId: {}, userGrade: {}", userId, userGrade);
+    					} else {
+    						// 메인 사용자인 경우: 모든 정보 삭제
+    						adminService.deleteUser(userId);
+    						logger.info("메인 사용자 삭제 완료 - userId: {}, userGrade: {}", userId, userGrade);
+    					}
+    				} else {
+    					// 사용자 정보가 없는 경우 기본 삭제 메서드 사용
+    					adminService.deleteUser(userId);
+    					logger.warn("사용자 정보 없음, 기본 삭제 메서드 사용 - userId: {}", userId);
+    				}
+    				
+    				resultMap.put("resultCode", "200");
+				} catch(Exception e) {
+    				logger.error("Error : " + e.toString());
+    				resultMap.put("resultCode", "999");
+    				resultMap.put("resultMessage", "사용자 삭제 중 오류가 발생했습니다.");
+				}
+			}
+		} else {
+			resultMap.put("resultCode", "999");
+			resultMap.put("resultMessage", "삭제할 사용자 정보가 없습니다.");
+		}
+
+    	return resultMap;
+	}
+
+	/**
+	 * 사용자 수정 (관리자 화면)
+	 * @param req
+	 * @param res
+	 * @param modifyMap
+	 * @return
+	 */
+	@RequestMapping(value = "/modifyUser", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> modifyUser(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> modifyMap
+	) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+
+    	if(null != modifyMap && 0 < modifyMap.size()) {
+    		try {
+    			adminService.updateUser(modifyMap);
+    			resultMap.put("resultCode", "200");
+			} catch(Exception e) {
+    			logger.error("Error : " + e.toString());
+			}
+		}
+
+    	return resultMap;
+	}
+
+	/**
+	 * 사용자 상세
+	 * @param req
+	 * @param res
+	 * @param userId
+	 * @param userGrade
+	 * @param dtlUser
+	 * @param gu
+	 * @param model
+	 * @return
+	 */
+	@RequestMapping(value = "/userDetail", method = RequestMethod.GET)
+	public String userDetail(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestParam(name = "userId", required = false) String userId
+			, @RequestParam(name = "userGrade", required = false) String userGrade
+			, @RequestParam(name = "dtlUser", required = true) String dtlUser
+			, @RequestParam(name = "gu", required = false) String gu
+			, Model model
+		) {
+    	String result = "admin/userDetail";
+    	HttpSession session = req.getSession();
+
+    // 세션 유효성 검사: 세션이 없으면 로그인으로
+    if (!isValidSession(session)) {
+      return "redirect:/login/login";
+    }
+
+    	if(null != gu && !"".equals(gu) && 0 < gu.length()) {
+    		if("m".equals(gu)) {
+    			result = "admin/userModify";
+			}
+		}
+
+    // 세션 우선: 세션의 userId/userGrade를 우선 적용
+    String sessionUserId = (String) session.getAttribute("userId");
+    String sessionUserGrade = (String) session.getAttribute("userGrade");
+
+    if(!StringUtil.isEmpty(sessionUserId)) {
+      userId = sessionUserId;
+    }
+    if(!StringUtil.isEmpty(sessionUserGrade)) {
+      userGrade = sessionUserGrade;
+    }
+
+    // 사이드바 데이터는 세션의 userId로 보강
+    commonController.addSidebarData(userId, model, session);
+		
+    // userId가 없으면 모델에서 기본값 설정 시도
+		if(StringUtil.isEmpty(userId)) {
+			userId = (String) model.asMap().get("userId");
+		}
+		
+    // userGrade가 없으면 모델에서 기본값 설정 시도
+		if(StringUtil.isEmpty(userGrade)) {
+			userGrade = (String) model.asMap().get("userGrade");
+		}
+
+		if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+			if(null != userGrade && !"".equals(userGrade) && 0 < userGrade.length()) {
+				if("A".equals(userGrade) || "U".equals(userGrade)) {
+					if(null != dtlUser && !"".equals(dtlUser) && 0 < dtlUser.length()) {
+						// 사용자 정보가 있고 등급이 관리자(A) 또는 일반사용자(U) 일때 사용자 상세 정보 표시
+						UserInfo userInfo = null;
+
+						try {
+							// 비밀번호 검증 없이 사용자 정보만 조회
+							userInfo = loginService.getUserInfoByUserId(dtlUser);
+						} catch (Exception e) {
+							logger.error("사용자 상세 정보 조회 실패 - dtlUser: {}, error: {}", dtlUser, e.getMessage());
+						}
+
+						if(null != userInfo) {
+							model.addAttribute("userInfo", userInfo);
+							// 사용자 정보가 있으면 해당 사용자의 장치 정보를 가져온다.
+							List<Map<String, Object>> sensorList = new ArrayList<Map<String, Object>>();
+							
+							if("A".equals(userGrade)) {
+								// A 등급은 모든 사용자의 장치 정보 조회 가능
+								sensorList = adminService.getSensorList(dtlUser);
+							} else {
+								// U 등급은 자신이 생성한 B 계정의 장치 정보 또는 자신의 장치 정보 조회 가능
+								if(dtlUser.equals(userId)) {
+									// 자신의 장치 정보 조회
+									sensorList = adminService.getSensorList(dtlUser);
+								} else {
+									// B 계정의 장치 정보 조회
+									sensorList = adminService.getSubSensorList(userId, dtlUser);
+								}
+							}
+
+							if(null != sensorList && 0 < sensorList.size()) {
+								model.addAttribute("sensorList", sensorList);
+							}
+						} else {
+							logger.warn("사용자 정보를 찾을 수 없습니다 - dtlUser: {}", dtlUser);
+						}
+					} else {
+
+					}
+
+					model.addAttribute("userId", userId);
+					model.addAttribute("userGrade", userGrade);
+				} else {
+					result = "redirect:/main/main";
+				}
+			} else {
+				result = "redirect:/main/main";
+			}
+		} else {
+			result = "redirect:/login/login";
+		}
+
+    	return result;
+	}
+
+	/**
+	 * 부계정 생성 화면
+	 * @param req
+	 * @param res
+	 * @param userId
+	 * @param userGrade
+	 * @param model
+	 * @return
+	 */
+	@RequestMapping(value = "/createSub", method = RequestMethod.GET)
+	public String createSub(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestParam(name = "userId", required = false) String userId
+			, @RequestParam(name = "userGrade", required = false) String userGrade
+			, Model model
+		) {
+    	String result = "admin/createSub";
+    	
+    	HttpSession session = req.getSession();
+    	
+    	// 세션에서 사용자 정보 확인
+    	String sessionUserId = (String) session.getAttribute("userId");
+    	String sessionUserGrade = (String) session.getAttribute("userGrade");
+    	String sessionUserNm = (String) session.getAttribute("userNm");
+    	
+    	// 세션 유효성 검사
+    	if (!isValidSession(session)) {
+    		return "redirect:/login/login";
+    	}
+    	
+    	// 권한 검사 (A, U 등급만 접근 가능, B 등급은 제외)
+    	if ("B".equals(sessionUserGrade)) {
+    		return "redirect:/login/login";
+    	}
+    	
+    	// 세션에서 사용자 정보 우선 사용
+    	if(!StringUtil.isEmpty(sessionUserId)) {
+    		userId = sessionUserId;
+    	}
+    	
+    	if(!StringUtil.isEmpty(sessionUserGrade)) {
+    		userGrade = sessionUserGrade;
+    	}
+    	
+    	// 세션에서 사용자 정보를 모델에 직접 설정
+    	if(!StringUtil.isEmpty(sessionUserNm)) {
+    		model.addAttribute("userNm", sessionUserNm);
+    	}
+
+    	// 새로운 방식: DB에서 직접 사이드바 데이터 조회
+    	commonController.addSidebarData(userId, model, session);
+    	
+    	// userId가 없으면 기본값 설정
+    	if(StringUtil.isEmpty(userId)) {
+    		userId = (String) model.asMap().get("userId");
+    	}
+    	
+    	// userGrade가 없으면 기본값 설정
+    	if(StringUtil.isEmpty(userGrade)) {
+    		userGrade = (String) model.asMap().get("userGrade");
+    	}
+
+    	// 사용자 아이디가 있을 경우
+    	if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+    		// 해당 사용자 등급이 U, A 인 경우에만 부계정 생성 가능
+			if(null != userGrade && !"".equals(userGrade) && 0 < userGrade.length()) {
+				// A(관리자) 또는 U(일반사용자)인 경우에만 부계정 생성 가능
+				if("A".equals(userGrade) || "U".equals(userGrade)) {
+					model.addAttribute("userId", userId);
+					model.addAttribute("userGrade", userGrade);
+					
+					// U 등급 사용자의 경우 부계정 목록 확인
+					if("U".equals(userGrade)) {
+						try {
+							Map<String, Object> subUserMap = loginService.getSubUserList(userId);
+							if(null != subUserMap && subUserMap.size() > 0) {
+								List<UserInfo> subUserList = (List<UserInfo>) subUserMap.get("userList");
+								if(null != subUserList && subUserList.size() > 0) {
+									model.addAttribute("hasSubUsers", true);
+								} else {
+									model.addAttribute("hasSubUsers", false);
+								}
+							} else {
+								model.addAttribute("hasSubUsers", false);
+							}
+						} catch(Exception e) {
+							logger.error("Error getting sub users: " + e.toString());
+							model.addAttribute("hasSubUsers", false);
+						}
+					} else {
+						model.addAttribute("hasSubUsers", true); // A 등급은 항상 true
+					}
+				} else {
+					result = "redirect:/main/main";
+				}
+			}
+		} else {
+			result = "redirect:/login/login";
+		}
+
+    	return result;
+	}
+
+	/**
+	 * 부계정 생성 처리
+	 * @param req
+	 * @param res
+	 * @param createMap
+	 * @return
+	 */
+	@RequestMapping(value = "/createSubProc", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> createSubProc(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> createMap
+		) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+
+    	if(null != createMap && 0 < createMap.size()) {
+    		try {
+    			adminService.createSubProc(createMap);
+
+    			resultMap.put("resultCode", "200");
+			} catch(Exception e) {
+    			logger.error("Error : " + e.toString());
+			}
+		}
+
+    	return resultMap;
+	}
+
+	/**
+	 * 사용자 등급 변경
+	 * @param req
+	 * @param res
+	 * @param changeMap
+	 * @return
+	 */
+	@RequestMapping(value = "/changeUserGrade", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> changeUserGrade(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> changeMap
+		) {
+    	Map<String, Object> resultMap = new HashMap<String, Object>();
+
+    	if(null != changeMap && 0 < changeMap.size()) {
+    		String targetUserId = String.valueOf(changeMap.get("targetUserId"));
+    		String newGrade = String.valueOf(changeMap.get("newGrade"));
+    		String adminUserId = String.valueOf(changeMap.get("adminUserId"));
+
+    		if(null != targetUserId && !"".equals(targetUserId) && 0 < targetUserId.length()) {
+    			if(null != newGrade && !"".equals(newGrade) && 0 < newGrade.length()) {
+    				if("A".equals(newGrade) || "U".equals(newGrade) || "B".equals(newGrade)) {
+    					try {
+    						// 현재 사용자 권한 확인
+    						LoginVO loginVO = new LoginVO();
+    						loginVO.setUserId(adminUserId);
+    						
+    						Map<String, Object> adminInfo = loginService.getUserInfo(loginVO);
+    						
+    						if(null != adminInfo && 0 < adminInfo.size()) {
+    							UserInfo adminUser = (UserInfo) adminInfo.get("userInfo");
+    							
+    							if(null != adminUser) {
+    								String currentUserGrade = adminUser.getUserGrade();
+    								boolean canChange = false;
+    								
+    								// 현재 사용자의 등급에 따라 조정 가능한 등급 확인
+    								if("A".equals(currentUserGrade)) {
+    									// A 등급은 모든 등급 조정 가능
+    									canChange = true;
+    								} else if("U".equals(currentUserGrade)) {
+    									// U 등급은 U, B 등급만 조정 가능
+    									if("U".equals(newGrade) || "B".equals(newGrade)) {
+    										canChange = true;
+    									}
+    								}
+    								
+    								if(canChange) {
+    									// 등급 변경 처리
+    									Map<String, Object> updateMap = new HashMap<String, Object>();
+    									updateMap.put("userId", targetUserId);
+    									updateMap.put("userGrade", newGrade);
+    									
+    									adminService.updateUserGrade(updateMap);
+    									
+    									resultMap.put("resultCode", "200");
+    									resultMap.put("resultMessage", "사용자 등급 변경이 완료되었습니다.");
+    								} else {
+    									resultMap.put("resultCode", "999");
+    									resultMap.put("resultMessage", "해당 등급으로 변경할 권한이 없습니다.");
+    								}
+    							} else {
+    								resultMap.put("resultCode", "999");
+    								resultMap.put("resultMessage", "사용자 정보를 찾을 수 없습니다.");
+    							}
+    						} else {
+    							resultMap.put("resultCode", "999");
+    							resultMap.put("resultMessage", "사용자 정보를 찾을 수 없습니다.");
+    						}
+    					} catch(Exception e) {
+    						logger.error("Error : " + e.toString());
+    						resultMap.put("resultCode", "999");
+    						resultMap.put("resultMessage", "등급 변경 중 오류가 발생했습니다.");
+    					}
+    				} else {
+    					resultMap.put("resultCode", "999");
+    					resultMap.put("resultMessage", "유효하지 않은 등급입니다.");
+    				}
+    			} else {
+    				resultMap.put("resultCode", "999");
+    				resultMap.put("resultMessage", "새 등급이 입력되지 않았습니다.");
+    			}
+    		} else {
+    			resultMap.put("resultCode", "999");
+    			resultMap.put("resultMessage", "대상 사용자 ID가 입력되지 않았습니다.");
+    		}
+    	} else {
+    		resultMap.put("resultCode", "999");
+    		resultMap.put("resultMessage", "요청 데이터가 없습니다.");
+    	}
+
+    	return resultMap;
+	}
+
+	/**
+	 * 기존 사용자들의 활동 상태를 모두 비활성으로 초기화
+	 */
+	@RequestMapping(value = "/resetUserActivityStatus", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> resetUserActivityStatus(
+			HttpServletRequest req,
+			HttpServletResponse res
+	) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		
+		try {
+			// 모든 사용자를 비활성 상태로 초기화
+			adminService.resetAllUserActivityStatus();
+			
+			resultMap.put("resultCode", "200");
+			resultMap.put("resultMessage", "모든 사용자의 활동 상태가 비활성으로 초기화되었습니다.");
+			logger.info("사용자 활동 상태 초기화 완료");
+			
+		} catch(Exception e) {
+			logger.error("사용자 활동 상태 초기화 실패: " + e.toString());
+			resultMap.put("resultCode", "999");
+			resultMap.put("resultMessage", "사용자 활동 상태 초기화 실패 - " + e.toString());
+		}
+		
+		return resultMap;
+	}
+    
+    @RequestMapping(value = "/resetSpecificUserActivityStatus", method = RequestMethod.POST)
+    public @ResponseBody Map<String, Object> resetSpecificUserActivityStatus(
+            HttpServletRequest req,
+            HttpServletResponse res,
+            @RequestBody Map<String, Object> requestData
+    ) {
+        Map<String, Object> resultMap = new HashMap<String, Object>();
+        try {
+            String userId = (String) requestData.get("userId");
+            if (userId != null && !userId.isEmpty()) {
+                adminService.resetSpecificUserActivityStatus(userId);
+                resultMap.put("resultCode", "200");
+                resultMap.put("resultMessage", "사용자 " + userId + "의 활동 상태가 비활성으로 초기화되었습니다.");
+                logger.info("특정 사용자 활동 상태 초기화 완료 - userId: {}", userId);
+            } else {
+                resultMap.put("resultCode", "400");
+                resultMap.put("resultMessage", "사용자 ID가 제공되지 않았습니다.");
+            }
+        } catch(Exception e) {
+            logger.error("특정 사용자 활동 상태 초기화 실패: " + e.toString());
+            resultMap.put("resultCode", "999");
+            resultMap.put("resultMessage", "특정 사용자 활동 상태 초기화 실패 - " + e.toString());
+        }
+        return resultMap;
+    }
+}

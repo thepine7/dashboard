@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 
+공통 SQL 조각 모음
+HnT Sensor API 프로젝트 전용
+
+주요 기능:
+- 재사용 가능한 SQL 조각 제공
+- 일관된 쿼리 패턴 적용
+- 가독성 및 유지보수성 향상
+- 성능 최적화된 공통 쿼리
+-->
+
+<mapper namespace="com.andrew.hnt.api.mapper.CommonSql">
+
+    <!-- ==========================================================================
+         공통 WHERE 조건
+         ========================================================================== -->
+
+    <!-- 기본 삭제 조건 (del_yn = 'N') -->
+    <sql id="notDeletedCondition">
+        del_yn = 'N'
+    </sql>
+
+    <!-- 사용자 ID 조건 -->
+    <sql id="userIdCondition">
+        user_id = #{userId}
+    </sql>
+
+    <!-- 센서 UUID 조건 -->
+    <sql id="sensorUuidCondition">
+        sensor_uuid = #{sensorUuid}
+    </sql>
+
+    <!-- UUID 조건 (센서 데이터용) -->
+    <sql id="uuidCondition">
+        uuid = #{sensorUuid}
+    </sql>
+
+    <!-- 시간 범위 조건 -->
+    <sql id="timeRangeCondition">
+        <if test="startDateTime != null and startDateTime != ''">
+            and inst_dtm >= #{startDateTime}
+        </if>
+        <if test="endDateTime != null and endDateTime != ''">
+            and inst_dtm &lt;= #{endDateTime}
+        </if>
+    </sql>
+
+    <!-- ==========================================================================
+         공통 SELECT 절
+         ========================================================================== -->
+
+    <!-- 사용자 기본 정보 -->
+    <sql id="userBasicColumns">
+        no
+        , user_nm as userNm
+        , user_tel as userTel
+        , user_email as userEmail
+        , user_id as userId
+        , user_pass as userPass
+        , user_grade as userGrade
+        , use_yn as useYn
+        , del_yn as delYn
+        , last_login_dtm as loginDtm
+        , logout_dtm as logoutDtm
+        , token as token
+    </sql>
+
+    <!-- 센서 데이터 기본 정보 -->
+    <sql id="sensorDataBasicColumns">
+        user_id as userId
+        , sensor_id as sensorId
+        , uuid as uuid
+        , sensor_type as sensorType
+        , sensor_value as sensorValue
+        , date_format(inst_dtm, '%Y-%m-%d %H:%i:%s') as instDtm
+        , topic as topic
+        , raw_data as rawData
+    </sql>
+
+    <!-- 센서 정보 기본 컬럼 -->
+    <sql id="sensorInfoBasicColumns">
+        user_id as userId
+        , sensor_id as sensorId
+        , sensor_uuid as sensorUuid
+        , sensor_name as sensorName
+        , sensor_type as sensorType
+        , chart_type as chartType
+        , inst_dtm as instDtm
+        , mdf_dtm as mdfDtm
+    </sql>
+
+    <!-- 알람 정보 기본 컬럼 -->
+    <sql id="alarmBasicColumns">
+        no
+        , user_token as userToken
+        , user_id as userId
+        , sensor_uuid as sensorUuid
+        , alarm_time as alarmTime
+        , alarm_type as alarmType
+        , cur_temp as curTemp
+        , in_temp as inTemp
+        , urgent_yn as urgentYn
+        , release_yn as releaseYn
+        , use_yn as useYn
+    </sql>
+
+    <!-- ==========================================================================
+         공통 ORDER BY 절
+         ========================================================================== -->
+
+    <!-- 최신순 정렬 -->
+    <sql id="orderByLatest">
+        order by inst_dtm desc
+    </sql>
+
+    <!-- 오래된순 정렬 -->
+    <sql id="orderByOldest">
+        order by inst_dtm asc
+    </sql>
+
+    <!-- 사용자 번호 내림차순 -->
+    <sql id="orderByUserNoDesc">
+        order by no desc
+    </sql>
+
+    <!-- ==========================================================================
+         공통 LIMIT 절
+         ========================================================================== -->
+
+    <!-- 기본 페이지 크기 -->
+    <sql id="defaultLimit">
+        limit 100
+    </sql>
+
+    <!-- 대용량 데이터 제한 -->
+    <sql id="largeDataLimit">
+        limit 1000
+    </sql>
+
+    <!-- 차트 데이터 제한 -->
+    <sql id="chartDataLimit">
+        limit 200
+    </sql>
+
+    <!-- ==========================================================================
+         공통 시간 조건
+         ========================================================================== -->
+
+    <!-- 오늘 데이터 -->
+    <sql id="todayCondition">
+        and inst_dtm between date_format(now(), '%Y-%m-%d 00:00:00') and now()
+    </sql>
+
+    <!-- 어제 데이터 -->
+    <sql id="yesterdayCondition">
+        and inst_dtm between date_format(date_sub(now(), interval 1 day), '%Y-%m-%d 00:00:00') 
+        and date_format(now(), '%Y-%m-%d 00:00:00')
+    </sql>
+
+    <!-- 최근 1일 -->
+    <sql id="lastDayCondition">
+        and inst_dtm between date_add(now(), interval -1 day) and now()
+    </sql>
+
+    <!-- 최근 1주일 -->
+    <sql id="lastWeekCondition">
+        and inst_dtm between date_add(now(), interval -1 week) and now()
+    </sql>
+
+    <!-- 최근 1개월 -->
+    <sql id="lastMonthCondition">
+        and inst_dtm between date_add(now(), interval -1 month) and now()
+    </sql>
+
+    <!-- 최근 1년 -->
+    <sql id="lastYearCondition">
+        and inst_dtm between date_add(now(), interval -1 year) and now()
+    </sql>
+
+    <!-- ==========================================================================
+         공통 페이징
+         ========================================================================== -->
+
+    <!-- 기본 페이징 -->
+    <sql id="basicPaging">
+        <if test="offset != null and limit != null">
+            limit #{offset}, #{limit}
+        </if>
+        <if test="offset == null and limit != null">
+            limit #{limit}
+        </if>
+    </sql>
+
+    <!-- 커서 기반 페이징 -->
+    <sql id="cursorPaging">
+        <if test="lastCursor != null and lastCursor != ''">
+            and inst_dtm > #{lastCursor}
+        </if>
+        <if test="pageSize != null">
+            limit #{pageSize}
+        </if>
+    </sql>
+
+    <!-- ID 기반 페이징 -->
+    <sql id="idPaging">
+        <if test="lastId != null and lastId != ''">
+            and id > #{lastId}
+        </if>
+        <if test="pageSize != null">
+            limit #{pageSize}
+        </if>
+    </sql>
+
+    <!-- ==========================================================================
+         공통 검증 조건
+         ========================================================================== -->
+
+    <!-- NULL 체크 -->
+    <sql id="nullCheck">
+        <if test="value != null and value != ''">
+            and column_name = #{value}
+        </if>
+    </sql>
+
+    <!-- 빈 문자열 체크 -->
+    <sql id="emptyStringCheck">
+        <if test="value != null and value != '' and value != 'null'">
+            and column_name = #{value}
+        </if>
+    </sql>
+
+    <!-- 숫자 범위 체크 -->
+    <sql id="numberRangeCheck">
+        <if test="minValue != null">
+            and column_name >= #{minValue}
+        </if>
+        <if test="maxValue != null">
+            and column_name &lt;= #{maxValue}
+        </if>
+    </sql>
+
+    <!-- ==========================================================================
+         공통 집계 함수
+         ========================================================================== -->
+
+    <!-- 센서 값 평균 -->
+    <sql id="sensorValueAvg">
+        round(avg(sensor_value), 1) as sensor_value
+    </sql>
+
+    <!-- 센서 값 최대값 -->
+    <sql id="sensorValueMax">
+        round(max(sensor_value), 1) as max_value
+    </sql>
+
+    <!-- 센서 값 최소값 -->
+    <sql id="sensorValueMin">
+        round(min(sensor_value), 1) as min_value
+    </sql>
+
+    <!-- 센서 값 개수 -->
+    <sql id="sensorValueCount">
+        count(*) as data_count
+    </sql>
+
+    <!-- ==========================================================================
+         공통 날짜 포맷
+         ========================================================================== -->
+
+    <!-- 날짜만 (YYYY-MM-DD) -->
+    <sql id="dateOnlyFormat">
+        date_format(inst_dtm, '%Y-%m-%d') as date_str
+    </sql>
+
+    <!-- 시간만 (HH:MM:SS) -->
+    <sql id="timeOnlyFormat">
+        date_format(inst_dtm, '%H:%i:%s') as time_str
+    </sql>
+
+    <!-- 날짜+시간 (YYYY-MM-DD HH:MM:SS) -->
+    <sql id="datetimeFormat">
+        date_format(inst_dtm, '%Y-%m-%d %H:%i:%s') as datetime_str
+    </sql>
+
+    <!-- 월별 (YYYY-MM) -->
+    <sql id="monthFormat">
+        date_format(inst_dtm, '%Y-%m') as month_str
+    </sql>
+
+    <!-- 시간별 (YYYY-MM-DD HH) -->
+    <sql id="hourFormat">
+        date_format(inst_dtm, '%Y-%m-%d %H') as hour_str
+    </sql>
+
+    <!-- ==========================================================================
+         공통 그룹화
+         ========================================================================== -->
+
+    <!-- 일별 그룹화 -->
+    <sql id="groupByDay">
+        group by date_format(inst_dtm, '%Y-%m-%d')
+    </sql>
+
+    <!-- 시간별 그룹화 -->
+    <sql id="groupByHour">
+        group by date_format(inst_dtm, '%Y-%m-%d %H')
+    </sql>
+
+    <!-- 월별 그룹화 -->
+    <sql id="groupByMonth">
+        group by date_format(inst_dtm, '%Y-%m')
+    </sql>
+
+    <!-- ==========================================================================
+         성능 최적화 힌트
+         ========================================================================== -->
+
+    <!-- 센서 데이터 인덱스 힌트 -->
+    <sql id="sensorDataIndexHint">
+        /*+ USE INDEX (idx_hnt_sensor_data_uuid_inst_dtm) */
+    </sql>
+
+    <!-- 사용자 인덱스 힌트 -->
+    <sql id="userIndexHint">
+        /*+ USE INDEX (idx_hnt_user_user_id) */
+    </sql>
+
+    <!-- 센서 정보 인덱스 힌트 -->
+    <sql id="sensorInfoIndexHint">
+        /*+ USE INDEX (idx_sensor_info_user_sensor) */
+    </sql>
+
+</mapper>

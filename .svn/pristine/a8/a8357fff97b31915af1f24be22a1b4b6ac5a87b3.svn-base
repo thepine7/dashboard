@@ -1,0 +1,85 @@
+package com.andrew.hnt.api.controller;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.servlet.ModelAndView;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+    
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    
+    /**
+     * 모든 예외를 처리하는 전역 예외 핸들러
+     */
+    @ExceptionHandler(Exception.class)
+    public ModelAndView handleGlobalException(HttpServletRequest request, HttpServletResponse response, Exception ex) {
+        logger.error("=== 전역 예외 처리기 호출 ===");
+        logger.error("요청 URI: {}", request.getRequestURI());
+        logger.error("요청 메서드: {}", request.getMethod());
+        logger.error("예외 타입: {}", ex.getClass().getSimpleName());
+        logger.error("예외 메시지: {}", ex.getMessage());
+        logger.error("=== 전역 예외 처리기 호출 끝 ===");
+        
+        // 콘솔에도 출력
+        System.out.println("=== 전역 예외 처리기 호출 ===");
+        System.out.println("요청 URI: " + request.getRequestURI());
+        System.out.println("요청 메서드: " + request.getMethod());
+        System.out.println("예외 타입: " + ex.getClass().getSimpleName());
+        System.out.println("예외 메시지: " + ex.getMessage());
+        System.out.println("=== 전역 예외 처리기 호출 끝 ===");
+        
+        ModelAndView mav = new ModelAndView();
+        
+        // 세션 확인
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            String userId = (String) session.getAttribute("userId");
+            String loginUserId = (String) session.getAttribute("loginUserId");
+            
+            logger.info("세션 정보 - userId: {}, loginUserId: {}", userId, loginUserId);
+            System.out.println("세션 정보 - userId: " + userId + ", loginUserId: " + loginUserId);
+            
+            // 세션이 유효하면 메인 페이지로 리다이렉트
+            if (userId != null && !userId.isEmpty() && !"null".equals(userId) && !"undefined".equals(userId) ||
+                loginUserId != null && !loginUserId.isEmpty() && !"null".equals(loginUserId) && !"undefined".equals(loginUserId)) {
+                logger.info("유효한 세션이 있으므로 메인 페이지로 리다이렉트");
+                System.out.println("유효한 세션이 있으므로 메인 페이지로 리다이렉트");
+                mav.setViewName("redirect:/main/main");
+                return mav;
+            }
+        }
+        
+        // 세션이 없거나 유효하지 않으면 로그인 페이지로 리다이렉트
+        logger.info("세션이 없거나 유효하지 않으므로 로그인 페이지로 리다이렉트");
+        System.out.println("세션이 없거나 유효하지 않으므로 로그인 페이지로 리다이렉트");
+        mav.setViewName("redirect:/login/login");
+        return mav;
+    }
+    
+    /**
+     * 404 에러 처리
+     */
+    @ExceptionHandler(org.springframework.web.servlet.NoHandlerFoundException.class)
+    public ModelAndView handleNoHandlerFoundException(HttpServletRequest request, HttpServletResponse response, Exception ex) {
+        logger.error("=== 404 에러 처리기 호출 ===");
+        logger.error("요청 URI: {}", request.getRequestURI());
+        logger.error("요청 메서드: {}", request.getMethod());
+        logger.error("=== 404 에러 처리기 호출 끝 ===");
+        
+        System.out.println("=== 404 에러 처리기 호출 ===");
+        System.out.println("요청 URI: " + request.getRequestURI());
+        System.out.println("요청 메서드: " + request.getMethod());
+        System.out.println("=== 404 에러 처리기 호출 끝 ===");
+        
+        ModelAndView mav = new ModelAndView();
+        mav.setViewName("redirect:/login/login");
+        return mav;
+    }
+} 

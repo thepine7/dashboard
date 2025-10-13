@@ -1,0 +1,40 @@
+package com.andrew.hnt.api.config;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.lang.NonNull;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import javax.annotation.PostConstruct;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+@Component
+public class RequestLoggingInterceptor implements HandlerInterceptor {
+    
+    private static final Logger logger = LoggerFactory.getLogger(RequestLoggingInterceptor.class);
+	
+	@PostConstruct
+	public void init() {
+		logger.info("RequestLoggingInterceptor 초기화 완료");
+	}
+    
+    @Override
+    public boolean preHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) throws Exception {
+        String requestURI = request.getRequestURI();
+        String method = request.getMethod();
+        String queryString = request.getQueryString();
+        
+        // 세션 정보 로깅
+        javax.servlet.http.HttpSession session = request.getSession(false); // 새 세션 생성하지 않음
+        String sessionId = session != null ? session.getId() : "NO_SESSION";
+        String userId = session != null ? (String) session.getAttribute("userId") : "NO_USERID";
+        String loginUserId = session != null ? (String) session.getAttribute("loginUserId") : "NO_LOGINUSERID";
+        
+                                                 // 기본 로깅만 유지
+                     logger.debug("요청: {} {} - 세션: {}", method, requestURI, sessionId);
+        
+        return true;
+    }
+} 

@@ -1,0 +1,214 @@
+spring:
+    mvc:
+        view:
+            prefix: /WEB-INF/jsp
+            suffix: .jsp
+        # static-path-pattern 제거 - Spring Boot 기본 설정 사용
+    main:
+        allow-bean-definition-overriding: true  # 빈 정의 오버라이딩 허용
+    # mysql db 설정
+    datasource:
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        url: ${DB_URL:jdbc:mysql://hntsolution.co.kr:3306/hnt?useUnicode=yes&characterEncoding=UTF-8&allowMultiQueries=true&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false}
+        username: ${DB_USERNAME:root}
+        password: ${DB_PASSWORD:HntRoot123!}
+        hikari:
+            # ============================================================
+            # HikariCP 연결 풀 최적화 설정 (2025-10-06 업그레이드)
+            # ============================================================
+            
+            # 기본 연결 풀 설정
+            pool-name: HnT-HikariCP-Optimized  # 풀 이름 설정
+            
+            # 연결 풀 크기 설정 (동적 확장 최적화)
+            minimum-idle: 10              # 최소 유휴 연결 수 (5 → 10) - 초기 성능 향상
+            maximum-pool-size: 30         # 최대 연결 풀 크기 (20 → 30) - 더 많은 트래픽 대응
+            
+            # 연결 타임아웃 설정
+            connection-timeout: 10000     # 연결 타임아웃 (5초 → 10초) - 안정성 향상
+            validation-timeout: 5000      # 검증 타임아웃 (3초 → 5초) - 안정성 향상
+            
+            # 연결 수명 관리
+            max-lifetime: 1800000         # 연결 최대 수명 (30분) - MySQL wait_timeout 고려
+            idle-timeout: 600000          # 유휴 타임아웃 (10분) - 연결 재사용 최적화
+            
+            # 연결 누수 감지 (강화)
+            leak-detection-threshold: 30000   # 누수 감지 임계값 (1분 → 30초) - 더 빠른 감지
+            
+            # 연결 검증 설정
+            connection-test-query: SELECT 1  # 연결 테스트 쿼리 (MySQL 호환)
+            
+            # JMX 모니터링 활성화
+            register-mbeans: true         # JMX MBeans 등록 (성능 모니터링)
+            
+            # 초기화 설정
+            initialization-fail-timeout: 1  # 초기화 실패 시 즉시 실패 (빠른 실패)
+            
+            # 트랜잭션 설정
+            is-auto-commit: true          # 자동 커밋 활성화 (성능 최적화)
+            is-read-only: false           # 읽기 전용 모드 비활성화
+            is-isolate-internal-queries: false  # 내부 쿼리 격리 비활성화
+            
+            # 연결 풀 동작 설정
+            allow-pool-suspension: false  # 풀 일시 중단 비활성화 (성능 우선)
+            
+            # 헬스 체크 설정 (추가)
+            keepalive-time: 300000        # Keepalive 시간 (5분) - 연결 유지
+            # ============================================================
+            # MySQL 데이터 소스 성능 최적화 설정 (2025-10-06 업그레이드)
+            # ============================================================
+            data-source-properties:
+                # 타임아웃 설정
+                socketTimeout: 30000      # 소켓 타임아웃 (20초 → 30초) - 안정성 향상
+                connectTimeout: 10000     # 연결 타임아웃 (5초 → 10초) - 안정성 향상
+                
+                # 자동 재연결 설정
+                autoReconnect: true       # 자동 재연결 활성화
+                maxReconnects: 10         # 최대 재연결 횟수 (5 → 10) - 안정성 향상
+                initialTimeout: 2         # 초기 타임아웃 (초)
+                
+                # 쿼리 타임아웃
+                queryTimeout: 30000       # 쿼리 타임아웃 (20초 → 30초) - 복잡한 쿼리 대응
+                
+                # PreparedStatement 캐싱 설정 (성능 최적화)
+                useServerPrepStmts: true  # 서버 준비문 사용 - 성능 향상
+                cachePrepStmts: true      # 준비문 캐시 사용 - 성능 향상
+                prepStmtCacheSize: 500    # 준비문 캐시 크기 (250 → 500) - 더 많은 쿼리 캐싱
+                prepStmtCacheSqlLimit: 4096  # 준비문 캐시 SQL 제한 (2048 → 4096) - 더 큰 쿼리 캐싱
+                
+                # 배치 처리 최적화
+                rewriteBatchedStatements: true # 배치 문 재작성 - 대량 INSERT 성능 향상
+                
+                # 세션 상태 최적화
+                useLocalSessionState: true    # 로컬 세션 상태 사용 - 불필요한 쿼리 감소
+                elideSetAutoCommits: true     # 자동 커밋 설정 생략 - 성능 향상
+                
+                # 메타데이터 캐싱
+                cacheResultSetMetadata: true  # 결과셋 메타데이터 캐시 - 성능 향상
+                cacheServerConfiguration: true # 서버 설정 캐시 - 성능 향상
+                
+                # 네트워크 최적화
+                useCompression: false         # 압축 비활성화 (로컬 네트워크)
+                tcpNoDelay: true             # TCP NoDelay 활성화 - 지연 감소
+                tcpKeepAlive: true           # TCP KeepAlive 활성화 - 연결 유지
+                
+                # 성능 통계 및 모니터링
+                maintainTimeStats: false     # 시간 통계 비활성화 (성능 우선)
+                gatherPerfMetrics: false     # 성능 메트릭 수집 비활성화 (성능 우선)
+                profileSQL: false            # SQL 프로파일링 비활성화 (성능 우선)
+                
+                # SSL 및 보안 설정
+                useSSL: false                # SSL 비활성화 (로컬 네트워크)
+                allowPublicKeyRetrieval: true  # 공개키 검색 허용
+                verifyServerCertificate: false # 서버 인증서 검증 비활성화
+                
+                # 타임존 및 문자 인코딩
+                serverTimezone: Asia/Seoul    # 서버 시간대 설정
+                characterEncoding: UTF-8      # 문자 인코딩
+                useUnicode: true             # 유니코드 사용
+                
+                # 카탈로그 및 스키마 설정
+                useInformationSchema: true    # 정보 스키마 사용
+                nullCatalogMeansCurrent: true # NULL 카탈로그를 현재로 처리
+                
+                # 추가 최적화 설정
+                useCursorFetch: false        # 커서 페치 비활성화 (메모리 효율)
+                defaultFetchSize: 0          # 기본 페치 크기 (0 = 모든 행)
+                
+                # 연결 검증
+                validationQuery: SELECT 1    # 연결 검증 쿼리
+                testOnBorrow: false          # 대여 시 테스트 비활성화 (성능)
+                testWhileIdle: true          # 유휴 시 테스트 활성화 (안정성)
+                
+                # 로깅 설정 (필요 시 활성화)
+                logger: com.mysql.cj.log.StandardLogger
+                logSlowQueries: true         # 느린 쿼리 로깅
+                slowQueryThresholdMillis: 1000  # 느린 쿼리 임계값 (1초)
+                explainSlowQueries: false    # 느린 쿼리 EXPLAIN 비활성화
+
+# 서버 설정
+server:
+    port: 8080
+    servlet:
+        context-path: /
+        encoding:
+            charset: UTF-8
+            enabled: true
+            force: true
+        session:
+            timeout: 1800  # 30분(초 단위) 세션 타임아웃 - SessionListener가 int로 주입받음
+            cookie:
+                name: JSESSIONID  # 세션 쿠키 이름
+                domain: iot.hntsolution.co.kr  # 정확한 도메인 지정
+                path: /  # 쿠키 경로
+                max-age: 1800  # 쿠키 최대 수명 (30분)
+                secure: false  # HTTP에서도 사용 가능
+                http-only: true  # XSS 공격 방지
+                same-site: lax  # HTTP 환경에 적합한 설정
+            tracking-modes: cookie  # 쿠키 기반 세션 추적
+        jsp:
+            # JSP 컴파일 최적화 설정
+            servlet:
+                class-name: org.apache.jasper.servlet.JspServlet
+                init-parameters:
+                    development: false  # 개발 모드 비활성화 (성능 향상)
+                    checkInterval: -1   # JSP 파일 변경 체크 비활성화 (성능 향상)
+                    modificationTestInterval: -1  # 수정 테스트 간격 비활성화
+                    recompileOnFail: false  # 실패 시 재컴파일 비활성화
+                    scratchdir: /tmp  # 스크래치 디렉토리
+                    keepgenerated: false  # 생성된 클래스 파일 유지 안함
+                    mappedfile: false  # 매핑된 파일 사용 안함
+                    trimSpaces: true  # 공백 제거
+                    genStringAsCharArray: true  # 문자열을 char 배열로 생성
+                    # 성능 최적화 설정
+                    javaEncoding: UTF-8  # Java 인코딩
+                    compilerSourceVM: 8  # Java 소스 버전
+                    compilerTargetVM: 8  # Java 타겟 버전
+                    # JSP 컴파일 최적화
+                    fork: false  # 포크 모드 비활성화
+                    xpoweredBy: false  # X-Powered-By 헤더 비활성화
+                    displaySourceFragment: false  # 소스 조각 표시 비활성화
+    error:
+        whitelabel:
+            enabled: false  # ErrorPageFilter 비활성화
+        include-stacktrace: never  # 스택 트레이스 포함하지 않음
+        include-message: never     # 에러 메시지 포함하지 않음
+
+# 커스텀 설정 (Spring Boot가 인식하지 않는 설정들)
+custom:
+    mqtt:
+        server: ${MQTT_SERVER:tcp://hntsolution.co.kr:1883}
+        username: ${MQTT_USERNAME:hnt1}
+        password: ${MQTT_PASSWORD:abcde}
+        default-topic: ${MQTT_TOPIC:#}
+        connection-timeout: 30
+        keep-alive-interval: 60
+        max-reconnect-attempts: 5
+        base-reconnect-delay: 2000
+        max-reconnect-delay: 30000
+    security:
+        fcm:
+            api-key: ${FCM_API_KEY:AAAAoUCvVY0:APA91bFhv_a-RRU0OOJPmGk4MBri_Aqu0MW4r1CDfar4GrhQf3H9XPTWRhoul86dfhLTomTn-WsTrKJ-qPAakoap9vMl7JHmrj8WniVnTQE3y5mhxKFDPp09bAmjaAuDx8qUXH1qhO05}
+            sender-id: ${FCM_SENDER_ID:692574967181}
+            project-id: ${FCM_PROJECT_ID:hnt-sensor-api}
+            service-account-key-path: ${FCM_SERVICE_ACCOUNT_KEY_PATH:}
+
+# 로그 설정
+logging:
+    level:
+        "[com.andrew.hnt.api]": INFO
+        "[com.andrew.hnt.api.config.SlowQueryInterceptor]": INFO
+        "[org.springframework]": WARN
+        "[org.springframework.web]": WARN
+        "[org.springframework.web.servlet.mvc.method.annotation]": WARN
+        "[org.apache.ibatis]": WARN
+        "[org.hibernate]": ERROR
+    pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+        file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# 느린 쿼리 감지 설정
+slow-query:
+    threshold: 1000  # 느린 쿼리 임계값 (밀리초)
+    enabled: true    # 느린 쿼리 감지 활성화
+    log-sql: true    # SQL 로깅 활성화

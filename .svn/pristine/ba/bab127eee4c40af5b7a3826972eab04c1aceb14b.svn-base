@@ -1,0 +1,946 @@
+package com.andrew.hnt.api.controller;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+import com.andrew.hnt.api.model.DeviceVO;
+import com.andrew.hnt.api.model.ExcelTest;
+import com.andrew.hnt.api.model.UserInfo;
+import com.andrew.hnt.api.mqtt.common.MQTT;
+import com.andrew.hnt.api.service.AdminService;
+import com.andrew.hnt.api.util.ExcelUtils;
+import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+
+import com.andrew.hnt.api.model.LoginVO;
+import com.andrew.hnt.api.service.DataService;
+import com.andrew.hnt.api.service.LoginService;
+
+@Controller
+@RequestMapping("/data")
+public class DataController extends DefaultController {
+	
+	@Autowired
+	private DataService dataService;
+
+	@Autowired
+	private AdminService adminService;
+
+	@Autowired
+	private CommonController commonController;
+
+	@Autowired
+	private LoginService loginService;
+
+	private Logger logger = LoggerFactory.getLogger(this.getClass());
+
+	@RequestMapping(value = "/getSensorList", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> getSensorList(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody LoginVO loginVO
+			) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		List<Map<String, Object>> deviceList = new ArrayList<Map<String, Object>>();
+		
+		try {
+			if(null != loginVO) {
+				String userId = loginVO.getUserId();
+
+				deviceList = dataService.getDeviceList(userId);
+				
+				if(null != deviceList && 0 < deviceList.size()) {
+					resultMap.put("deviceList", deviceList);
+				} else {
+					deviceList = null;
+					resultMap.put("deviceList", deviceList);
+				}
+				
+				resultMap.put("resultCode", "200");
+				resultMap.put("resultMessage", "장치 목록 조회 성공");
+			}
+		} catch(Exception e) {
+			logger.error("Error : 장치 목록 조회 과정에서 오류 발생");
+			e.printStackTrace();
+			resultMap.put("resultCode", "999");
+			resultMap.put("resultMessage", "장치 목록 조회 실패");
+		}
+		
+		return resultMap;
+	}
+
+	@RequestMapping(value = "/updateSensorInfo", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> updateSensorInfo(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody DeviceVO deviceVO
+			, @RequestParam(name = "userId", required = false) String userId
+			, @RequestParam(name = "userGrade", required = false) String userGrade
+			, @RequestParam(name = "userNm", required = false) String userNm
+			) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != deviceVO) {
+			try {
+				// 세션에서 사용자 정보 확인
+				HttpSession session = req.getSession();
+				String sessionUserId = (String) session.getAttribute("userId");
+				String sessionUserGrade = (String) session.getAttribute("userGrade");
+				String sessionUserNm = (String) session.getAttribute("userNm");
+				
+				logger.info("=== 세션 정보 확인 ===");
+				logger.info("세션 userId: {}, userGrade: {}, userNm: {}", sessionUserId, sessionUserGrade, sessionUserNm);
+				logger.info("URL 파라미터 userId: {}, userGrade: {}, userNm: {}", userId, userGrade, userNm);
+				logger.info("DeviceVO userId: {}, sensorUuid: {}, sensorName: {}", 
+					deviceVO.getUserId(), deviceVO.getSensorUuid(), deviceVO.getSensorName());
+				
+				// 1순위: URL 파라미터로 받은 사용자 정보 (MainController와 동일한 방식)
+				if (userId != null && !userId.isEmpty() && userGrade != null && !userGrade.isEmpty()) {
+					logger.info("URL 파라미터로 받은 사용자 정보를 세션에 즉시 설정 - userId: {}, userGrade: {}, userNm: {}", 
+							   userId, userGrade, userNm);
+					
+					// 앱에서 전달받은 사용자 정보를 세션에 설정 (신뢰)
+					session.setAttribute("userId", userId);
+					session.setAttribute("userGrade", userGrade);
+					if (userNm != null && !userNm.isEmpty()) {
+						session.setAttribute("userNm", userNm);
+					}
+					
+					// 로컬 변수 업데이트
+					sessionUserId = userId;
+					sessionUserGrade = userGrade;
+					sessionUserNm = userNm;
+					
+					logger.info("세션 설정 완료 - sessionUserId: {}, sessionUserGrade: {}, sessionUserNm: {}", 
+							   sessionUserId, sessionUserGrade, sessionUserNm);
+				}
+				// 2순위: DeviceVO의 userId를 사용하여 세션 설정 (앱에서 URL 파라미터 없이 요청할 때)
+				else if (deviceVO.getUserId() != null && !deviceVO.getUserId().isEmpty()) {
+					logger.info("DeviceVO의 userId를 사용하여 세션 설정 - userId: {}", deviceVO.getUserId());
+					
+					// DeviceVO의 userId를 세션에 설정
+					session.setAttribute("userId", deviceVO.getUserId());
+					
+					// userGrade가 없으면 기본값 "U" 설정 (일반 사용자)
+					String defaultUserGrade = (userGrade != null && !userGrade.isEmpty()) ? userGrade : "U";
+					session.setAttribute("userGrade", defaultUserGrade);
+					
+					// userNm이 없으면 userId를 사용
+					String defaultUserNm = (userNm != null && !userNm.isEmpty()) ? userNm : deviceVO.getUserId();
+					session.setAttribute("userNm", defaultUserNm);
+					
+					// 로컬 변수 업데이트
+					sessionUserId = deviceVO.getUserId();
+					sessionUserGrade = defaultUserGrade;
+					sessionUserNm = defaultUserNm;
+					
+					logger.info("DeviceVO 기반 세션 설정 완료 - sessionUserId: {}, sessionUserGrade: {}, sessionUserNm: {}", 
+							   sessionUserId, sessionUserGrade, sessionUserNm);
+				}
+				
+				// 세션 유효성 검사
+				if (!isValidSession(session)) {
+					resultMap.put("resultCode", "401");
+					resultMap.put("resultMessage", "세션이 유효하지 않습니다.");
+					logger.warn("세션 유효하지 않음 - 장치 수정 시도 차단");
+					return resultMap;
+				}
+				
+				// 부계정(B 등급) 사용자는 장치 수정 불가
+				if("B".equals(sessionUserGrade)) {
+					resultMap.put("resultCode", "403");
+					resultMap.put("resultMessage", "부계정 사용자는 장치 수정 권한이 없습니다.");
+					logger.warn("부계정 사용자 장치 수정 시도 차단 - userId: {}, userGrade: {}", sessionUserId, sessionUserGrade);
+					return resultMap;
+				}
+				
+				// A(관리자) 또는 U(일반사용자)만 장치 수정 가능
+				if(!"A".equals(sessionUserGrade) && !"U".equals(sessionUserGrade)) {
+					resultMap.put("resultCode", "403");
+					resultMap.put("resultMessage", "장치 수정 권한이 없습니다.");
+					logger.warn("권한 없는 사용자 장치 수정 시도 차단 - userId: {}, userGrade: {}", sessionUserId, sessionUserGrade);
+					return resultMap;
+				}
+
+				dataService.updateSensorInfo(deviceVO);
+
+				resultMap.put("resultCode", "200");
+				resultMap.put("resultMessage", "장치명 변경 성공");
+				logger.info("장치 수정 성공 - userId: {}, sensorUuid: {}, userGrade: {}", sessionUserId, deviceVO.getSensorUuid(), sessionUserGrade);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+				resultMap.put("resultCode", "999");
+				resultMap.put("resultMessage", "장치명 변경 실패");
+			}
+		}
+
+		return resultMap;
+	}
+
+	@RequestMapping(value = "/deleteSensorInfo", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> deleteSensorInfo(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody DeviceVO deviceVO
+			, @RequestParam(name = "userId", required = false) String userId
+			, @RequestParam(name = "userGrade", required = false) String userGrade
+			, @RequestParam(name = "userNm", required = false) String userNm
+		) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != deviceVO) {
+			try {
+				// 세션에서 사용자 정보 확인
+				HttpSession session = req.getSession();
+				String sessionUserId = (String) session.getAttribute("userId");
+				String sessionUserGrade = (String) session.getAttribute("userGrade");
+				String sessionUserNm = (String) session.getAttribute("userNm");
+				
+				logger.info("=== 세션 정보 확인 ===");
+				logger.info("세션 userId: {}, userGrade: {}, userNm: {}", sessionUserId, sessionUserGrade, sessionUserNm);
+				logger.info("URL 파라미터 userId: {}, userGrade: {}, userNm: {}", userId, userGrade, userNm);
+				logger.info("DeviceVO userId: {}, sensorUuid: {}, sensorName: {}", 
+					deviceVO.getUserId(), deviceVO.getSensorUuid(), deviceVO.getSensorName());
+				
+				// 1순위: URL 파라미터로 받은 사용자 정보 (MainController와 동일한 방식)
+				if (userId != null && !userId.isEmpty() && userGrade != null && !userGrade.isEmpty()) {
+					logger.info("URL 파라미터로 받은 사용자 정보를 세션에 즉시 설정 - userId: {}, userGrade: {}, userNm: {}", 
+							   userId, userGrade, userNm);
+					
+					// 앱에서 전달받은 사용자 정보를 세션에 설정 (신뢰)
+					session.setAttribute("userId", userId);
+					session.setAttribute("userGrade", userGrade);
+					if (userNm != null && !userNm.isEmpty()) {
+						session.setAttribute("userNm", userNm);
+					}
+					
+					// 로컬 변수 업데이트
+					sessionUserId = userId;
+					sessionUserGrade = userGrade;
+					sessionUserNm = userNm;
+					
+					logger.info("세션 설정 완료 - sessionUserId: {}, sessionUserGrade: {}, sessionUserNm: {}", 
+							   sessionUserId, sessionUserGrade, sessionUserNm);
+				}
+				// 2순위: DeviceVO의 userId를 사용하여 세션 설정 (앱에서 URL 파라미터 없이 요청할 때)
+				else if (deviceVO.getUserId() != null && !deviceVO.getUserId().isEmpty()) {
+					logger.info("DeviceVO의 userId를 사용하여 세션 설정 - userId: {}", deviceVO.getUserId());
+					
+					// DeviceVO의 userId를 세션에 설정
+					session.setAttribute("userId", deviceVO.getUserId());
+					
+					// userGrade가 없으면 기본값 "U" 설정 (일반 사용자)
+					String defaultUserGrade = (userGrade != null && !userGrade.isEmpty()) ? userGrade : "U";
+					session.setAttribute("userGrade", defaultUserGrade);
+					
+					// userNm이 없으면 userId를 사용
+					String defaultUserNm = (userNm != null && !userNm.isEmpty()) ? userNm : deviceVO.getUserId();
+					session.setAttribute("userNm", defaultUserNm);
+					
+					// 로컬 변수 업데이트
+					sessionUserId = deviceVO.getUserId();
+					sessionUserGrade = defaultUserGrade;
+					sessionUserNm = defaultUserNm;
+					
+					logger.info("DeviceVO 기반 세션 설정 완료 - sessionUserId: {}, sessionUserGrade: {}, sessionUserNm: {}", 
+							   sessionUserId, sessionUserGrade, sessionUserNm);
+				}
+
+				// 세션 유효성 검사 (이제 세션에 사용자 정보가 있음)
+				if (!isValidSession(session)) {
+					logger.warn("세션이 유효하지 않음 - 장치 삭제 시도 차단");
+					resultMap.put("resultCode", "401");
+					resultMap.put("resultMessage", "세션이 유효하지 않습니다.");
+					return resultMap;
+				}
+				
+				// 세션 유효성 검사 통과
+				logger.info("세션 유효성 검사 통과- userId: {}", sessionUserId);
+				logger.info("userGrade: {}", sessionUserGrade);
+				logger.info("userNm: {}", sessionUserNm);
+				
+				// 부계정(B 등급) 사용자는 장치 삭제 불가
+				if("B".equals(sessionUserGrade)) {
+					resultMap.put("resultCode", "403");
+					resultMap.put("resultMessage", "부계정 사용자는 장치 삭제 권한이 없습니다.");
+					logger.warn("부계정 사용자 장치 삭제 시도 차단 - userId: {}, userGrade: {}", sessionUserId, sessionUserGrade);
+					return resultMap;
+				}
+				
+				// A(관리자) 또는 U(일반사용자)만 장치 삭제 가능
+				if(!"A".equals(sessionUserGrade) && !"U".equals(sessionUserGrade)) {
+					resultMap.put("resultCode", "403");
+					resultMap.put("resultMessage", "장치 삭제 권한이 없습니다.");
+					logger.warn("권한 없는 사용자 장치 삭제 시도 차단 - userId: {}, userGrade: {}", sessionUserId, sessionUserGrade);
+					return resultMap;
+				}
+
+				// 권한 확인 완료 - 장치 삭제 진행
+				logger.info("권한 확인 완료 - 장치 삭제 진행");
+				
+				dataService.deleteSensorInfo(deviceVO);
+
+				Map<String, Object> param = new HashMap<String, Object>();
+				param.put("userId", deviceVO.getUserId());
+				param.put("setGu", "deleteDevice");
+
+				// DB 데이터 삭제 후 센서 자체 삭제 처리 추가 2023-02-24
+				String payload = "ACT&name=userId&value=0";
+				String sendTopic = "HBEE/" + deviceVO.getUserId() + "/TC/" + deviceVO.getSensorUuid() + "/SER";
+
+				param.put("topicStr", sendTopic);
+
+                String MqttServer1 = "tcp://hntnas.diskstation.me:1883";
+				String MqttServer2 = "";
+				String client_id = "";
+				String userName = "hnt1";
+				String password = "abcde";
+                String topic = "#";
+				String msg = "";
+				String readMsg = "";
+
+				client_id = UUID.randomUUID().toString();
+
+				MQTT client = new MQTT(MqttServer1, client_id, userName, password);
+
+                if(null != sendTopic && !"".equals(sendTopic) && 0 < sendTopic.length()) {
+                    // 응답은 DEV 토픽으로 수신하도록 구독 토픽 설정
+                    if (sendTopic.endsWith("/SER")) {
+                        topic = sendTopic.substring(0, sendTopic.length() - 3) + "DEV";
+                    } else {
+                        topic = sendTopic;
+                    }
+                }
+                client.init(topic, "Y"); // DEV 구독
+                client.publish(payload, 0, sendTopic); // SER 발행
+				String resultMsg = client.getMsg();
+				String resultTopic = client.getRcvTopic();
+
+				resultMap.put("resultCode", "200");
+				resultMap.put("resultMessage", "장치 삭제 성공");
+				resultMap.put("resultMsg", resultMsg);
+				logger.info("장치 삭제 성공 - userId: {}, sensorUuid: {}, userGrade: {}", sessionUserId, deviceVO.getSensorUuid(), sessionUserGrade);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+				resultMap.put("resultCode", "999");
+				resultMap.put("resultMessage", "장치 삭제 실패");
+			}
+		}
+
+		return resultMap;
+	}
+
+	@RequestMapping(value = "/data/insertSensorInfo", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> insertSensorInfo(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestBody Map<String, Object> insertData
+			, @RequestParam(name = "userId", required = false) String userId
+			, @RequestParam(name = "userGrade", required = false) String userGrade
+			, @RequestParam(name = "userNm", required = false) String userNm
+	) {
+		// 기존 코드 주석 처리
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != insertData && 0 < insertData.size()) {
+			try {
+				// 세션에서 사용자 정보 확인
+				HttpSession session = req.getSession();
+				String sessionUserId = (String) session.getAttribute("userId");
+				String sessionUserGrade = (String) session.getAttribute("userGrade");
+				String sessionUserNm = (String) session.getAttribute("userNm");
+				
+				logger.info("🚨🚨🚨 DataController insertSensorInfo 메서드가 호출되었습니다! 🚨🚨🚨");
+				logger.info("🚨🚨🚨 호출 시간: {}", new java.util.Date());
+				logger.info("🚨🚨🚨 호출자 IP: {}", req.getRemoteAddr());
+				logger.info("🚨🚨🚨 insertData 전체 파라미터: {}", insertData);
+				logger.info("🚨🚨🚨 세션 userId: {}, userGrade: {}, userNm: {}", sessionUserId, sessionUserGrade, sessionUserNm);
+				logger.info("URL 파라미터 userId: {}, userGrade: {}, userNm: {}", userId, userGrade, userNm);
+				
+				// 1순위: URL 파라미터로 받은 사용자 정보
+				if (userId != null && !userId.isEmpty() && userGrade != null && !userGrade.isEmpty()) {
+					logger.info("URL 파라미터로 받은 사용자 정보를 세션에 즉시 설정 - userId: {}, userGrade: {}, userNm: {}", 
+							   userId, userGrade, userNm);
+					
+					session.setAttribute("userId", userId);
+					session.setAttribute("userGrade", userGrade);
+					if (userNm != null && !userNm.isEmpty()) {
+						session.setAttribute("userNm", userNm);
+					}
+					
+					sessionUserId = userId;
+					sessionUserGrade = userGrade;
+					sessionUserNm = userNm;
+					
+					logger.info("세션 설정 완료 - sessionUserId: {}, sessionUserGrade: {}, sessionUserNm: {}", 
+							   sessionUserId, sessionUserGrade, sessionUserNm);
+				}
+				
+				// 세션 유효성 검사
+				if (!isValidSession(session)) {
+					resultMap.put("resultCode", "401");
+					resultMap.put("resultMessage", "세션이 유효하지 않습니다.");
+					logger.warn("세션 유효하지 않음 - 장치 등록 시도 차단");
+					return resultMap;
+				}
+				
+				// 부계정(B 등급) 사용자는 장치 등록 불가
+				if("B".equals(sessionUserGrade)) {
+					resultMap.put("resultCode", "403");
+					resultMap.put("resultMessage", "부계정 사용자는 장치 등록 권한이 없습니다.");
+					logger.warn("부계정 사용자 장치 등록 시도 차단 - userId: {}, userGrade: {}", sessionUserId, sessionUserGrade);
+					return resultMap;
+				}
+				
+				// A(관리자) 또는 U(일반사용자)만 장치 등록 가능
+				if(!"A".equals(sessionUserGrade) && !"U".equals(sessionUserGrade)) {
+					resultMap.put("resultCode", "403");
+					resultMap.put("resultMessage", "장치 등록 권한이 없습니다.");
+					logger.warn("권한 없는 사용자 장치 등록 시도 차단 - userId: {}, userGrade: {}", sessionUserId, sessionUserGrade);
+					return resultMap;
+				}
+				
+				// MainController의 insertSensorInfo 로직과 동일하게 처리
+				if (String.valueOf(insertData.get("userId")).equals(String.valueOf(session.getAttribute("userId")))) {
+					Map<String, Object> param = new HashMap<String, Object>();
+					param.put("userId", String.valueOf(session.getAttribute("userId")));
+					param.put("sensorUuid", String.valueOf(insertData.get("uuid")));
+					param.put("sensorId", String.valueOf(insertData.get("userId")));
+					param.put("sensorType", "TC");
+					param.put("chartType", "none");
+					param.put("instId", "hnt");
+					param.put("mdfId", "hnt");
+					
+					// 장치 이름 파라미터 추가
+					if(insertData.get("sensorName") != null && !"".equals(String.valueOf(insertData.get("sensorName")))) {
+						param.put("sensorName", String.valueOf(insertData.get("sensorName")));
+						logger.info("장치 이름 변경 요청 감지 - sensorName: {}", insertData.get("sensorName"));
+					} else {
+						logger.info("sensorName 파라미터가 없음 - insertData.get('sensorName'): {}", insertData.get("sensorName"));
+					}
+					
+					logger.info("LoginServiceImpl로 전달할 param: {}", param);
+					
+					try {
+						Map<String, Object> chkMap = new HashMap<String, Object>();
+						chkMap = loginService.insertSensorInfo2(param);
+
+						if(null != chkMap && 0 < chkMap.size()) {
+							if("true".equals(String.valueOf(chkMap.get("result")))) {
+								resultMap.put("resultCode", "200");
+								if(chkMap.get("message") != null) {
+									resultMap.put("resultMsg", String.valueOf(chkMap.get("message")));
+								} else {
+									resultMap.put("resultMsg", "success");
+								}
+							} else {
+								// 중복 등록 또는 기타 오류
+								resultMap.put("resultCode", "400");
+								if(chkMap.get("message") != null) {
+									resultMap.put("resultMsg", String.valueOf(chkMap.get("message")));
+								} else {
+									resultMap.put("resultMsg", "장치 등록 실패");
+								}
+							}
+						}
+					} catch (Exception e) {
+						logger.error("Error : " + e.toString());
+						resultMap.put("resultCode", "999");
+						resultMap.put("resultMsg", "장치 등록 중 오류가 발생했습니다.");
+					}
+				}
+				
+				logger.info("=== DataController insertSensorInfo 완료 ===");
+				logger.info("최종 결과: {}", resultMap);
+				
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+				resultMap.put("resultCode", "999");
+				resultMap.put("resultMsg", "장치 등록 중 오류가 발생했습니다.");
+			}
+		}
+
+		return resultMap;
+	}
+
+	/**
+	 * 상세 센서 데이터를 보여주는 화면
+	 * @return
+	 */
+    @RequestMapping(value = "/chart", method = RequestMethod.GET)
+    public String chart(
+            HttpServletRequest req
+            , HttpServletResponse res
+            , @RequestParam(name = "sensorId", required = false) String sensorId
+            , @RequestParam(name = "userId", required = false) String userId
+            , @RequestParam(name = "sensorUuid", required = true) String sensorUuid
+            , Model model
+        ) {
+		
+		// 메서드 시작 시 sensorId 값 로깅
+		logger.info("DataController - 메서드 시작 sensorId: " + sensorId);
+		String result = "chart/chart";
+
+        HttpSession session = req.getSession();
+
+        // 세션 유효성 검사: 세션이 없거나 필수 속성 누락 시 복구 시도 후 실패 시 로그인 페이지로 이동
+        if (!isValidSession(session)) {
+            String restoreUserId = (String) session.getAttribute("loginUserId");
+            if (restoreUserId == null || restoreUserId.isEmpty()) {
+                restoreUserId = userId; // URL 파라미터 보완(세션 우선 정책은 유지)
+            }
+            if (restoreUserId != null && !restoreUserId.isEmpty()) {
+                session.setAttribute("userId", restoreUserId);
+            }
+            if (!isValidSession(session)) {
+                logger.warn("DataController.chart - 세션 유효하지 않음(복구 실패). 로그인 페이지로 리다이렉트");
+                return "redirect:/login/login";
+            }
+        }
+
+        if(null != session) {
+            // URL userId 파라미터는 무시하고 세션 값 우선
+            userId = String.valueOf(session.getAttribute("userId"));
+            model.addAttribute("userId", userId);
+            model.addAttribute("loginUserId", userId);
+            model.addAttribute("userNm", String.valueOf(session.getAttribute("userNm")));
+            model.addAttribute("userGrade", String.valueOf(session.getAttribute("userGrade")));
+            // 세션 보완: 파라미터 userId가 있고 세션이 비어 있으면 설정
+            if ((session.getAttribute("userId") == null || "".equals(String.valueOf(session.getAttribute("userId")))) && userId != null && !userId.isEmpty()) {
+                session.setAttribute("userId", userId);
+            }
+
+            // userId와 sensorUuid만으로 처리 시작 (sensorId는 DB에서 보정)
+            if(null != userId && !"".equals(userId) && null != sensorUuid && !"".equals(sensorUuid)) {
+                List<Map<String, Object>> dailyList = new ArrayList<Map<String, Object>>();
+                List<Map<String, Object>> monthlyList = new ArrayList<Map<String, Object>>();
+                List<Map<String, Object>> yearlyList = new ArrayList<Map<String, Object>>();
+
+				List<String> daily = new ArrayList<String>();
+				List<String> monthly = new ArrayList<String>();
+				List<String> yearly = new ArrayList<String>();
+
+                String topicStr = "";
+				String sensorName = "";
+				UserInfo user = new UserInfo();
+
+                Map<String, Object> userInfo = new HashMap<String, Object>();
+                userInfo = adminService.getUserInfo(userId, sensorUuid);
+
+				if(null != userInfo && !"".equals(userInfo)) {
+                    Object userObj = userInfo.get("userInfo");
+                    if (userObj instanceof UserInfo) {
+                        user = (UserInfo) userObj;
+                    } else if (userObj == null) {
+                        logger.warn("DataController - userInfo.userInfo 가 null 입니다. userId: {}, sensorUuid: {}", userId, sensorUuid);
+                    } else {
+                        logger.warn("DataController - userInfo.userInfo 타입이 UserInfo가 아닙니다: {}", userObj.getClass());
+                    }
+                    Map<String, Object> sensor = (Map<String, Object>) userInfo.get("sensorInfo");
+                    if (sensor != null && !sensor.isEmpty()) {
+                        sensorName = String.valueOf(sensor.get("sensor_name"));
+                        // 실제 장치 소유자 ID로 sensorId 설정
+                        sensorId = String.valueOf(sensor.get("sensor_id"));
+                        // 주의: 서버측 MQTT 클라이언트는 와일드카드를 사용할 수 없음
+                        topicStr = "HBEE/" + sensorId + "/" + String.valueOf(sensor.get("sensor_type")) + "/" + String.valueOf(sensor.get("sensor_uuid")) + "/SER";
+                        if (topicStr.contains("+") || topicStr.contains("#")) {
+                            logger.error("DataController - 유효하지 않은 토픽 생성 감지(와일드카드 포함): {}", topicStr);
+                            topicStr = topicStr.replace("+", "").replace("#", "");
+                        }
+						
+						// 디버깅 로그 추가
+						logger.info("DataController - URL 파라미터 sensorId: " + req.getParameter("sensorId"));
+						logger.info("DataController - 실제 장치 소유자 sensorId: " + sensorId);
+						logger.info("DataController - topicStr: " + topicStr);
+						
+						// 올바른 sensorId 저장 완료
+					}
+				}
+
+                Map<String, Object> param = new HashMap<String, Object>();
+                // 부계정이 메인 계정의 장치 데이터를 조회할 때는 user_id를 sensor_id와 동일하게 설정
+                param.put("userId", sensorId);  // 실제 장치 소유자 ID 사용
+                param.put("sensorId", sensorId);
+                param.put("sensorUuid", sensorUuid);
+
+				try {
+					// 일간 데이터 조회
+					param.put("gu", "d");
+					dailyList = dataService.selectSensorData(param);
+
+					if(null != dailyList && 0 < dailyList.size()) {
+						for(int i=0; i < dailyList.size(); i++) {
+							daily.add(dailyList.get(i).get("inst_dtm") + "^" + dailyList.get(i).get("sensor_value"));
+						}
+					}
+
+                    // 성능 최적화: 초기 진입 시 월간/연간 집계는 미리 조회하지 않음
+                    String prefetch = req.getParameter("prefetch");
+                    boolean prefetchAll = "all".equalsIgnoreCase(prefetch);
+
+                    if (prefetchAll) {
+                        // 월간 데이터 조회
+                        param.remove("gu");
+                        param.put("gu", "w");
+                        // 기간 파라미터 적용 (있을 때만)
+                        String startDateParam = req.getParameter("startDate");
+                        String endDateParam = req.getParameter("endDate");
+                        if(startDateParam != null && !startDateParam.isEmpty() && endDateParam != null && !endDateParam.isEmpty()) {
+                            param.put("setDate1", startDateParam.replace("-", "") + "000000");
+                            param.put("setDate2", endDateParam.replace("-", "") + "235959");
+                            model.addAttribute("startDate", req.getParameter("startDate"));
+                            model.addAttribute("endDate", req.getParameter("endDate"));
+                        }
+                        monthlyList = dataService.selectSensorData(param);
+
+                        if(null != monthlyList && 0 < monthlyList.size()) {
+                            for(int i=0; i < monthlyList.size(); i++) {
+                                monthly.add(monthlyList.get(i).get("inst_dtm") + "^" + monthlyList.get(i).get("sensor_value"));
+                            }
+                        }
+
+                        // 연간 데이터 조회
+                        param.remove("gu");
+                        param.put("gu", "y");
+                        yearlyList = dataService.selectSensorData(param);
+
+                        if(null != yearlyList && 0 < yearlyList.size()) {
+                            for(int i=0; i < yearlyList.size(); i++) {
+                                yearly.add(yearlyList.get(i).get("inst_dtm") + "^" + yearlyList.get(i).get("sensor_value"));
+                            }
+                        }
+                    }
+
+					String todayStr = "";
+					Date today = new Date();
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+					todayStr = sdf.format(today);
+
+					// 모델 속성 설정 전 디버깅 로그
+					logger.info("DataController - 모델에 설정할 sensorId: " + sensorId);
+					
+                    // 세션의 sensorId를 올바른 값으로 업데이트 (널가드)
+                    if (sensorId != null && !"".equals(sensorId)) {
+                        session.setAttribute("sensorId", sensorId);
+                        logger.info("DataController - 세션 sensorId 업데이트: " + sensorId);
+                    } else {
+                        logger.warn("DataController - sensorId 가 null/빈 값입니다. userId: {}, sensorUuid: {}", userId, sensorUuid);
+                    }
+					
+                    model.addAttribute("userId", userId);
+                    model.addAttribute("sensorId", sensorId);
+					model.addAttribute("sensorUuid", sensorUuid);
+					
+					// 디버깅 로그 추가 - 모델에 설정되는 값 확인
+					logger.info("DataController - model.addAttribute sensorId: " + sensorId);
+					logger.info("DataController - model.addAttribute userId: " + userId);
+                    model.addAttribute("sensorName", sensorName);
+                    model.addAttribute("dailyList", dailyList);
+					model.addAttribute("monthlyList", monthlyList);
+					model.addAttribute("yearlyList", yearlyList);
+					model.addAttribute("topicStr", topicStr);
+					model.addAttribute("daily", daily);
+					model.addAttribute("monthly", monthly);
+					model.addAttribute("yearly", yearly);
+					model.addAttribute("todayStr", todayStr);
+
+                    // 사이드바 데이터 추가 (세션 userId 우선 보장)
+                    String sessionUserIdEff = (String) session.getAttribute("userId");
+                    String effectiveUserId = (sessionUserIdEff != null && !sessionUserIdEff.isEmpty()) ? sessionUserIdEff : userId;
+                    commonController.addSidebarData(effectiveUserId, model, session);
+                    // 세션에 userNm이 없을 때 DB 조회값(user)로 보완
+                    Object sessionUserNmObj = session.getAttribute("userNm");
+                    if ((sessionUserNmObj == null || String.valueOf(sessionUserNmObj).isEmpty()) && user != null) {
+                        model.addAttribute("userNm", user.getUserNm());
+                        model.addAttribute("userGrade", user.getUserGrade());
+                    }
+                    model.addAttribute("sensorName", sensorName);
+				} catch(Exception e) {
+					logger.error("Error : " + e.toString());
+					e.printStackTrace();
+				}
+			} else {
+				logger.error("Error : 데이터 조회에 필요한 필수값이 없습니다.");
+			}
+		} else {
+			result = "redirect:/login/login";
+		}
+
+		return result;
+	}
+
+	@RequestMapping(value = "/excelDownload", method = RequestMethod.GET)
+	public void excelDownload (
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestParam(name = "sensorId", required = true) String sensorId
+			, @RequestParam(name = "userId", required = true) String userId
+			, @RequestParam(name = "sensorUuid", required = true) String sensorUuid
+			, @RequestParam(name = "setDate", required = false) String setDate
+			, @RequestParam(name = "startDate", required = false) String startDate
+			, @RequestParam(name = "endDate", required = false) String endDate
+			, @RequestParam(name = "sensorName", required = false) String sensorName
+		) throws IOException {
+
+		logger.info("엑셀 다운로드 시작 - sensorId: {}, userId: {}, sensorUuid: {}, sensorName: {}", 
+			sensorId, userId, sensorUuid, sensorName);
+
+		HttpSession session = req.getSession();
+
+		if(null != session) {
+			if(null != userId && !"".equals(userId)) {
+
+			} else {
+				userId = String.valueOf(session.getAttribute("userId"));
+			}
+
+			if(null != userId && !"".equals(userId) && null != sensorId && !"".equals(sensorId) && null != sensorUuid && !"".equals(sensorUuid)) {
+				String todayStr = "";
+				String setDate1 = "";
+				String setDate2 = "";
+
+				if(null != setDate && !"".equals(setDate) && 0 < setDate.length()) {
+					todayStr = setDate;
+					if(setDate.contains("-")) {
+						setDate = setDate.replace("-", "");
+					}
+					setDate1 = setDate + "000000";
+					setDate2 = setDate + "235959";
+				} else {
+					Date today = new Date();
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+					todayStr = sdf.format(today);
+				}
+
+				if(null != startDate && !"".equals(startDate) && 0 < startDate.length()) {
+					if(startDate.contains("-")) {
+						startDate = startDate.replace("-", "");
+					}
+					setDate1 = startDate + "000000";
+				}
+
+				if(null != endDate && !"".equals(endDate) && 0 < endDate.length()) {
+					if(endDate.contains("-")) {
+						endDate = endDate.replace("-", "");
+					}
+					setDate2 = endDate + "235959";
+				}
+
+				logger.info("엑셀 다운로드 파라미터 - todayStr: {}, setDate1: {}, setDate2: {}", 
+					todayStr, setDate1, setDate2);
+
+				res.setHeader("Content-Disposition", "attachment;filename=report_"+todayStr+".xls");
+				res.setContentType("application/vnd.ms-excel");
+
+				List<Map<String, Object>> dailyList = new ArrayList<Map<String, Object>>();
+				List<Map<String, Object>> monthlyList = new ArrayList<Map<String, Object>>();
+				List<Map<String, Object>> yearlyList = new ArrayList<Map<String, Object>>();
+
+				List<String> daily = new ArrayList<String>();
+				List<String> monthly = new ArrayList<String>();
+				List<String> yearly = new ArrayList<String>();
+
+				List<String> header = new ArrayList<String>();
+				List<String> header2 = new ArrayList<String>();
+				List<String> header3 = new ArrayList<String>();
+
+				// === 실제 장치 소유자 ID 조회 (차트 페이지와 동일한 로직) ===
+				String actualSensorId = sensorId;  // 기본값
+				Map<String, Object> userInfo = new HashMap<String, Object>();
+				userInfo = adminService.getUserInfo(userId, sensorUuid);
+
+				if(null != userInfo && !"".equals(userInfo)) {
+					Map<String, Object> sensor = (Map<String, Object>) userInfo.get("sensorInfo");
+					if (null != sensor && 0 < sensor.size()) {
+						// 실제 장치 소유자 ID로 sensorId 설정
+						actualSensorId = String.valueOf(sensor.get("sensor_id"));
+						logger.info("엑셀 다운로드 - URL 파라미터 sensorId: {}", sensorId);
+						logger.info("엑셀 다운로드 - 실제 장치 소유자 sensorId: {}", actualSensorId);
+					}
+				}
+
+				Map<String, Object> param = new HashMap<String, Object>();
+				// 부계정이 메인 계정의 장치 데이터를 조회할 때는 user_id를 sensor_id와 동일하게 설정
+				param.put("userId", actualSensorId);  // 실제 장치 소유자 ID 사용
+				param.put("sensorId", actualSensorId);
+				param.put("sensorUuid", sensorUuid);
+				param.put("setDate", setDate);
+				param.put("setDate1", setDate1);
+				param.put("setDate2", setDate2);
+
+				logger.info("데이터 조회 파라미터 - param: {}", param);
+
+				try {
+					// 일간 데이터 조회
+					param.put("gu", "d");
+					dailyList = dataService.selectSensorData(param);
+					logger.info("일간 데이터 조회 완료 - 데이터 수: {}, sensorUuid: {}", 
+						dailyList != null ? dailyList.size() : 0, sensorUuid);
+
+					// 데이터 샘플 로깅
+					if(dailyList != null && !dailyList.isEmpty()) {
+						logger.info("일간 데이터 샘플 - 첫 번째 데이터: {}", dailyList.get(0));
+					}
+
+					header.add("00:00");
+					header.add("00:30");
+					header.add("01:00");
+					header.add("01:30");
+					header.add("02:00");
+					header.add("02:30");
+					header.add("03:00");
+					header.add("03:30");
+					header.add("04:00");
+					header.add("04:30");
+					header.add("05:00");
+					header.add("05:30");
+					header.add("06:00");
+					header.add("06:30");
+					header.add("07:00");
+					header.add("07:30");
+					header.add("08:00");
+					header.add("08:30");
+					header.add("09:00");
+					header.add("09:30");
+					header.add("10:00");
+					header.add("10:30");
+					header.add("11:00");
+					header.add("11:30");
+					header.add("12:00");
+					header.add("12:30");
+					header.add("13:00");
+					header.add("13:30");
+					header.add("14:00");
+					header.add("14:30");
+					header.add("15:00");
+					header.add("15:30");
+					header.add("16:00");
+					header.add("16:30");
+					header.add("17:00");
+					header.add("17:30");
+					header.add("18:00");
+					header.add("18:30");
+					header.add("19:00");
+					header.add("19:30");
+					header.add("20:00");
+					header.add("20:30");
+					header.add("21:00");
+					header.add("21:30");
+					header.add("22:00");
+					header.add("22:30");
+					header.add("23:00");
+					header.add("23:30");
+
+					// 월간 데이터 조회
+					param.remove("gu");
+					param.put("gu", "w");
+					monthlyList = dataService.selectSensorData(param);
+					logger.info("월간 데이터 조회 완료 - 데이터 수: {}", monthlyList != null ? monthlyList.size() : 0);
+
+					if(null != monthlyList && 0 < monthlyList.size()) {
+						for(int i =0; i < monthlyList.size(); i++) {
+							monthly.add(String.valueOf(monthlyList.get(i).get("sensor_value")));
+							header2.add(String.valueOf(monthlyList.get(i).get("inst_dtm")));
+						}
+					}
+
+					// 연간 데이터 조회
+					param.remove("gu");
+					param.put("gu", "y");
+					yearlyList = dataService.selectSensorData(param);
+					logger.info("연간 데이터 조회 완료 - 데이터 수: {}", yearlyList != null ? yearlyList.size() : 0);
+
+					if(null != yearlyList && 0 < yearlyList.size()) {
+						for(int i =0; i < yearlyList.size(); i++) {
+							yearly.add(String.valueOf(yearlyList.get(i).get("sensor_value")));
+							header3.add(String.valueOf(yearlyList.get(i).get("inst_dtm")));
+						}
+					}
+
+					logger.info("엑셀 파일 생성 시작 - 일간: {}, 월간: {}, 연간: {}", 
+						dailyList != null ? dailyList.size() : 0,
+						monthlyList != null ? monthlyList.size() : 0,
+						yearlyList != null ? yearlyList.size() : 0);
+
+					ByteArrayInputStream stream = ExcelUtils.createDataExcel(header, header2, header3, dailyList, monthlyList, yearlyList, sensorName);
+					IOUtils.copy(stream, res.getOutputStream());
+					
+					logger.info("엑셀 파일 생성 완료");
+				} catch (Exception e) {
+					logger.error("엑셀 다운로드 실패: {}", e.getMessage(), e);
+					e.printStackTrace();
+				}
+			}
+		}
+
+	}
+	
+	@RequestMapping(value = "/getDailyData", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> getDailyData(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestParam(name = "sensorId", required = true) String sensorId
+			, @RequestParam(name = "userId", required = true) String userId
+			, @RequestParam(name = "sensorUuid", required = true) String sensorUuid
+			, @RequestParam(name = "startDate", required = false) String startDate
+			, @RequestParam(name = "endDate", required = true) String endDate
+	) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		
+		try {
+			Map<String, Object> param = new HashMap<String, Object>();
+			// 온도데이터는 sensor_uuid에만 종속됨
+			param.put("sensorUuid", sensorUuid);
+			
+			// 날짜 파라미터 추가 (endDate만 사용)
+			if(endDate != null && !endDate.isEmpty()) {
+				param.put("startDateTime", endDate + " 00:00:00");
+				param.put("endDateTime", endDate + " 23:59:59");
+			}
+			
+			// 일간 데이터 조회
+			param.put("gu", "d");
+			
+			List<Map<String, Object>> dailyList = dataService.selectSensorData(param);
+			
+			List<String> daily = new ArrayList<String>();
+			
+			if(null != dailyList && 0 < dailyList.size()) {
+				for(int i=0; i < dailyList.size(); i++) {
+					daily.add(dailyList.get(i).get("inst_dtm") + "^" + dailyList.get(i).get("sensor_value"));
+				}
+			}
+			
+			// 결과 데이터를 쉼표로 구분된 문자열로 변환
+			String dailyData = String.join(",", daily);
+			
+			resultMap.put("resultCode", "200");
+			resultMap.put("resultMessage", "데이터 조회 성공");
+			resultMap.put("dailyData", dailyData);
+			
+		} catch(Exception e) {
+			logger.error("Error : " + e.toString());
+			e.printStackTrace();
+			resultMap.put("resultCode", "500");
+			resultMap.put("resultMessage", "데이터 조회 실패: " + e.getMessage());
+		}
+		
+		return resultMap;
+	}
+}

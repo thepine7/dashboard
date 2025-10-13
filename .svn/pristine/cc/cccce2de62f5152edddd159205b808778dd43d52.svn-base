@@ -1,0 +1,68 @@
+package com.andrew.hnt.api.controller;
+
+import javax.servlet.http.HttpServletRequest;
+
+import com.andrew.hnt.api.client.RetroClient;
+import com.andrew.hnt.api.client.RetroInterface;
+import org.springframework.http.MediaType;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+public class TestController {
+
+	@GetMapping(value = "/test", produces = MediaType.APPLICATION_JSON_VALUE)
+	public String test() {
+		return "test";
+	}
+
+	public static void main(String[] args) {
+		try {
+			String token = "dimotaOSTsuaGRM5LGoBfb:APA91bEWbuPNACaOKKF9320Z7CjNxZKZY4emUROs18zscNalOXQgVFNIB-ujaKg0pNE9wAqOdQLErA3JI0hrAnX89p8lk3kLrHK4tpjgscmakenOPc0d6fcIm3euOhPncXFIqTiblQOe";
+
+			RetroInterface retroInterface = RetroClient.getApiService();
+			Map<String, Object> param = new HashMap<String, Object>();
+			param.put("userId", "andrew2768");
+			param.put("sensorId", "andrew2768");
+			param.put("sensorUuid", "2C3AE80A61AC");
+			param.put("sensorValue", "27");
+			param.put("token", token);
+			param.put("name", "ain");
+			param.put("type", "1");
+
+			Call<Map<String, Object>> result = retroInterface.sendAlarm(param);
+			result.enqueue(new Callback<Map<String, Object>>() {
+				@Override
+				public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+					if(response.isSuccessful()) {
+						Map<String, Object> resultMap = new HashMap<String, Object>();
+						resultMap = response.body();
+
+						if(null != resultMap && 0 < resultMap.size()) {
+							System.out.println("resultcode : " + String.valueOf(resultMap.get("resultCode")));
+						}
+					}
+				}
+
+				@Override
+				public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+					t.printStackTrace();
+				}
+			});
+
+		} catch(Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+}

@@ -1,0 +1,61 @@
+spring:
+    # influxdb 설정
+    influxdb:
+        url: ${INFLUXDB_URL:}
+        username: ${INFLUXDB_USERNAME:}
+        password: ${INFLUXDB_PASSWORD:}
+        database: ${INFLUXDB_DATABASE:}
+        retention-policy: autogen
+    mvc:
+        view:
+            prefix: /WEB-INF/jsp
+            suffix: .jsp
+        static-path-pattern: "/static/**"    #static file 경로 설정 -> /resources/static 아래에 static 파일들 위치
+    # mysql db 설정
+    datasource:
+        driver-class-name: com.mysql.jdbc.Driver
+        url: ${DB_URL:jdbc:mysql://hntsolution.co.kr:3306/hnt?useUnicode=yes&characterEncoding=UTF-8&allowMultiQueries=true&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false}
+        username: ${DB_USERNAME:root}
+        password: ${DB_PASSWORD:HntRoot123!}
+        hikari:
+            max-lifetime: 900000          # 연결 최대 수명 (15분)
+            connection-timeout: 15000     # 연결 타임아웃 (15초)
+            minimum-idle: 5               # 최소 유휴 연결 수
+            maximum-pool-size: 20         # 최대 연결 풀 크기
+            idle-timeout: 600000          # 유휴 타임아웃 (10분)
+            leak-detection-threshold: 60000  # 누수 감지 임계값 (1분)
+            connection-test-query: SELECT 1  # 연결 테스트 쿼리
+
+# 서버 설정
+server:
+    port: 8080
+    servlet:
+        context-path: /
+        encoding:
+            charset: UTF-8
+            enabled: true
+            force: true
+        session:
+            timeout: 1800  # 30분(초 단위) 세션 타임아웃 - SessionListener가 int로 주입받음
+
+
+
+
+
+# 보안 설정 (환경변수 사용 권장)
+security:
+    fcm:
+        api-key: ${FCM_API_KEY:AAAAoUCvVY0:APA91bFhv_a-RRU0OOJPmGk4MBri_Aqu0MW4r1CDfar4GrhQf3H9XPTWRhoul86dfhLTomTn-WsTrKJ-qPAakoap9vMl7JHmrj8WniVnTQE3y5mhxKFDPp09bAmjaAuDx8qUXH1qhO05}
+        sender-id: ${FCM_SENDER_ID:692574967181}
+        project-id: ${FCM_PROJECT_ID:hnt-sensor-api}
+        service-account-key-path: ${FCM_SERVICE_ACCOUNT_KEY_PATH:}
+
+# 로그 설정
+logging:
+    level:
+        com.andrew.hnt.api: INFO
+        org.springframework: WARN
+        org.springframework.web: WARN
+        org.springframework.web.servlet.mvc.method.annotation: WARN
+        org.apache.ibatis: WARN
+        org.hibernate: ERROR

@@ -1,0 +1,16 @@
+﻿
+  [LOG] 최종 사용자 ID: @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] === 사용자 ID 검색 완료 === @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] 센서설정 페이지 토픽 구독: @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+> [LOG] === subscribe 함수 호출 === @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] 토픽: @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] 클라이언트 존재: @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] 클라이언트 연결 상태: @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+> [LOG] client.subscribe() 호출 시작 @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+> [LOG] client.subscribe() 호출 완료 @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+> [LOG] subscribedTopics에 추가 완료 @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] 콜백 함수 설정 완료 @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] 토픽 구독 완료: @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+  [LOG] 백엔드 MQTT 상태: @ http://iot.hntsolution.co.kr:8888/js/log-filter.js:173
+
+

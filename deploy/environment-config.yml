@@ -1,0 +1,257 @@
+# HnT Sensor API 환경별 설정 관리
+# 작성일: 2025-09-26
+# 목적: 개발/테스트/운영 환경별 설정 분리 및 관리
+
+# 개발 환경 설정
+development:
+  server:
+    port: 8080
+    servlet:
+      context-path: /
+      session:
+        timeout: 1800
+        cookie:
+          max-age: 1800
+          http-only: true
+          secure: false
+          same-site: lax
+  
+  spring:
+    datasource:
+      url: jdbc:mysql://localhost:3306/hnt_dev?useUnicode=yes&characterEncoding=UTF-8&allowMultiQueries=true&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
+      username: root
+      password: dev_password
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 2
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+    
+    mvc:
+      view:
+        prefix: /WEB-INF/jsp
+        suffix: .jsp
+  
+  mqtt:
+    server: tcp://localhost:1883
+    username: dev_user
+    password: dev_password
+    connection-timeout: 30
+    keep-alive-interval: 60
+  
+  security:
+    fcm:
+      api-key: DEV_FCM_API_KEY
+      sender-id: DEV_FCM_SENDER_ID
+      project-id: hnt-sensor-api-dev
+  
+  logging:
+    level:
+      com.andrew.hnt.api: DEBUG
+      org.springframework: INFO
+      org.springframework.web: DEBUG
+      org.mybatis: DEBUG
+
+# 테스트 환경 설정
+testing:
+  server:
+    port: 8080
+    servlet:
+      context-path: /
+      session:
+        timeout: 1800
+        cookie:
+          max-age: 1800
+          http-only: true
+          secure: false
+          same-site: lax
+  
+  spring:
+    datasource:
+      url: jdbc:mysql://test.hntsolution.co.kr:3306/hnt_test?useUnicode=yes&characterEncoding=UTF-8&allowMultiQueries=true&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
+      username: test_user
+      password: test_password
+      hikari:
+        maximum-pool-size: 15
+        minimum-idle: 3
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+    
+    mvc:
+      view:
+        prefix: /WEB-INF/jsp
+        suffix: .jsp
+  
+  mqtt:
+    server: tcp://test.hntsolution.co.kr:1883
+    username: test_user
+    password: test_password
+    connection-timeout: 30
+    keep-alive-interval: 60
+  
+  security:
+    fcm:
+      api-key: TEST_FCM_API_KEY
+      sender-id: TEST_FCM_SENDER_ID
+      project-id: hnt-sensor-api-test
+  
+  logging:
+    level:
+      com.andrew.hnt.api: INFO
+      org.springframework: WARN
+      org.springframework.web: INFO
+      org.mybatis: WARN
+
+# 운영 환경 설정 (톰캣1)
+production_tomcat1:
+  server:
+    port: 8080
+    servlet:
+      context-path: /
+      session:
+        timeout: 1800
+        cookie:
+          max-age: 1800
+          http-only: true
+          secure: false
+          same-site: lax
+  
+  spring:
+    datasource:
+      url: jdbc:mysql://hntsolution.co.kr:3306/hnt?useUnicode=yes&characterEncoding=UTF-8&allowMultiQueries=true&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
+      username: root
+      password: HntRoot123!
+      hikari:
+        maximum-pool-size: 20
+        minimum-idle: 5
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+    
+    mvc:
+      view:
+        prefix: /WEB-INF/jsp
+        suffix: .jsp
+  
+  mqtt:
+    server: tcp://iot.hntsolution.co.kr:1883
+    username: hnt1
+    password: abcde
+    connection-timeout: 30
+    keep-alive-interval: 60
+  
+  security:
+    fcm:
+      api-key: AAAAoUCvVY0:APA91bFhv_a-RRU0OOJPmGk4MBri_Aqu0MW4r1CDfar4GrhQf3H9XPTWRhoul86dfhLTomTn-WsTrKJ-qPAakoap9vMl7JHmrj8WniVnTQE3y5mhxKFDPp09bAmjaAuDx8qUXH1qhO05
+      sender-id: 692574967181
+      project-id: hnt-sensor-api
+  
+  logging:
+    level:
+      com.andrew.hnt.api: INFO
+      org.springframework: WARN
+      org.springframework.web: WARN
+      org.mybatis: WARN
+
+# 운영 환경 설정 (톰캣2)
+production_tomcat2:
+  server:
+    port: 8080
+    servlet:
+      context-path: /
+      session:
+        timeout: 1800
+        cookie:
+          max-age: 1800
+          http-only: true
+          secure: false
+          same-site: lax
+  
+  spring:
+    datasource:
+      url: jdbc:mysql://hntsolution.co.kr:3306/hnt?useUnicode=yes&characterEncoding=UTF-8&allowMultiQueries=true&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true&useSSL=false
+      username: root
+      password: HntRoot123!
+      hikari:
+        maximum-pool-size: 20
+        minimum-idle: 5
+        connection-timeout: 30000
+        idle-timeout: 600000
+        max-lifetime: 1800000
+    
+    mvc:
+      view:
+        prefix: /WEB-INF/jsp
+        suffix: .jsp
+  
+  mqtt:
+    server: tcp://iot.hntsolution.co.kr:1883
+    username: hnt1
+    password: abcde
+    connection-timeout: 30
+    keep-alive-interval: 60
+  
+  security:
+    fcm:
+      api-key: AAAAoUCvVY0:APA91bFhv_a-RRU0OOJPmGk4MBri_Aqu0MW4r1CDfar4GrhQf3H9XPTWRhoul86dfhLTomTn-WsTrKJ-qPAakoap9vMl7JHmrj8WniVnTQE3y5mhxKFDPp09bAmjaAuDx8qUXH1qhO05
+      sender-id: 692574967181
+      project-id: hnt-sensor-api
+  
+  logging:
+    level:
+      com.andrew.hnt.api: INFO
+      org.springframework: WARN
+      org.springframework.web: WARN
+      org.mybatis: WARN
+
+# 환경별 공통 설정
+common:
+  # 데이터베이스 공통 설정
+  database:
+    driver-class-name: com.mysql.jdbc.Driver
+    hikari:
+      leak-detection-threshold: 300000
+      register-mbeans: true
+      validation-timeout: 5000
+      data-source-properties:
+        connectTimeout: 300000
+        autoReconnect: true
+        maxReconnects: 10
+        queryTimeout: 1200000
+        useServerPrepStmts: false
+        cachePrepStmts: false
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        useCompression: false
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
+  
+  # MQTT 공통 설정
+  mqtt:
+    default-topic: "#"
+    max-reconnect-attempts: 5
+    base-reconnect-delay: 2000
+    max-reconnect-delay: 30000
+  
+  # 보안 공통 설정
+  security:
+    headers:
+      x-frame-options: DENY
+      x-content-type-options: nosniff
+      x-xss-protection: "1; mode=block"
+      strict-transport-security: "max-age=31536000; includeSubDomains"
+      content-security-policy: "default-src 'self'"
+  
+  # 로깅 공통 설정
+  logging:
+    pattern:
+      console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+      file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file:
+      max-size: 100MB
+      max-history: 30
+      total-size-cap: 3GB

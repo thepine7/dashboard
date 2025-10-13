@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  # 톰캣1 서비스 (포트 8080)
+  tomcat1:
+    image: tomcat:9.0-jdk11
+    container_name: hnt-tomcat1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./tomcat1/webapps:/usr/local/tomcat/webapps
+      - ./tomcat1/logs:/usr/local/tomcat/logs
+      - ./tomcat1/conf:/usr/local/tomcat/conf
+    environment:
+      - SPRING_PROFILES_ACTIVE=production_tomcat1
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - hnt-network
+
+  # 톰캣2 서비스 (포트 8888)
+  tomcat2:
+    image: tomcat:9.0-jdk11
+    container_name: hnt-tomcat2
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./tomcat2/webapps:/usr/local/tomcat/webapps
+      - ./tomcat2/logs:/usr/local/tomcat/logs
+      - ./tomcat2/conf:/usr/local/tomcat/conf
+    environment:
+      - SPRING_PROFILES_ACTIVE=production_tomcat2
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - hnt-network
+
+  # Nginx 리버스 프록시
+  nginx:
+    image: nginx:alpine
+    container_name: hnt-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - tomcat1
+      - tomcat2
+    restart: unless-stopped
+    networks:
+      - hnt-network
+
+  # MySQL 데이터베이스
+  mysql:
+    image: mysql:5.7
+    container_name: hnt-mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+      - ./mysql/conf:/etc/mysql/conf.d
+    environment:
+      - MYSQL_ROOT_PASSWORD=HntRoot123!
+      - MYSQL_DATABASE=hnt
+      - MYSQL_USER=hnt_user
+      - MYSQL_PASSWORD=hnt_password
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - hnt-network
+
+  # Redis 캐시 (선택사항)
+  redis:
+    image: redis:alpine
+    container_name: hnt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - hnt-network
+
+networks:
+  hnt-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:

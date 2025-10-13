@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HnT Sensor API - 성능 모니터링 대시보드</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-healthy {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .status-critical {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: #666;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 5px;
+            margin: 1rem 0;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 HnT Sensor API 성능 모니터링</h1>
+        <p>실시간 성능 지표 및 시스템 상태 모니터링</p>
+    </div>
+
+    <div class="container">
+        <button class="refresh-btn" onclick="refreshDashboard()">🔄 새로고침</button>
+        
+        <div id="loading" class="loading">
+            <p>성능 지표를 불러오는 중...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;">
+            <p>성능 지표를 불러올 수 없습니다. 서버 연결을 확인해주세요.</p>
+        </div>
+
+        <div id="dashboard" class="dashboard-grid" style="display: none;">
+            <!-- 시스템 리소스 카드 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">💻 시스템 리소스</h3>
+                    <span id="system-status" class="status-badge status-healthy">정상</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">CPU 사용률</span>
+                    <span id="cpu-usage" class="metric-value">0%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">메모리 사용률</span>
+                    <span id="memory-usage" class="metric-value">0%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">시스템 로드</span>
+                    <span id="system-load" class="metric-value">0.0</span>
+                </div>
+            </div>
+
+            <!-- JVM 상태 카드 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">☕ JVM 상태</h3>
+                    <span id="jvm-status" class="status-badge status-healthy">정상</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">스레드 수</span>
+                    <span id="thread-count" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">힙 메모리 사용률</span>
+                    <span id="heap-usage" class="metric-value">0%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">GC 실행 횟수</span>
+                    <span id="gc-count" class="metric-value">0</span>
+                </div>
+            </div>
+
+            <!-- 애플리케이션 성능 카드 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">📱 애플리케이션</h3>
+                    <span class="status-badge status-healthy">정상</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">총 요청 수</span>
+                    <span id="total-requests" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">활성 세션</span>
+                    <span id="active-sessions" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">평균 응답 시간</span>
+                    <span id="avg-response-time" class="metric-value">0ms</span>
+                </div>
+            </div>
+
+            <!-- 데이터베이스 성능 카드 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">🗄️ 데이터베이스</h3>
+                    <span class="status-badge status-healthy">정상</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">활성 연결</span>
+                    <span id="db-active-connections" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">유휴 연결</span>
+                    <span id="db-idle-connections" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">평균 쿼리 시간</span>
+                    <span id="db-avg-query-time" class="metric-value">0ms</span>
+                </div>
+            </div>
+
+            <!-- MQTT 상태 카드 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">📡 MQTT</h3>
+                    <span id="mqtt-status" class="status-badge status-healthy">연결됨</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">수신 메시지</span>
+                    <span id="mqtt-received" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">송신 메시지</span>
+                    <span id="mqtt-sent" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">연결 시간</span>
+                    <span id="mqtt-uptime" class="metric-value">0초</span>
+                </div>
+            </div>
+
+            <!-- 성능 차트 카드 -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-header">
+                    <h3 class="card-title">📊 성능 트렌드</h3>
+                </div>
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let performanceChart;
+        let refreshInterval;
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeChart();
+            refreshDashboard();
+            startAutoRefresh();
+        });
+
+        // 차트 초기화
+        function initializeChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'CPU 사용률 (%)',
+                        data: [],
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.1
+                    }, {
+                        label: '메모리 사용률 (%)',
+                        data: [],
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    }
+                }
+            });
+        }
+
+        // 대시보드 새로고침
+        async function refreshDashboard() {
+            try {
+                const response = await fetch('/admin/performance/dashboard');
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateDashboard(data.summary);
+                    hideLoading();
+                    showDashboard();
+                } else {
+                    showError(data.message);
+                }
+            } catch (error) {
+                console.error('대시보드 새로고침 실패:', error);
+                showError('서버 연결에 실패했습니다.');
+            }
+        }
+
+        // 대시보드 업데이트
+        function updateDashboard(summary) {
+            // 시스템 리소스 업데이트
+            if (summary.cpuUsage !== undefined) {
+                document.getElementById('cpu-usage').textContent = summary.cpuUsage.toFixed(1) + '%';
+                updateStatus('system-status', summary.cpuUsage, 80, 90);
+            }
+            
+            if (summary.memoryUsage !== undefined) {
+                document.getElementById('memory-usage').textContent = summary.memoryUsage.toFixed(1) + '%';
+            }
+            
+            if (summary.systemLoad !== undefined) {
+                document.getElementById('system-load').textContent = summary.systemLoad.toFixed(2);
+            }
+
+            // JVM 상태 업데이트
+            if (summary.threadCount !== undefined) {
+                document.getElementById('thread-count').textContent = summary.threadCount;
+            }
+            
+            if (summary.heapUsage !== undefined) {
+                const heapUsage = (summary.heapUsage / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+                document.getElementById('heap-usage').textContent = heapUsage;
+            }
+
+            // 애플리케이션 성능 업데이트
+            if (summary.totalRequests !== undefined) {
+                document.getElementById('total-requests').textContent = summary.totalRequests.toLocaleString();
+            }
+            
+            if (summary.activeSessions !== undefined) {
+                document.getElementById('active-sessions').textContent = summary.activeSessions;
+            }
+
+            // 차트 업데이트
+            updateChart(summary.cpuUsage, summary.memoryUsage);
+        }
+
+        // 상태 배지 업데이트
+        function updateStatus(elementId, value, warningThreshold, criticalThreshold) {
+            const element = document.getElementById(elementId);
+            if (value >= criticalThreshold) {
+                element.textContent = '위험';
+                element.className = 'status-badge status-critical';
+            } else if (value >= warningThreshold) {
+                element.textContent = '경고';
+                element.className = 'status-badge status-warning';
+            } else {
+                element.textContent = '정상';
+                element.className = 'status-badge status-healthy';
+            }
+        }
+
+        // 차트 업데이트
+        function updateChart(cpuUsage, memoryUsage) {
+            const now = new Date().toLocaleTimeString();
+            
+            // 최대 20개 데이터 포인트 유지
+            if (performanceChart.data.labels.length >= 20) {
+                performanceChart.data.labels.shift();
+                performanceChart.data.datasets[0].data.shift();
+                performanceChart.data.datasets[1].data.shift();
+            }
+            
+            performanceChart.data.labels.push(now);
+            performanceChart.data.datasets[0].data.push(cpuUsage || 0);
+            performanceChart.data.datasets[1].data.push(memoryUsage || 0);
+            
+            performanceChart.update();
+        }
+
+        // 자동 새로고침 시작
+        function startAutoRefresh() {
+            refreshInterval = setInterval(refreshDashboard, 5000); // 5초마다
+        }
+
+        // 자동 새로고침 중지
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        }
+
+        // UI 표시/숨김 함수들
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showDashboard() {
+            document.getElementById('dashboard').style.display = 'grid';
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('error').querySelector('p').textContent = message;
+        }
+
+        // 페이지 언로드 시 정리
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+package com.andrew.hnt.api.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+import com.andrew.hnt.api.util.StringUtil;
+
+@Controller
+@RequestMapping(value = "/chart")
+public class ChartController extends DefaultController {
+
+    @Autowired
+    private CommonController commonController;
+
+    /**
+     * 챠트 메인화면
+     * @return
+     */
+    @RequestMapping(value = "/chart", method = RequestMethod.GET)
+    public String chartMain(
+            HttpServletRequest req
+            , HttpServletResponse res
+            , @RequestParam(name = "userId", required = false) String userId
+            , Model model
+            ) {
+        String result = "";
+
+        HttpSession session = req.getSession();
+        
+        // 세션에서 사용자 정보 확인
+        String sessionUserId = (String) session.getAttribute("userId");
+        String sessionUserGrade = (String) session.getAttribute("userGrade");
+        String sessionUserNm = (String) session.getAttribute("userNm");
+        
+        // 세션 유효성 검사 (앱 연동 보완)
+        if (!isValidSession(session)) {
+            if(!StringUtil.isEmpty(userId)) {
+                // userId 파라미터로 세션 보완 시도(앱에서 쿠키 전파 지연 케이스)
+                session.setAttribute("userId", userId);
+            }
+            if (!isValidSession(session)) {
+                return "redirect:/login/login";
+            }
+        }
+        
+        // 권한 검사 (일반 사용자 권한 필요)
+        if (!hasPermission(session, "B")) {
+            return "redirect:/login/login";
+        }
+        
+        // 세션에서 사용자 정보 우선 사용
+        if(!StringUtil.isEmpty(sessionUserId)) {
+            userId = sessionUserId;
+        }
+        
+        // 세션에서 사용자 정보를 모델에 직접 설정
+        if(!StringUtil.isEmpty(sessionUserNm)) {
+            model.addAttribute("userNm", sessionUserNm);
+        }
+        
+        if(!StringUtil.isEmpty(sessionUserGrade)) {
+            model.addAttribute("userGrade", sessionUserGrade);
+        }
+
+        // 세션 userId 우선 사용하여 사이드바 데이터 설정
+        String effectiveUserId = sessionUserId != null && !sessionUserId.isEmpty() ? sessionUserId : userId;
+        commonController.addSidebarData(effectiveUserId, model, session);
+        
+        // userId가 없으면 기본값 설정
+        if(StringUtil.isEmpty(userId)) {
+            userId = (String) model.asMap().get("userId");
+        }
+
+        if(null != userId && !"".equals(userId)) {
+            result = "chart/chart";
+        } else {
+            result = "redirect:/login/login";
+        }
+
+        return result;
+    }
+}

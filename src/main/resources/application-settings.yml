@@ -1,0 +1,190 @@
+# HnT Sensor API 설정 파일
+# 하드코딩된 값들을 설정 파일로 분리
+
+# MQTT 설정
+mqtt:
+  broker:
+    host: "hntsolution.co.kr"
+    port: 1883
+    username: "hnt1"
+    password: "abcde"
+    client-id-prefix: "hnt_sensor_"
+    keep-alive: 60
+    timeout: 30
+    reconnect-delay: 2000
+    max-reconnect-attempts: 10
+  
+  topic:
+    pattern: "HBEE/{userId}/TC/{uuid}/{type}"
+    types:
+      - "SER"
+      - "DEV"
+  
+  message:
+    max-length: 1000
+    validation-enabled: true
+
+# 데이터베이스 설정
+database:
+  connection:
+    url: "jdbc:mysql://hntsolution.co.kr:3306/hnt"
+    username: "root"
+    password: "HntRoot123!"
+    driver-class: "com.mysql.cj.jdbc.Driver"
+  
+  pool:
+    max-lifetime: 900000
+    connection-timeout: 30000
+    minimum-idle: 5
+    maximum-pool-size: 20
+    idle-timeout: 600000
+    leak-detection-threshold: 60000
+
+# 센서 설정
+sensor:
+  types:
+    allowed:
+      - "temp"
+      - "humidity"
+      - "pressure"
+      - "co2"
+      - "pt100"
+      - "4-20ma"
+      - "alarm"
+      - "h/l"
+      - "counter"
+      - "freq"
+      - "comp"
+      - "def"
+      - "fan"
+      - "dout"
+      - "rout"
+      - "aout"
+  
+  parameters:
+    count: 16
+    range:
+      min: -1000
+      max: 1000
+  
+  validation:
+    temperature:
+      min: -200
+      max: 1000
+    value:
+      min: -200
+      max: 1000
+
+# 알림 설정
+notification:
+  fcm:
+    api-key: "AAAAoUCvVY0:APA91bFhv_a-RRU0OOJPmGk4MBri_Aqu0MW4r1CDfar4GrhQf3H9XPTWRhoul86dfhLTomTn-WsTrKJ-qPAakoap9vMl7JHmrj8WniVnTQE3y5mhxKFDPp09bAmjaAuDx8qUXH1qhO05"
+    sender-id: "692574967181"
+  
+  types:
+    - "high-temperature"
+    - "low-temperature"
+    - "specific-temperature"
+    - "communication-error"
+    - "sensor-error"
+
+# 보안 설정
+security:
+  session:
+    timeout: 1800  # 30분
+    max-inactive-interval: 1800
+  
+  password:
+    encryption:
+      algorithm: "AES"
+      key-length: 256
+  
+  validation:
+    user-id:
+      min-length: 3
+      max-length: 50
+      pattern: "^[a-zA-Z0-9_-]+$"
+    
+    uuid:
+      min-length: 1
+      max-length: 100
+      pattern: "^[a-zA-Z0-9_-]+$"
+
+# 로깅 설정
+logging:
+  filter:
+    max-logs-per-minute: 10
+    reset-interval: 60000  # 1분
+  
+  console:
+    enabled: true
+    level: "INFO"
+  
+  file:
+    enabled: true
+    level: "DEBUG"
+    path: "logs/hnt-sensor-api.log"
+    max-size: "10MB"
+    max-files: 5
+
+# UI 설정
+ui:
+  buttons:
+    styles:
+      - "btn-primary"
+      - "btn-success"
+      - "btn-danger"
+      - "btn-warning"
+      - "btn-info"
+      - "btn-secondary"
+      - "btn-soft"
+      - "btn-on-soft"
+      - "btn-off-soft"
+      - "btn-is-active"
+    
+    sizes:
+      - "btn-sm"
+      - "btn-lg"
+      - "btn-icon"
+  
+  alerts:
+    duration:
+      success: 3000
+      error: 5000
+      warning: 4000
+      info: 3000
+  
+  status-indicators:
+    colors:
+      - "green"
+      - "gray"
+      - "red"
+    animation:
+      pulse-duration: 2000
+
+# 성능 설정
+performance:
+  mqtt:
+    connection-pool-size: 5
+    message-batch-size: 100
+  
+  database:
+    query-timeout: 30
+    batch-size: 1000
+  
+  cache:
+    enabled: true
+    ttl: 300  # 5분
+    max-size: 1000
+
+# 개발 설정
+development:
+  debug:
+    enabled: false
+    mqtt-logs: false
+    performance-logs: false
+  
+  features:
+    auto-reconnect: true
+    error-recovery: true
+    data-validation: true

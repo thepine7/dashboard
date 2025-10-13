@@ -1,0 +1,602 @@
+package com.andrew.hnt.api.service.impl;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.andrew.hnt.api.util.AES256Util;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.andrew.hnt.api.mapper.AdminMapper;
+import com.andrew.hnt.api.mapper.LoginMapper;
+import com.andrew.hnt.api.model.LoginVO;
+import com.andrew.hnt.api.model.UserInfo;
+import com.andrew.hnt.api.service.AdminService;
+
+@Service
+@Transactional(timeout = 10)
+public class AdminServiceImpl implements AdminService {
+	
+	@Autowired
+	private LoginMapper loginMapper;
+	
+	@Autowired
+	private AdminMapper adminMapper;
+
+	private AES256Util aes256;
+
+	private Logger logger = LoggerFactory.getLogger(this.getClass());
+
+	@Override
+	public Map<String, Object> getUserInfo(String userId, String sensorUuid) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		
+        if(null != userId && !"".equals(userId)) {
+			try {
+                UserInfo userInfo = new UserInfo();
+				Map<String, Object> sensorMap = new HashMap<String, Object>();
+				Map<String, Object> param = new HashMap<String, Object>();
+				param.put("userId", userId);
+				param.put("sensorUuid", sensorUuid);
+				
+                // 비밀번호가 없는 조회 경로에서는 userId만으로 조회
+                userInfo = loginMapper.getUserInfoByUserId(userId);
+
+				sensorMap = adminMapper.getSensorInfo(param);
+				
+				resultMap.put("userInfo", userInfo);
+				resultMap.put("sensorInfo", sensorMap);
+			} catch(Exception e) {
+				logger.error("Error in getUserInfo: " + e.toString());
+				e.printStackTrace();
+			}
+		}
+		
+		return resultMap;
+	}
+
+	@Override
+	public Map<String, Object> getSensorInfo(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != param && 0 < param.size()) {
+			try {
+				resultMap = adminMapper.getSensorInfo(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+
+		return resultMap;
+	}
+
+	@Override
+	public List<Map<String, Object>> getSensorList(String userId) {
+		List<Map<String, Object>> resultList = new ArrayList<Map<String, Object>>();
+
+		if(null != userId && !"".equals(userId)) {
+			Map<String, Object> param = new HashMap<String, Object>();
+			param.put("userId", userId);
+
+			resultList = adminMapper.getSensorList(param);
+
+			if(null != resultList && 0 < resultList.size()) {
+				for(int i=0; i < resultList.size(); i++) {
+					String chk = String.valueOf(resultList.get(i).get("sensor_name"));
+					int j = 0;
+					if(null != chk && !"".equals(chk) && 0 < chk.length()) {
+
+					} else {
+						resultList.get(i).remove("sensor_name");
+						j = i + 1;
+						resultList.get(i).put("sensor_name", "장치"+j);
+					}
+				}
+			}
+		}
+
+		return resultList;
+	}
+
+	@Override
+	public List<Map<String, Object>> getSubSensorList(String mainUserId, String subUserId) {
+		List<Map<String, Object>> resultList = new ArrayList<Map<String, Object>>();
+
+		if(null != mainUserId && !"".equals(mainUserId) && null != subUserId && !"".equals(subUserId)) {
+			Map<String, Object> param = new HashMap<String, Object>();
+			param.put("mainUserId", mainUserId);
+			param.put("subUserId", subUserId);
+
+			try {
+				resultList = adminMapper.getSubSensorList(param);
+
+				if(null != resultList && 0 < resultList.size()) {
+					for(int i=0; i < resultList.size(); i++) {
+						String chk = String.valueOf(resultList.get(i).get("sensor_name"));
+						int j = 0;
+						if(null != chk && !"".equals(chk) && 0 < chk.length()) {
+
+						} else {
+							resultList.get(i).remove("sensor_name");
+							j = i + 1;
+							resultList.get(i).put("sensor_name", "장치"+j);
+						}
+					}
+				}
+			} catch(Exception e) {
+				logger.error("Error in getSubSensorList: " + e.toString());
+			}
+		}
+
+		return resultList;
+	}
+
+	@Override
+	public void insertSetting(Map<String, Object> settingMap) {
+		if(null != settingMap && 0 < settingMap.size()) {
+			logger.info("userId : " + String.valueOf(settingMap.get("userId")));
+			logger.info("sensorId : " + String.valueOf(settingMap.get("userId")));
+			logger.info("sensorUuid : " + String.valueOf(settingMap.get("sensorUuid")));
+			try {
+				// 이미 입력된 설정이 있을 경우에는 업데이트, 없으면 입력 처리
+				Map<String, Object> chkMap = new HashMap<String, Object>();
+				Map<String, Object> alarmMap = new HashMap<String, Object>();
+				chkMap.put("userId", String.valueOf(settingMap.get("userId")));
+				chkMap.put("sensorId", String.valueOf(settingMap.get("userId")));
+				chkMap.put("sensorUuid", String.valueOf(settingMap.get("sensorUuid")));
+
+				Map<String, Object> sensorMap = new HashMap<String, Object>();
+				sensorMap = adminMapper.selectSensorId(chkMap);
+
+				logger.info("sensorMap size : " + sensorMap.size());
+
+				if(null != sensorMap && 0 < sensorMap.size()) {
+					logger.info("sensorMap info : " + sensorMap.get("sensor_id"));
+					chkMap.remove("sensorId");
+					chkMap.put("sensorId", String.valueOf(sensorMap.get("sensor_id")));
+					logger.info("chkMap info : " + chkMap.get("sensorId"));
+					settingMap.remove("sensorId");
+					settingMap.put("sensorId", String.valueOf(sensorMap.get("sensor_id")));
+					logger.info("settingMap info : " + settingMap.get("sensorId"));
+				}
+
+				alarmMap = adminMapper.selectSetting(chkMap);
+
+				if(null != alarmMap && 0 < alarmMap.size()) {
+					adminMapper.updateSetting(settingMap);
+				} else {
+					adminMapper.insertSetting(settingMap);
+				}
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+			}
+		}
+	}
+
+	@Override
+	public Map<String, Object> selectSetting(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != param && 0 < param.size()) {
+			try {
+				Map<String, Object> sensorMap = new HashMap<String, Object>();
+				sensorMap = adminMapper.selectSensorId(param);
+
+				if(null != sensorMap && 0 < sensorMap.size()) {
+					param.remove("sensorId");
+					param.put("sensorId", String.valueOf(sensorMap.get("sensor_id")));
+				}
+
+				resultMap = adminMapper.selectSetting(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+			}
+		}
+
+		return resultMap;
+	}
+
+	@Override
+	public Map<String, Object> selectNoti(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		List<Map<String, Object>> resultList = new ArrayList<Map<String, Object>>();
+
+		if(null != param && 0 < param.size()) {
+			try {
+				resultMap = adminMapper.selectNoti(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+			}
+		}
+
+		return resultMap;
+	}
+
+	@Override
+	public Map<String, Object> selectChkNoti(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		List<Map<String, Object>> resultList = new ArrayList<Map<String, Object>>();
+
+		if(null != param && 0 < param.size()) {
+			try {
+				resultList = adminMapper.selectChkNoti(param);
+
+				if(null != resultList && 0 < resultList.size()) {
+					resultMap.put("result", "200");
+					resultMap.put("cnt", resultList.size());
+				}
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+
+		return resultMap;
+	}
+
+	@Override
+	public void deleteNoti2(Map<String, Object> param) {
+		if(null != param && 0 < param.size()) {
+			try {
+				adminMapper.deleteNoti2(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+			}
+		}
+	}
+
+	@Override
+	public void insertNoti(Map<String, Object> param) {
+		if(null != param && 0 < param.size()) {
+			try {
+				adminMapper.insertNoti(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+			}
+		}
+	}
+
+	@Override
+	public void updateSensorInfo(Map<String, Object> param) {
+		if(null != param && 0 < param.size()) {
+			try {
+				adminMapper.updateSensorInfo(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+			}
+		}
+	}
+
+	@Override
+	public Map<String, Object> getAlarmSetting(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != param && 0 < param.size()) {
+			try {
+				resultMap = adminMapper.getAlarmSetting(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+
+		return resultMap;
+	}
+
+
+
+	@Override
+	public String getCurTemp(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		String result = "";
+
+		if(null != param && 0 < param.size()) {
+			try {
+				// 타임아웃 방지를 위한 빠른 조회
+				resultMap = adminMapper.getCurTemp(param);
+
+				if(null != resultMap && 0 < resultMap.size()) {
+					result = String.valueOf(resultMap.get("sensor_value"));
+				}
+			} catch(Exception e) {
+				logger.error("Error in getCurTemp: " + e.toString());
+				// 타임아웃 발생 시 기본값 반환
+				result = "0";
+			}
+		}
+
+		return result;
+	}
+
+	@Override
+	public int chkError(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		int result = 0;
+
+		if(null != param && 0 < param.size()) {
+			try {
+				resultMap = adminMapper.chkError(param);
+
+				if(null != resultMap && 0 < resultMap.size()) {
+					result = Integer.parseInt(String.valueOf(resultMap.get("cnt")));
+
+					if(result < 1) {
+						result = 0;
+					} else {
+						// 통신 오류가 해소된 경우 이미 입력되어 있는 발송 대상 정보가 있을 경우 발송되지 않도록 처리
+						param.put("alarmType", "netError1");
+
+						Map<String, Object> chkMap = new HashMap<String, Object>();
+						chkMap = adminMapper.selectNoti(param);
+
+						if(null != chkMap && 0 < chkMap.size()) {
+							param.put("no", String.valueOf(chkMap.get("no")));
+
+							try {
+								adminMapper.updateNoti(param);
+							} catch(Exception e) {
+								logger.error("Error : " + e.toString());
+							}
+						}
+
+						param.remove("no");
+						param.remove("alarmType");
+
+						param.put("alarmType", "netError2");
+						chkMap = new HashMap<String, Object>();
+						chkMap = adminMapper.selectNoti(param);
+
+						if(null != chkMap && 0 < chkMap.size()) {
+							param.put("no", String.valueOf(chkMap.get("no")));
+
+							try {
+								adminMapper.updateNoti(param);
+							} catch(Exception e) {
+								logger.error("Error : " + e.toString());
+							}
+						}
+					}
+				}
+			} catch(Exception e) {
+				logger.error("Error :  "+ e.toString());
+			}
+		}
+
+		return result;
+	}
+
+	@Override
+	public void updateNoti(Map<String, Object> param) {
+		if(null != param && 0 < param.size()) {
+			try {
+				adminMapper.updateNoti(param);
+				adminMapper.updateUrgentNoti(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+	}
+
+	@Override
+	public Map<String, Object> selectUrgentNoti(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != param && 0 < param.size()) {
+			try {
+				resultMap = adminMapper.selectUrgentNoti(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+
+		return resultMap;
+	}
+
+	@Override
+	public Map<String, Object> selectReleaseNoti(Map<String, Object> param) {
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+
+		if(null != param && 0 < param.size()) {
+			try {
+				resultMap = adminMapper.selectReleaseNoti(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+
+		return resultMap;
+	}
+
+	@Override
+	public void insertUrgentNoti(Map<String, Object> param) {
+		if(null != param && 0 < param.size()) {
+			try {
+				adminMapper.insertUrgentNoti(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				e.printStackTrace();
+			}
+		}
+	}
+
+	@Override
+	public void updateUrgentNoti(Map<String, Object> param) {
+		if(null != param && 0 < param.size()) {
+			try {
+				adminMapper.updateUrgentNoti(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+	}
+
+	@Override
+	public void deleteUser(String userId) {
+		if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+			try {
+				// 1. 사용자 센서 데이터 삭제 (모든 센서 데이터 완전 삭제)
+				adminMapper.deleteUserSensorData(userId);
+				logger.info("사용자 센서 데이터 삭제 완료 - userId: {}", userId);
+				
+				// 2. 사용자 알림 데이터 삭제
+				Map<String, Object> alarmParam = new HashMap<String, Object>();
+				alarmParam.put("userId", userId);
+				adminMapper.deleteDeviceAlarm(alarmParam);
+				logger.info("사용자 알림 데이터 삭제 완료 - userId: {}", userId);
+				
+				// 3. 사용자 장치 설정 정보 삭제
+				adminMapper.deleteConfig(userId, "");
+				logger.info("사용자 장치 설정 정보 삭제 완료 - userId: {}", userId);
+				
+				// 4. 사용자 장치 기본 정보 삭제
+				adminMapper.deleteSensor(userId);
+				logger.info("사용자 장치 기본 정보 삭제 완료 - userId: {}", userId);
+				
+				// 5. 사용자 정보 삭제
+				adminMapper.deleteUser(userId);
+				logger.info("사용자 정보 삭제 완료 - userId: {}", userId);
+				
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+	}
+
+	@Override
+	public void deleteSubUser(String userId) {
+		if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+			try {
+				// 부계정 사용자 정보만 삭제 (장치 정보는 보존)
+				adminMapper.deleteSubUser(userId);
+				logger.info("부계정 사용자 정보 삭제 완료 - userId: {}", userId);
+				
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+	}
+
+	@Override
+	public void updateUser(Map<String, Object> param) {
+		if(null != param && 0 < param.size()) {
+			try {
+				adminMapper.updateUser(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+			}
+		}
+	}
+
+	@Override
+	public void createSubProc(Map<String, Object> param) throws Exception {
+		if(null != param && 0 < param.size()) {
+			String userId = String.valueOf(param.get("userId"));
+			String subId = String.valueOf(param.get("subId"));
+			String subPass = String.valueOf(param.get("subPass"));
+			String subNm = String.valueOf(param.get("subNm"));
+
+			// 서브 사용자 정보 입력
+			if(null != subId && !"".equals(subId) && 0 < subId.length()) {
+				if(subId.contains("@")) {
+					String[] userIdArr = subId.split("@");
+
+					if(null != userIdArr && 0 < userIdArr.length) {
+						subId = userIdArr[0];
+						param.remove("subId");
+						param.put("subId", subId);
+					}
+				}
+			}
+
+			if(null != subPass && !"".equals(subPass) && 0 < subPass.length()) {
+				try {
+					aes256 = new AES256Util();
+					subPass = aes256.encrypt(subPass);
+					param.remove("subPass");
+					param.put("subPass", subPass);
+				} catch(Exception e) {
+					e.printStackTrace();
+					logger.error("Error : 암호화 중 에러가 발생되었습니다. - " + e.toString());
+					throw new Exception();
+				}
+			}
+
+			UserInfo userInfo = new UserInfo();
+			userInfo.setUserId(subId);
+			userInfo.setUserPass(subPass);
+			userInfo.setUserNm(subNm);
+			userInfo.setUserGrade("B");
+			userInfo.setUserEmail(String.valueOf(param.get("userEmail")));
+			userInfo.setUserTel(String.valueOf(param.get("userTel")));
+			userInfo.setUseYn("Y");
+			userInfo.setDelYn("N");
+			userInfo.setInstId("hnt");
+			userInfo.setMdfId("hnt");
+
+			try {
+				loginMapper.insertUser(userInfo);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				throw new Exception();
+			}
+
+			// 서브 사용자에게 메인 사용자의 장치 정보 입력
+			try {
+				adminMapper.insertSubSensorInfo(param);
+			} catch(Exception e) {
+				logger.error("Error : " + e.toString());
+				throw new Exception();
+			}
+		}
+	}
+
+	@Override
+	public void updateUserGrade(Map<String, Object> param) throws Exception {
+		if(null != param && 0 < param.size()) {
+			String userId = String.valueOf(param.get("userId"));
+			String userGrade = String.valueOf(param.get("userGrade"));
+
+			if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+				if(null != userGrade && !"".equals(userGrade) && 0 < userGrade.length()) {
+					try {
+						adminMapper.updateUserGrade(param);
+					} catch(Exception e) {
+						logger.error("Error : " + e.toString());
+						throw new Exception();
+					}
+				}
+			}
+		}
+	}
+
+	@Override
+	public void resetAllUserActivityStatus() throws Exception {
+		try {
+			adminMapper.resetAllUserActivityStatus();
+			logger.info("모든 사용자의 활동 상태 초기화 완료");
+		} catch (Exception e) {
+			logger.error("사용자 활동 상태 초기화 실패: " + e.toString());
+			throw e;
+		}
+	}
+	
+	@Override
+	public void resetSpecificUserActivityStatus(String userId) throws Exception {
+		try {
+			adminMapper.resetSpecificUserActivityStatus(userId);
+			logger.info("특정 사용자 활동 상태 초기화 완료 - userId: {}", userId);
+		} catch (Exception e) {
+			logger.error("특정 사용자 활동 상태 초기화 실패 - userId: {}, error: {}", userId, e.toString());
+			throw e;
+		}
+	}
+}

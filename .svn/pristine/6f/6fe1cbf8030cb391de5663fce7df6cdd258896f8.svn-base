@@ -1,0 +1,197 @@
+// main.jsp 최적화된 JavaScript 파일
+
+// 성능 최적화를 위한 설정
+const PERFORMANCE_CONFIG = {
+  MQTT_DELAY: 1000,        // MQTT 연결 지연 (1초)
+  SYNC_DELAY: 500,         // 초기 동기화 지연 (0.5초)
+  POLL_INTERVAL: 200,      // 폴링 간격 (0.2초)
+  TIMEOUT: 6000            // 타임아웃 (6초)
+};
+
+// 페이지 상태 관리
+let __pageReady = false;
+let __lastSyncScheduledAt = 0;
+let __mqttConnected = false;
+
+// MQTT 연결 상태 확인 (최적화됨)
+function isMqttConnectedSafe() {
+  try {
+    return (typeof client !== 'undefined' && 
+            client && 
+            typeof client.isConnected === 'function' && 
+            client.isConnected());
+  } catch(e) { 
+    return false; 
+  }
+}
+
+// 초기 동기화 요청 (디바운스 적용)
+function requestInitialSyncOnce(reason) {
+  if (!__pageReady) return;
+  
+  const now = Date.now();
+  if (now - __lastSyncScheduledAt < 2000) {
+    return; // 2초 내 중복 스케줄 방지
+  }
+  
+  __lastSyncScheduledAt = now;
+  
+  // 지연된 초기 동기화
+  setTimeout(() => {
+    applyToAllUuids((uuid) => {
+      if (typeof window['setSensor_' + uuid] === 'function') {
+        window['setSensor_' + uuid]();
+      }
+    });
+  }, PERFORMANCE_CONFIG.SYNC_DELAY);
+  
+  setTimeout(() => {
+    applyToAllUuids((uuid) => {
+      if (typeof window['getStatus_' + uuid] === 'function') {
+        window['getStatus_' + uuid]();
+      }
+    });
+  }, PERFORMANCE_CONFIG.SYNC_DELAY + 2000);
+}
+
+// 페이지 준비 상태 설정
+function setPageReady() {
+  __pageReady = true;
+  console.log('페이지 준비 완료');
+}
+
+// MQTT 연결 성공 이벤트
+function onMqttConnected() {
+  __mqttConnected = true;
+  console.log('MQTT 연결 성공');
+  requestInitialSyncOnce('mqtt');
+}
+
+// 페이지/연결 안정화 대기 후 동기화 (앱 복귀용)
+function waitForReadyThenSync(maxWaitMs = PERFORMANCE_CONFIG.TIMEOUT) {
+  const start = Date.now();
+  
+  function poll() {
+    const pageReady = (document.readyState === 'complete');
+    const mqttReady = isMqttConnectedSafe();
+    
+    if (pageReady && mqttReady) {
+      requestInitialSyncOnce('waitForReadyThenSync');
+      return;
+    }
+    
+    if (Date.now() - start > maxWaitMs) {
+      // 타임아웃: MQTT 미연결이어도 초기 동기화 강제 수행
+      requestInitialSyncOnce('wait-timeout');
+      return;
+    }
+    
+    setTimeout(poll, PERFORMANCE_CONFIG.POLL_INTERVAL);
+  }
+  
+  poll();
+}
+
+// 페이지 가시성 변경 이벤트 (최적화됨)
+function handleVisibilityChange() {
+  if (document.hidden) {
+    // 백그라운드 진입
+    if (typeof isPageActive !== 'undefined') { 
+      isPageActive = false; 
+    }
+    
+    // 에러 타이머 정리
+    if (window.__errorTimers && window.__errorTimers.length) {
+      window.__errorTimers.forEach(t => clearInterval(t));
+      window.__errorTimers = [];
+    }
+    
+    // 배경 진입 시점 기록
+    try { 
+      window.backgroundStartTime = Date.now(); 
+    } catch(e) {}
+    
+    // 모든 장치에 에러 체크 유예 부여
+    const saveY = ($('#saveId').val() || 'N') === 'Y';
+    const graceMsBg = saveY ? 40000 : 15000; // 앱은 더 길게 유예
+    
+    if (typeof applyToAllUuids === 'function') {
+      applyToAllUuids((uuid) => {
+        if (typeof pauseError === 'function') {
+          pauseError(uuid, graceMsBg);
+        }
+      });
+    }
+  } else {
+    // 포그라운드 복귀
+    if (typeof checkTimeoutAndRedirect === 'function') {
+      checkTimeoutAndRedirect();
+    }
+    
+    // 복귀: 최근 수신 기준 초기화 후 에러 체크 재개
+    if (typeof deviceLastDataTime !== 'undefined') {
+      deviceLastDataTime = Date.now();
+    }
+    
+    if (!window.__errorTimers) window.__errorTimers = [];
+    
+    // 복귀 즉시: 에러 카운터/상태 리셋 + MQTT 재연결
+    const bgDur = (() => {
+      try { 
+        return Date.now() - (window.backgroundStartTime || 0); 
+      } catch(e) { 
+        return 0; 
+      }
+    })();
+    
+    const isApp = ($('#saveId').val() || 'N') === 'Y';
+    if (isApp && bgDur > 30000) {
+      if (typeof applyToAllUuids === 'function') {
+        applyToAllUuids((uuid) => {
+          if (typeof pauseError === 'function') {
+            pauseError(uuid, 60000); // ain 수신 시 즉시 해제, 최대 60초
+          }
+        });
+      }
+    }
+  }
+}
+
+// 이벤트 리스너 등록 (최적화됨)
+function initializeEventListeners() {
+  // 페이지 로딩 완료
+  window.addEventListener('load', setPageReady);
+  
+  // MQTT 연결 성공
+  window.addEventListener('mqtt:connected', onMqttConnected);
+  
+  // 페이지 가시성 변경
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  console.log('이벤트 리스너 등록 완료');
+}
+
+// 성능 최적화된 초기화
+function initializeOptimized() {
+  console.log('최적화된 초기화 시작');
+  
+  // 이벤트 리스너 등록
+  initializeEventListeners();
+  
+  // MQTT 연결 지연 (페이지 로딩 완료 후)
+  setTimeout(() => {
+    if (typeof startConnect === 'function') {
+      startConnect();
+    }
+  }, PERFORMANCE_CONFIG.MQTT_DELAY);
+  
+  // 페이지/연결 안정화 대기 후 동기화
+  waitForReadyThenSync();
+}
+
+// DOM 준비 완료 시 초기화
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeOptimized);
+} else {
+  initializeOptimized();
+}
