@@ -57,7 +57,7 @@ public class AdminServiceImpl extends BaseService implements AdminService {
                 userInfo = loginMapper.getUserInfoByUserId(userId);
                 logInfo("getUserInfo", "사용자 정보 조회 결과: " + (userInfo != null ? userInfo.toString() : "null"));
 
-				sensorMap = adminMapper.getSensorInfo(param);
+				sensorMap = adminMapper.getSensorInfoByUuid(param);
 				logInfo("getUserInfo", "센서 정보 조회 결과: " + (sensorMap != null ? sensorMap.toString() : "null"));
 				
 				resultMap.put("userInfo", userInfo);

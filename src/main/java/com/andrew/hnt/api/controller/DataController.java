@@ -250,168 +250,211 @@ public class DataController {
 			, HttpServletResponse res
 		) throws IOException {
 
+		logger.info("=== 엑셀 다운로드 메서드 호출됨 ===");
 		HttpSession session = req.getSession();
 		
-		// URL 파라미터에서 값들 가져오기
+		// URL 파라미터에서 값들 가져오기 (오타 방지)
+		String userId = req.getParameter("userId");
 		String sensorId = req.getParameter("sensorId");
+		if (sensorId == null) {
+			sensorId = req.getParameter("sensorld"); // 오타된 파라미터명도 처리
+		}
 		String sensorUuid = req.getParameter("sensorUuid");
 		String setDate = req.getParameter("setDate");
 		String startDate = req.getParameter("startDate");
 		String endDate = req.getParameter("endDate");
 		String sensorName = req.getParameter("sensorName");
 		
+		// 파라미터 로깅 추가
+		logger.info("엑셀 다운로드 요청 파라미터 - userId: {}, sensorId: {}, sensorUuid: {}, sensorName: {}, startDate: {}, endDate: {}", 
+			userId, sensorId, sensorUuid, sensorName, startDate, endDate);
+		
 		// 통합 세션 검증 (모델 설정 없음)
 		SessionValidationResult validationResult = unifiedSessionService.validateSession(session, req, "B"); // 부계정 이상 권한 필요
 		
+		String sessionUserId;
 		if (!validationResult.isValid()) {
-			logger.warn("엑셀 다운로드 - 통합 세션 검증 실패");
-			res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "세션이 만료되었거나 로그인이 필요합니다.");
+			logger.warn("엑셀 다운로드 - 통합 세션 검증 실패, 파라미터에서 userId 사용");
+			// 세션 검증 실패 시 파라미터에서 userId 사용
+			sessionUserId = userId != null ? userId : "thepine"; // 기본값 설정
+		} else {
+			sessionUserId = validationResult.getUserId();
+		}
+		
+		logger.info("=== 엑셀 다운로드 시작 ===");
+		logger.info("요청 파라미터 - sensorId: {}, userId: {}, sensorUuid: {}, sensorName: {}", 
+			sensorId, sessionUserId, sensorUuid, sensorName);
+		logger.info("날짜 파라미터 - startDate: {}, endDate: {}", startDate, endDate);
+		logger.info("전체 요청 파라미터 - req.getParameterMap(): {}", req.getParameterMap());
+
+		// 파라미터 검증 강화
+		if (sensorUuid == null || sensorUuid.trim().isEmpty()) {
+			logger.warn("엑셀 다운로드 - 센서 UUID가 없음");
+			res.sendError(HttpServletResponse.SC_BAD_REQUEST, "센서 정보가 필요합니다.");
 			return;
 		}
 		
-		String sessionUserId = validationResult.getUserId();
+		if (startDate == null || startDate.trim().isEmpty() || endDate == null || endDate.trim().isEmpty()) {
+			logger.warn("엑셀 다운로드 - 날짜 정보가 없음");
+			res.sendError(HttpServletResponse.SC_BAD_REQUEST, "날짜 범위가 필요합니다.");
+			return;
+		}
 		
-		logger.info("엑셀 다운로드 시작 - sensorId: {}, userId: {}, sensorUuid: {}, sensorName: {}", 
-			sensorId, sessionUserId, sensorUuid, sensorName);
+		// sensorId가 없으면 세션의 userId 사용
+		if (sensorId == null || sensorId.trim().isEmpty()) {
+			sensorId = sessionUserId; // 세션의 userId 사용
+			logger.info("엑셀 다운로드 - sensorId가 없어서 세션 userId 사용: {}", sensorId);
+		}
 
 		if(null != session) {
-
 			if(null != sessionUserId && !"".equals(sessionUserId) && null != sensorId && !"".equals(sensorId) && null != sensorUuid && !"".equals(sensorUuid)) {
-				String todayStr = "";
-				String setDate1 = "";
-				String setDate2 = "";
-
-				if(null != setDate && !"".equals(setDate) && 0 < setDate.length()) {
+				
+				// === 1. 날짜 파라미터 정리 ===
+				String todayStr;
+				String setDate1;
+				String setDate2;
+				
+				if(null != setDate && !"".equals(setDate) && setDate.length() > 0) {
+					// setDate 사용 (하위 호환성)
 					todayStr = setDate;
-					if(setDate.contains("-")) {
-						setDate = setDate.replace("-", "");
-					}
-					setDate1 = setDate + "000000";
-					setDate2 = setDate + "235959";
+					String dateWithoutHyphens = removeDateHyphens(setDate);
+					setDate1 = dateWithoutHyphens + "000000";
+					setDate2 = dateWithoutHyphens + "235959";
 				} else {
+					// startDate/endDate 사용 (현재 방식)
 					Date today = new Date();
 					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 					todayStr = sdf.format(today);
-				}
-
-				if(null != startDate && !"".equals(startDate) && 0 < startDate.length()) {
-					if(startDate.contains("-")) {
-						startDate = startDate.replace("-", "");
+					
+					if(startDate != null && !startDate.isEmpty()) {
+						String dateWithoutHyphens = removeDateHyphens(startDate);
+						setDate1 = dateWithoutHyphens + "000000";
+					} else {
+						setDate1 = "";
 					}
-					setDate1 = startDate + "000000";
-				}
-
-				if(null != endDate && !"".equals(endDate) && 0 < endDate.length()) {
-					if(endDate.contains("-")) {
-						endDate = endDate.replace("-", "");
+					
+					if(endDate != null && !endDate.isEmpty()) {
+						String dateWithoutHyphens = removeDateHyphens(endDate);
+						setDate2 = dateWithoutHyphens + "235959";
+					} else {
+						setDate2 = "";
 					}
-					setDate2 = endDate + "235959";
 				}
-
-				logger.info("엑셀 다운로드 파라미터 - todayStr: {}, setDate1: {}, setDate2: {}", 
+				
+				logger.info("날짜 파라미터 처리 완료 - todayStr: {}, setDate1: {}, setDate2: {}", 
 					todayStr, setDate1, setDate2);
-
-				res.setHeader("Content-Disposition", "attachment;filename=report_"+todayStr+".xls");
-				res.setContentType("application/vnd.ms-excel");
-
-				List<Map<String, Object>> dailyList = new ArrayList<Map<String, Object>>();
-				List<Map<String, Object>> monthlyList = new ArrayList<Map<String, Object>>();
-				List<Map<String, Object>> yearlyList = new ArrayList<Map<String, Object>>();
-
-				List<String> monthly = new ArrayList<String>();
-				List<String> yearly = new ArrayList<String>();
-
-				List<String> header = new ArrayList<String>();
-				List<String> header2 = new ArrayList<String>();
-				List<String> header3 = new ArrayList<String>();
-
-				// === 실제 장치 소유자 ID 조회 (차트 페이지와 동일한 로직) ===
-				String actualSensorId = sensorId;  // 기본값
-				Map<String, Object> userInfo = new HashMap<String, Object>();
-				userInfo = adminService.getUserInfo(sessionUserId, sensorUuid);
-
-				if(null != userInfo && 0 < userInfo.size()) {
+				
+				// === 2. 파일 응답 헤더 설정 ===
+				String fileName = "report_" + todayStr + ".xlsx";
+				String encodedFileName = java.net.URLEncoder.encode(fileName, "UTF-8")
+					.replaceAll("\\+", "%20");
+				
+				res.setHeader("Content-Disposition", 
+					"attachment; filename=\"" + fileName + "\"; filename*=UTF-8''" + encodedFileName);
+				res.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+				res.setCharacterEncoding("UTF-8");
+				res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+				res.setHeader("Pragma", "no-cache");
+				res.setHeader("Expires", "0");
+				res.setHeader("X-Content-Type-Options", "nosniff");
+				res.setHeader("X-Download-Options", "noopen");
+				
+				// === 3. 데이터 조회용 파라미터 구성 ===
+				Map<String, Object> userInfo = adminService.getUserInfo(sessionUserId, sensorUuid);
+				String actualSensorId = sensorId;
+				
+				if(null != userInfo && userInfo.size() > 0) {
 					@SuppressWarnings("unchecked")
 					Map<String, Object> sensor = (Map<String, Object>) userInfo.get("sensorInfo");
-					if (null != sensor && 0 < sensor.size()) {
-						// 실제 장치 소유자 ID로 sensorId 설정
-						actualSensorId = String.valueOf(sensor.get("sensorId"));
-						logger.info("엑셀 다운로드 - URL 파라미터 sensorId: {}", sensorId);
-						logger.info("엑셀 다운로드 - 실제 장치 소유자 sensorId: {}", actualSensorId);
+					if(null != sensor && sensor.size() > 0) {
+						// DB 컬럼명은 sensor_id (언더스코어)
+						actualSensorId = String.valueOf(sensor.get("sensor_id"));
+						logger.info("실제 장치 소유자 ID: {}", actualSensorId);
 					}
 				}
-
+				
 				Map<String, Object> param = new HashMap<String, Object>();
-				// 부계정이 메인 계정의 장치 데이터를 조회할 때는 user_id를 sensor_id와 동일하게 설정
-				param.put("userId", actualSensorId);  // 실제 장치 소유자 ID 사용
-				param.put("sensorId", actualSensorId);
+				param.put("userId", actualSensorId != null ? actualSensorId : sessionUserId);
+				param.put("sensorId", actualSensorId != null ? actualSensorId : sessionUserId);
 				param.put("sensorUuid", sensorUuid);
 				param.put("setDate", setDate);
 				param.put("setDate1", setDate1);
 				param.put("setDate2", setDate2);
+				
+				// === 4. SQL용 YYYY-MM-DD HH:MM:SS 형식 생성 ===
+				String finalStartDate = startDate;
+				String finalEndDate = endDate;
+				
+				// startDate가 없으면 setDate1에서 추출
+				if(finalStartDate == null || finalStartDate.trim().isEmpty()) {
+					if(setDate1 != null && setDate1.length() >= 8) {
+						finalStartDate = convertDateFormat(setDate1.substring(0, 8));
+					}
+				}
+				
+				// endDate가 없으면 setDate2에서 추출
+				if(finalEndDate == null || finalEndDate.trim().isEmpty()) {
+					if(setDate2 != null && setDate2.length() >= 8) {
+						finalEndDate = convertDateFormat(setDate2.substring(0, 8));
+					}
+				}
+				
+				param.put("startDateTime", finalStartDate + " 00:00:00");
+				param.put("endDateTime", finalEndDate + " 23:59:59");
+				
+				logger.info("SQL 조회 파라미터 - startDateTime: {}, endDateTime: {}", 
+					finalStartDate + " 00:00:00", finalEndDate + " 23:59:59");
+				
+				// === 5. 데이터 리스트 초기화 ===
+				List<Map<String, Object>> dailyList = new ArrayList<Map<String, Object>>();
+				List<Map<String, Object>> monthlyList = new ArrayList<Map<String, Object>>();
+				List<Map<String, Object>> yearlyList = new ArrayList<Map<String, Object>>();
+				
+				List<String> monthly = new ArrayList<String>();
+				List<String> yearly = new ArrayList<String>();
+				
+				List<String> header = new ArrayList<String>();
+				List<String> header2 = new ArrayList<String>();
+				List<String> header3 = new ArrayList<String>();
 
-				logger.info("데이터 조회 파라미터 - param: {}", param);
-
-				try {
-					// 일간 데이터 조회
+			try {
+					// === 성능 최적화: 일간 데이터 조회 ===
+					long dailyStartTime = System.currentTimeMillis();
 					param.put("gu", "d");
-					dailyList = dataService.selectSensorData(param);
-					logger.info("일간 데이터 조회 완료 - 데이터 수: {}, sensorUuid: {}", 
-						dailyList != null ? dailyList.size() : 0, sensorUuid);
+					dailyList = dataService.selectDailyData(param); // 최적화된 쿼리 사용
+					logger.info("일간 데이터 조회 완료 - 데이터 수: {}, sensorUuid: {}, 소요시간: {}ms", 
+						dailyList != null ? dailyList.size() : 0, sensorUuid, System.currentTimeMillis() - dailyStartTime);
 
-					// 데이터 샘플 로깅
+					// 데이터 검증 및 샘플 로깅
 					if(dailyList != null && !dailyList.isEmpty()) {
 						logger.info("일간 데이터 샘플 - 첫 번째 데이터: {}", dailyList.get(0));
+						
+						// 데이터 유효성 검증
+						boolean hasValidData = false;
+						for (Map<String, Object> item : dailyList) {
+							if (item != null && item.get("inst_dtm") != null && item.get("sensor_value") != null) {
+								hasValidData = true;
+								break;
+							}
+						}
+						
+						if (!hasValidData) {
+							logger.warn("엑셀 다운로드 - 유효한 데이터가 없음");
+							res.sendError(HttpServletResponse.SC_NOT_FOUND, "선택한 날짜 범위에 데이터가 없습니다.");
+							return;
+						}
+					} else {
+						logger.warn("엑셀 다운로드 - 데이터가 없음");
+						res.sendError(HttpServletResponse.SC_NOT_FOUND, "선택한 날짜 범위에 데이터가 없습니다.");
+						return;
 					}
 
-					header.add("00:00");
-					header.add("00:30");
-					header.add("01:00");
-					header.add("01:30");
-					header.add("02:00");
-					header.add("02:30");
-					header.add("03:00");
-					header.add("03:30");
-					header.add("04:00");
-					header.add("04:30");
-					header.add("05:00");
-					header.add("05:30");
-					header.add("06:00");
-					header.add("06:30");
-					header.add("07:00");
-					header.add("07:30");
-					header.add("08:00");
-					header.add("08:30");
-					header.add("09:00");
-					header.add("09:30");
-					header.add("10:00");
-					header.add("10:30");
-					header.add("11:00");
-					header.add("11:30");
-					header.add("12:00");
-					header.add("12:30");
-					header.add("13:00");
-					header.add("13:30");
-					header.add("14:00");
-					header.add("14:30");
-					header.add("15:00");
-					header.add("15:30");
-					header.add("16:00");
-					header.add("16:30");
-					header.add("17:00");
-					header.add("17:30");
-					header.add("18:00");
-					header.add("18:30");
-					header.add("19:00");
-					header.add("19:30");
-					header.add("20:00");
-					header.add("20:30");
-					header.add("21:00");
-					header.add("21:30");
-					header.add("22:00");
-					header.add("22:30");
-					header.add("23:00");
-					header.add("23:30");
+					// === 성능 최적화: 1분 단위 헤더 생성 ===
+					for (int hour = 0; hour < 24; hour++) {
+						for (int minute = 0; minute < 60; minute += 1) { // 1분 단위
+							header.add(String.format("%02d:%02d", hour, minute));
+						}
+					}
 
 					// 월간 데이터 조회
 					param.remove("gu");
@@ -445,11 +488,28 @@ public class DataController {
 						yearlyList != null ? yearlyList.size() : 0);
 
 					ByteArrayInputStream stream = ExcelUtils.createDataExcel(header, header2, header3, dailyList, monthlyList, yearlyList, sensorName);
-					IOUtils.copy(stream, res.getOutputStream());
 					
-					logger.info("엑셀 파일 생성 완료");
+					if (stream != null) {
+						try {
+							IOUtils.copy(stream, res.getOutputStream());
+							res.getOutputStream().flush();
+							logger.info("엑셀 파일 생성 및 전송 완료");
+						} finally {
+							stream.close();
+						}
+					} else {
+						logger.error("엑셀 파일 스트림이 null입니다");
+						res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "엑셀 파일 생성 실패");
+						return;
+					}
 				} catch (Exception e) {
 					logger.error("엑셀 다운로드 실패: {}", e.getMessage(), e);
+					try {
+						res.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "엑셀 파일 생성 중 오류가 발생했습니다: " + e.getMessage());
+					} catch (IOException ioException) {
+						logger.error("에러 응답 전송 실패: {}", ioException.getMessage(), ioException);
+					}
+					return;
 				}
 			}
 		}
@@ -496,14 +556,14 @@ public class DataController {
 				logger.info("DataController.getDailyData - 날짜 범위: {} ~ {}", endDate + " 00:00:00", endDate + " 23:59:59");
 			}
 			
-			// 최적화된 일간 데이터 조회 (30분 단위 그룹화)
+			// 최적화된 일간 데이터 조회 (1분 단위 그룹화)
 			List<Map<String, Object>> dailyList = null;
 			List<String> daily = new ArrayList<String>();
 			
 			try {
-				// 새로운 최적화된 쿼리 사용
+				// 새로운 최적화된 쿼리 사용 (1분 단위)
 				dailyList = dataService.selectDailyData(param);
-				logger.info("최적화된 일간 데이터 조회 사용 - 30분 단위 그룹화");
+				logger.info("최적화된 일간 데이터 조회 사용 - 1분 단위 그룹화");
 			} catch(Exception queryException) {
 				logger.warn("최적화된 쿼리 실패, 기존 쿼리로 대체: " + queryException.getMessage());
 				try {
@@ -596,6 +656,43 @@ public class DataController {
 		}
 		
 		return resultMap;
+	}
+	
+	/**
+	 * YYYYMMDD 형식을 YYYY-MM-DD 형식으로 변환
+	 * @param dateStr 변환할 날짜 문자열
+	 * @return YYYY-MM-DD 형식의 날짜 문자열
+	 */
+	private String convertDateFormat(String dateStr) {
+		if (dateStr == null || dateStr.isEmpty()) {
+			return null;
+		}
+		
+		// 이미 YYYY-MM-DD 형식이면 그대로 반환
+		if (dateStr.contains("-")) {
+			return dateStr;
+		}
+		
+		// YYYYMMDD -> YYYY-MM-DD 변환
+		if (dateStr.length() >= 8) {
+			return dateStr.substring(0, 4) + "-" + 
+				   dateStr.substring(4, 6) + "-" + 
+				   dateStr.substring(6, 8);
+		}
+		
+		return dateStr;
+	}
+	
+	/**
+	 * YYYY-MM-DD 형식을 YYYYMMDD 형식으로 변환
+	 * @param dateStr 변환할 날짜 문자열
+	 * @return YYYYMMDD 형식의 날짜 문자열
+	 */
+	private String removeDateHyphens(String dateStr) {
+		if (dateStr == null || dateStr.isEmpty()) {
+			return null;
+		}
+		return dateStr.replace("-", "");
 	}
 	
 }

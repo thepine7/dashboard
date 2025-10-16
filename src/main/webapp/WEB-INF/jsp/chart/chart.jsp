@@ -652,18 +652,27 @@
         setPeriod('1year');
     });
 
+    // 다운로드 중 플래그
+    var isDownloading = false;
+    
     $('#excelDownload').click(function() {
-       var params = {
-           userId: $('#userId').val(),
-           sensorId: $('#sensorId').val(),
-           sensorUuid: $('#sensorUuid').val(),
-           sensorName: $('#sensorName').val(),
-           startDate: $('#startDate').val(),
-           endDate: $('#endDate').val()
-       };
+        // 다운로드 중이면 무시
+        if (isDownloading) {
+            console.log('이미 다운로드 중입니다. 중복 요청 차단.');
+            return;
+        }
+        
+        var params = {
+            userId: $('#userId').val(),
+            sensorId: $('#sensorId').val(),
+            sensorUuid: $('#sensorUuid').val(),
+            sensorName: $('#sensorName').val(),
+            startDate: $('#startDate').val(),
+            endDate: $('#endDate').val()
+        };
 
-       // 엑셀 다운로드 파라미터
-       downloadExcel(params);
+        // 엑셀 다운로드 파라미터
+        downloadExcel(params);
     });
 
     // 엑셀 다운로드 함수 구현
@@ -681,6 +690,17 @@
             return;
         }
         
+        // 다운로드 플래그 설정
+        isDownloading = true;
+        
+        // 버튼 비활성화 및 텍스트 변경
+        var $downloadBtn = $('#excelDownload');
+        $downloadBtn.prop('disabled', true);
+        var originalText = $downloadBtn.text();
+        $downloadBtn.text('다운로드 중...');
+        
+        console.log('다운로드 버튼 비활성화 - 중복 클릭 방지');
+        
         // URL 파라미터 생성
         var urlParams = new URLSearchParams();
         urlParams.append('userId', params.userId || '');
@@ -696,13 +716,16 @@
         
         console.log('다운로드 URL:', downloadUrl);
         
-        // 새 창에서 다운로드 실행
-        var link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = 'chart_data_' + params.sensorUuid + '_' + params.startDate + '_' + params.endDate + '.xlsx';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // 현재 창에서 다운로드 실행
+        location.href = downloadUrl;
+        
+        // 3초 후 버튼 재활성화 (다운로드 완료 예상 시간)
+        setTimeout(function() {
+            isDownloading = false;
+            $downloadBtn.prop('disabled', false);
+            $downloadBtn.text(originalText);
+            console.log('다운로드 버튼 재활성화');
+        }, 3000);
     }
 
     function goMain() {

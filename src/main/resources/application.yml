@@ -120,9 +120,9 @@ spring:
                 testOnBorrow: false          # 대여 시 테스트 비활성화 (성능)
                 testWhileIdle: true          # 유휴 시 테스트 활성화 (안정성)
                 
-                # 로깅 설정 (필요 시 활성화)
+                # 로깅 설정 (SlowQueryInterceptor 사용으로 중복 로깅 제거)
                 logger: com.mysql.cj.log.StandardLogger
-                logSlowQueries: true         # 느린 쿼리 로깅
+                logSlowQueries: false        # 느린 쿼리 로깅 비활성화 (SlowQueryInterceptor 사용)
                 slowQueryThresholdMillis: 1000  # 느린 쿼리 임계값 (1초)
                 explainSlowQueries: false    # 느린 쿼리 EXPLAIN 비활성화
 

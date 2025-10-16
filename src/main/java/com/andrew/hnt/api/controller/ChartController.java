@@ -75,15 +75,45 @@ public class ChartController extends DefaultController {
         // 세션 userId 사용하여 사이드바 데이터 설정
         commonController.addSidebarData(sessionUserId, model, session);
         
+        // 엑셀 다운로드를 위한 sensorId 모델 추가 (sessionUserId와 동일)
+        model.addAttribute("sensorId", sessionUserId);
+        logger.info("차트 페이지 sensorId 설정: {}", sessionUserId);
+        
         // sensorUuid 파라미터를 모델에 추가
         if (sensorUuid != null && !sensorUuid.isEmpty()) {
             model.addAttribute("sensorUuid", sensorUuid);
             logger.info("차트 페이지 sensorUuid 설정: {}", sensorUuid);
             
-            // 센서 이름 설정 (기본값)
-            String sensorName = "장치 " + sensorUuid.substring(0, Math.min(8, sensorUuid.length()));
-            model.addAttribute("sensorName", sensorName);
-            logger.info("차트 페이지 센서 이름 설정: {}", sensorName);
+            // 센서 정보 조회하여 이름과 장치종류 설정
+            try {
+                Map<String, Object> sensorInfo = adminService.getSensorInfoByUuid(sensorUuid);
+                String sensorName = "장치 " + sensorUuid.substring(0, Math.min(8, sensorUuid.length()));
+                String deviceType = "0"; // 기본값: 쿨러
+                
+                if (sensorInfo != null && !sensorInfo.isEmpty()) {
+                    String dbSensorName = (String) sensorInfo.get("sensor_name");
+                    if (dbSensorName != null && !dbSensorName.isEmpty()) {
+                        sensorName = dbSensorName;
+                    }
+                    deviceType = String.valueOf(sensorInfo.get("p16") != null ? sensorInfo.get("p16") : "0");
+                }
+                
+                // 장치종류에 따른 표시명 생성
+                String deviceTypeText = "0".equals(deviceType) ? "쿨러" : "히터";
+                String displayName = sensorName + "(" + deviceTypeText + ")";
+                
+                model.addAttribute("sensorName", displayName);
+                model.addAttribute("sensor_name", sensorName);
+                model.addAttribute("deviceType", deviceType);
+                logger.info("차트 페이지 센서 정보 설정: sensorName={}, deviceType={}, displayName={}", 
+                           sensorName, deviceType, displayName);
+            } catch (Exception e) {
+                logger.error("차트 페이지 센서 정보 조회 중 오류 발생", e);
+                String sensorName = "장치 " + sensorUuid.substring(0, Math.min(8, sensorUuid.length()));
+                model.addAttribute("sensorName", sensorName);
+                model.addAttribute("sensor_name", sensorName);
+                model.addAttribute("deviceType", "0");
+            }
             
             // 차트 데이터 조회 (최적화된 쿼리 사용)
             try {
@@ -140,8 +170,37 @@ public class ChartController extends DefaultController {
                     
                     if (defaultSensorUuid != null && !defaultSensorUuid.isEmpty()) {
                         model.addAttribute("sensorUuid", defaultSensorUuid);
-                        model.addAttribute("sensorName", defaultSensorName != null ? defaultSensorName : "장치 " + defaultSensorUuid.substring(0, Math.min(8, defaultSensorUuid.length())));
-                        logger.info("차트 페이지 기본 센서 설정: sensorUuid={}, sensorName={}", defaultSensorUuid, defaultSensorName);
+                        
+                        // 기본 센서의 상세 정보 조회
+                        try {
+                            Map<String, Object> sensorInfo = adminService.getSensorInfoByUuid(defaultSensorUuid);
+                            String sensorName = defaultSensorName != null ? defaultSensorName : "장치 " + defaultSensorUuid.substring(0, Math.min(8, defaultSensorUuid.length()));
+                            String deviceType = "0"; // 기본값: 쿨러
+                            
+                            if (sensorInfo != null && !sensorInfo.isEmpty()) {
+                                String dbSensorName = (String) sensorInfo.get("sensor_name");
+                                if (dbSensorName != null && !dbSensorName.isEmpty()) {
+                                    sensorName = dbSensorName;
+                                }
+                                deviceType = String.valueOf(sensorInfo.get("p16") != null ? sensorInfo.get("p16") : "0");
+                            }
+                            
+                            // 장치종류에 따른 표시명 생성
+                            String deviceTypeText = "0".equals(deviceType) ? "쿨러" : "히터";
+                            String displayName = sensorName + "(" + deviceTypeText + ")";
+                            
+                            model.addAttribute("sensorName", displayName);
+                            model.addAttribute("sensor_name", sensorName);
+                            model.addAttribute("deviceType", deviceType);
+                            logger.info("차트 페이지 기본 센서 설정: sensorUuid={}, sensorName={}, deviceType={}, displayName={}", 
+                                       defaultSensorUuid, sensorName, deviceType, displayName);
+                        } catch (Exception e) {
+                            logger.error("기본 센서 정보 조회 중 오류 발생", e);
+                            String sensorName = defaultSensorName != null ? defaultSensorName : "장치 " + defaultSensorUuid.substring(0, Math.min(8, defaultSensorUuid.length()));
+                            model.addAttribute("sensorName", sensorName);
+                            model.addAttribute("sensor_name", sensorName);
+                            model.addAttribute("deviceType", "0");
+                        }
                         
                         // 기본 센서의 차트 데이터 조회
                         param.put("sensorUuid", defaultSensorUuid);

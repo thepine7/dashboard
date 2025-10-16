@@ -285,7 +285,7 @@
         // 페이지 이탈 시 히스토리 정리
         window.addEventListener('beforeunload', function(event) {
             console.log('부계정 생성 페이지 이탈 - 히스토리 정리');
-            history.replaceState({page: 'main'}, '메인', '/main');
+            history.replaceState({page: 'main'}, '메인', '/main/main');
         });
     }
     

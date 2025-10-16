@@ -172,19 +172,64 @@ public class AdminController extends DefaultController {
             Map<String, Object> sensorInfo = adminService.getSensorInfoByUuid(sensorUuid);
             if (sensorInfo != null && !sensorInfo.isEmpty()) {
                 model.addAttribute("sensorInfo", sensorInfo);
-                model.addAttribute("sensorName", sensorInfo.get("sensor_name"));
+                model.addAttribute("sensor_name", sensorInfo.get("sensor_name"));
                 model.addAttribute("sensorUuid", sensorUuid);
+                
+                // 센서 정보 초기값 설정
+                String sensorType = String.valueOf(sensorInfo.get("sensor_type") != null ? sensorInfo.get("sensor_type") : "0");
+                String deviceType = String.valueOf(sensorInfo.get("p16") != null ? sensorInfo.get("p16") : "0");
+                
+                // 센서 타입에 따른 정보 설정
+                String sensorDisplayName = "";
+                String tempRange = "";
+                if("2".equals(sensorType)) { // T3
+                    sensorDisplayName = "PT100(T3)";
+                    tempRange = "-200°C ~ 850°C";
+                } else if("0".equals(sensorType)) { // T1
+                    sensorDisplayName = "NTC 10K(T1)";
+                    tempRange = "-50°C ~ 125°C";
+                } else if("1".equals(sensorType)) { // T2
+                    sensorDisplayName = "NTC 5K(T2)";
+                    tempRange = "-50°C ~ 125°C";
+                } else {
+                    sensorDisplayName = "NTC 10K(T1)"; // Default
+                    tempRange = "-50°C ~ 125°C"; // Default
+                }
+                
+                // 장치종류 설정
+                String deviceTypeText = "";
+                if("0".equals(deviceType)) {
+                    deviceTypeText = "Cooler (쿨러)";
+                } else if("1".equals(deviceType)) {
+                    deviceTypeText = "Heater (히터)";
+                } else {
+                    deviceTypeText = "Cooler (쿨러)";
+                }
+                
+                model.addAttribute("sensorDisplayName", sensorDisplayName);
+                model.addAttribute("tempRange", tempRange);
+                model.addAttribute("deviceTypeText", deviceTypeText);
                 logger.info("센서 정보 조회 성공 - sensorName: {}, sensorUuid: {}", 
                            sensorInfo.get("sensor_name"), sensorUuid);
             } else {
                 logger.warn("센서 정보 조회 실패 - sensorUuid: {}", sensorUuid);
-                model.addAttribute("sensorName", "알 수 없는 장치");
+                model.addAttribute("sensor_name", "알 수 없는 장치");
                 model.addAttribute("sensorUuid", sensorUuid);
+                
+                // 센서 정보가 없을 때 기본값 설정
+                model.addAttribute("sensorDisplayName", "-");
+                model.addAttribute("tempRange", "-");
+                model.addAttribute("deviceTypeText", "-");
             }
         } catch (Exception e) {
             unifiedErrorHandler.logError("센서 정보 조회", e);
-            model.addAttribute("sensorName", "알 수 없는 장치");
+            model.addAttribute("sensor_name", "알 수 없는 장치");
             model.addAttribute("sensorUuid", sensorUuid);
+            
+            // 예외 발생 시에도 기본값 설정
+            model.addAttribute("sensorDisplayName", "-");
+            model.addAttribute("tempRange", "-");
+            model.addAttribute("deviceTypeText", "-");
         }
         
         // 세션 우선: DB에서 직접 사이드바 데이터 조회 (세션 userId 사용)

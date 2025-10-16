@@ -10,11 +10,12 @@
     <meta charset="utf-8">
     <!--[if IE]><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"><![endif]-->
     <title>H&T Solutions</title>
+    	<link rel="icon" href="/images/hntbi.png" type="image/png">
     <meta name="keywords" content="" />
     <meta name="description" content="" />
     <meta name="viewport" content="width=device-width">
-    <link rel="stylesheet" href="/css/templatemo_main.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    	<link rel="stylesheet" href="/css/templatemo_main.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         /* 상태표시등 스타일 (메인 페이지와 동일) */
         .status-indicator {
@@ -36,66 +37,138 @@
         .status-indicator.red { background: #f44336; box-shadow: 0 0 10px rgba(244, 67, 54, 0.3); }
         .status-indicator.active { animation: pulse 2s infinite; }
         
-      @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        /* 출력 제어 버튼 스타일 */
+        .btn-soft {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            color: #495057;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 2px;
+        }
+        .btn-soft:hover {
+            background-color: #e9ecef;
+            border-color: #adb5bd;
+        }
+        .btn-soft:disabled {
+            background-color: #e9ecef;
+            border-color: #dee2e6;
+            color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+      /* 활성 상태 버튼 스타일 - 기존 색상 유지하면서 더 진하게 */
+      .btn-soft.is-active {
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        transform: scale(1.05);
+        border-width: 2px;
       }
       
-      /* 출력 제어 버튼 스타일 */
-      .btn-soft {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        color: #495057;
-        padding: 4px 8px;
-        font-size: 12px;
-        border-radius: 3px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        margin: 2px;
-      }
-      .btn-soft:hover {
-        background-color: #e9ecef;
-        border-color: #adb5bd;
-      }
-      .btn-soft:disabled {
-        background-color: #e9ecef;
-        border-color: #dee2e6;
-        color: #6c757d;
-        cursor: not-allowed;
-        opacity: 0.5;
-      }
+      /* ON/OFF 구분용 아주 연한 색상 버튼 */
       .btn-on-soft {
-        background-color: #d4edda;
-        border-color: #c3e6cb;
-        color: #155724;
+        background-color: #e3f6ed;  /* 약간 더 진한 연한 그린 */
+        border-color: #bfead6;
+        color: #1f5535;
       }
-      .btn-on-soft:hover {
-        background-color: #c3e6cb;
-        border-color: #b8dacc;
+      .btn-on-soft:hover { 
+        background-color: #daf1e6; 
+        box-shadow: 0 0 0 3px rgba(46,204,113,0.12); 
       }
+
       .btn-off-soft {
-        background-color: #f8d7da;
-        border-color: #f5c6cb;
-        color: #721c24;
+        background-color: #ffecec; /* 약간 더 진한 연한 레드 */
+        border-color: #ffcfcf;
+        color: #732020;
       }
-      .btn-off-soft:hover {
-        background-color: #f5c6cb;
-        border-color: #f1b0b7;
+      .btn-off-soft:hover { 
+        background-color: #ffe3e3; 
+        box-shadow: 0 0 0 3px rgba(231,76,60,0.12); 
       }
-      .btn-soft.is-active {
-        background-color: #007bff;
-        border-color: #007bff;
-        color: white;
-        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+
+      /* 실행 상태 하이라이트 (명확한 구분) */
+      .btn-on-soft.is-active {
+        background-color: #28a745 !important; /* 진한 녹색 */
+        border-color: #1e7e34 !important;
+        color: white !important;
+        font-weight: 900 !important;
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4) !important;
+        transform: scale(1.05) !important;
+        border-width: 2px !important;
       }
-      .out-btn {
-        width: 64px;
-        height: 30px;
-        margin-right: 6px;
-        border-radius: 4px;
+      .btn-off-soft.is-active {
+        background-color: #dc3545 !important; /* 진한 빨간색 */
+        border-color: #bd2130 !important;
+        color: white !important;
+        font-weight: 900 !important;
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4) !important;
+        transform: scale(1.05) !important;
+        border-width: 2px !important;
       }
+      
+      /* 비활성 상태는 기본 색상 유지 (투명도 제거) */
+      .btn-on-soft:not(.is-active) {
+        background-color: #e3f6ed !important;
+        border-color: #bfead6 !important;
+        color: #1f5535 !important;
+      }
+      .btn-off-soft:not(.is-active) {
+        background-color: #ffecec !important;
+        border-color: #ffcfcf !important;
+        color: #732020 !important;
+      }
+        .btn-soft.is-active {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: white;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        .out-btn {
+            width: 64px;
+            height: 30px;
+            margin-right: 6px;
+            border-radius: 4px;
+        }
     </style>
+  <!-- 통일된 세션 관리 모듈 사용 -->
+<script src="/js/session-manager.js"></script>
+<!-- 부계정 권한 제한 모듈 사용 -->
+<script src="/js/sub-account-permission.js"></script>
+<!-- 공통 파라미터 유틸리티 -->
+<script src="/js/common-parameter-utils.js"></script>
+<!-- 공통 상태 표시 유틸리티 -->
+<script src="/js/common-status-utils.js"></script>
+<!-- 표준 MQTT 초기화 템플릿 -->
+<script src="/js/mqtt-init-template.js"></script>
+<!-- Paho MQTT 라이브러리 -->
+<script src="/js/mqttws31-min.js"></script>
+<!-- 통일된 MQTT 관리 모듈 사용 (버전 쿼리로 캐시 무효화) -->
+<script src="/js/unified-mqtt-manager.js?v=20251007"></script>
+<!-- 센서 설정 페이지 전용 JavaScript -->
+<script>
+// sensor-setting.js에서 사용할 변수들을 JSP에서 설정
+window.SensorSettingPage = window.SensorSettingPage || {};
+window.SensorSettingPage.currentUserId = '${userId}';
+window.SensorSettingPage.currentSensorUuid = '${sensorUuid}';
+window.SensorSettingPage.currentTopic = 'HBEE/' + window.SensorSettingPage.currentUserId + '/TC/' + window.SensorSettingPage.currentSensorUuid + '/SER';
+
+console.log('센서설정 페이지 변수 설정:', {
+    userId: window.SensorSettingPage.currentUserId,
+    sensorUuid: window.SensorSettingPage.currentSensorUuid,
+    topic: window.SensorSettingPage.currentTopic
+});
+</script>
+<script src="/js/sensor-setting.js"></script>
+
 </head>
 <body>
 <input type="hidden" id="userId" name="userId" value="${userId}" />
@@ -103,6 +176,7 @@
 <input type="hidden" id="userGrade" name="userGrade" value="${userGrade}" />
 <input type="hidden" id ="topicStr" name="topicStr" value="${topicStr}" />
 <input type="hidden" id="sensorUuid" name="sensorUuid" value="${sensorUuid}" />
+<input type="hidden" id="sensor_name" name="sensor_name" value="${sensor_name}" />
 <input type="hidden" id="alarmMap" name="alarmMap" value='${alarmMap}' />
 <input type="hidden" id="token" name="token" value="${token}" />
 <input type="hidden" id="sensorId" name="sensorId" value="${sensorId}" />
@@ -138,7 +212,7 @@
 					<ul class="templatemo-submenu">
 						<li><a href="/admin/createSub?userId=${userId}&userGrade=${userGrade}">부계정 생성</a></li>
 					</ul>
-				</c:if>
+            </c:if>
             </li>
             <li><a href="" data-toggle="modal" data-target="#confirmModal"><i class="fa fa-sign-out"></i>로그아웃</a></li>
         </ul>
@@ -156,8 +230,17 @@
                     <div class="" style="margin-right: 10px; margin-left: 10px;">
                         <span class="btn btn-primary"><a href="javascript:void(0);" onclick="refreshDeviceSettings()">장치설정</a></span>
                         <div class="panel panel-primary">
-                            <div class="panel-heading" id="deviceName">${sensorName}</div>
+                            <div class="panel-heading"><strong><span id="deviceName${sensorUuid}">${sensor_name}</span> <span id="deviceType${sensorUuid}" style="font-size: 12px; color: #ccc;">(장치)</span></strong></div>
                             <div class="panel-body">
+                                                            <!-- 센서 정보 표시 -->
+                                <div style="background-color: #d9edf7; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
+                                    <div style="font-weight: bold; margin-bottom: 5px;">센서 정보</div>
+                                    <div style="font-size: 12px; line-height: 1.4;">
+                                        <div><strong>센서 정보:</strong> <span id="deviceSensorInfoDisplay">-</span></div>
+                                        <div><strong>온도 범위:</strong> <span id="deviceTempRangeDisplay">-</span></div>
+                                        <div><strong>장치 종류:</strong> <span id="deviceDeviceTypeDisplay">-</span></div>
+                                    </div>
+                                </div>
                                 <table class="table table-striped">
                                     <thead>
                                         <tr>
@@ -170,7 +253,12 @@
 									    <tr>
 											<td align="center" valign="middle"><strong><p align="center" id="curTemp" name="curTemp" style="font-size: 30px; color: #c9302c"></p></strong></td>
 											<td align="center" valign="middle"><strong><span id="setTemp" name="setTemp" style="font-size: 30px; color: #3c763d"></span></strong></td>
-											<td align="center" valign="middle"><button valign="middle" id="defrost" name="defrost" style="padding-top: 7px; padding-bottom: 7px; font-size: 13px;">강제제상</button>&nbsp;<button valign="middle" id="stopDefrost" name="defrost" style="padding-top: 7px; padding-bottom: 7px; font-size: 13px;">강제제상종료</button></td>
+                                            <td align="center" valign="middle" style="padding-right:12px;">
+                                              <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; gap:8px;">
+                                                <button id="defrost" name="defrost" class="btn-soft btn-on-soft defrost-btn" style="font-size: 13px; width:140px;">강제제상</button>
+                                                <button id="stopDefrost" name="defrost" class="btn-soft btn-off-soft defrost-btn" style="font-size: 13px; width:140px;">강제제상종료</button>
+                                              </div>
+                                            </td>
 										</tr>
 									    <tr>
 											<td align="center" valign="middle" style="background-color: #c7254e;">
@@ -181,26 +269,26 @@
 												<table class="table table-striped">
 													<thead>
 													<tr>
-														<td align="center"><div id="status${sensorUuid != null ? sensorUuid : ''}" class="status-indicator green"><i class="bi bi-play-circle-fill"></i></div></td>
-														<td align="center"><div id="comp${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-gear-fill"></i></div></td>
-														<td align="center"><div id="defr${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-snow"></i></div></td>
-														<td align="center"><div id="fan${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-fan"></i></div></td>
-														<td align="center"><div id="error${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-exclamation-triangle-fill"></i></div></td>
+                                            <td align="center"><div id="status${sensorUuid != null ? sensorUuid : ''}" class="status-indicator green"><i class="bi bi-play-circle-fill"></i></div></td>
+                                            <td align="center"><div id="comp${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-gear-fill"></i></div></td>
+                                            <td align="center"><div id="defr${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-snow defrost-icon"></i><i class="bi bi-thermometer-half heater-icon" style="display:none;"></i></div></td>
+                                            <td align="center"><div id="fan${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-fan"></i></div></td>
+                                            <td align="center"><div id="error${sensorUuid != null ? sensorUuid : ''}" class="status-indicator gray"><i class="bi bi-exclamation-triangle-fill"></i></div></td>
 													</tr>
 													</thead>
 													<tbody>
 													<tr>
 														<td width="20%" align="center" valign="middle" style="background-color: #c7254e;"><strong><span style="color: #f0f8ff; font-size:10pt;">운전</span></strong></td>
 														<td width="20%" align="center" valign="middle" style="background-color: #c7254e;"><strong><span style="color: #f0f8ff; font-size:10pt;">콤프</span></strong></td>
-														<td width="20%" align="center" valign="middle" style="background-color: #c7254e;"><strong><span style="color: #f0f8ff; font-size:10pt;">제상</span></strong></td>
+														<td width="20%" align="center" valign="middle" style="background-color: #c7254e;"><strong><span id="defrostLabel${sensorUuid != null ? sensorUuid : ''}" style="color: #f0f8ff; font-size:10pt;">제상</span></strong></td>
 														<td width="20%" align="center" valign="middle" style="background-color: #c7254e;"><strong><span style="color: #f0f8ff; font-size:10pt;">FAN</span></strong></td>
 														<td width="20%" align="center" valign="middle" style="background-color: #c7254e;"><strong><span style="color: #f0f8ff; font-size:10pt;">이상</span></strong></td>
 													</tr>
 													</tbody>
 												</table>
-											</td>
-										</tr>
-									</tbody>
+                                        </td>
+	                                    </tr>
+                                    </tbody>
                                 </table>
                                 <table class="table table-striped">
                                     <thead>
@@ -216,7 +304,7 @@
 	                                        <td align="center" valign="middle" style="font-size:10pt;">설정온도</td>
 	                                        <td align="left" valign="middle" style="font-size:10pt;">
 	                                            <c:if test="${userGrade ne 'B'}">
-	                                                <input type="text" id="p01" name="p01" value="" style="width:50px;" />°C
+	                                                <input type="text" id="p01" name="p01" value="" style="width:50px;" onblur="validateTemperatureInput(this)" />°C
 	                                            </c:if>
 	                                            <c:if test="${userGrade eq 'B'}">
 	                                                <input type="text" id="p01" name="p01" value="" style="width:50px; background-color: #f5f5f5;" readonly />°C
@@ -233,13 +321,13 @@
 	                                    </tr>
 	                                    <tr>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">히스테리시스<br>편차</td>
-	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p02" name="p02" value="" style="width:50px;" />°C</td>
+	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p02" name="p02" value="" style="width:50px;" onblur="validateHysteresisInput(this)" />°C</td>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">제상 시간<br>(min)</td>
-	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p06" name="p06" value="" style="width:50px;" />분</td>
+	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p06" name="p06" value="" style="width:50px;" onblur="validateMinuteInput(this)" />분</td>
 	                                    </tr>
 	                                    <tr>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">COMP 출력<br>지연시간(sec)</td>
-	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p03" name="p03" value="" style="width:50px;" />초</td>
+	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p03" name="p03" value="" style="width:50px;" onblur="validateDelayInput(this)" />초</td>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">팬설정</td>
 	                                        <td align="left" valign="middle" style="font-size:10pt;">
 												<select id="p07" name="p07" style="width:60px; font-size:10pt;">
@@ -253,19 +341,19 @@
 	                                    </tr>
 	                                    <tr>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">온도보정</td>
-	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p04" name="p04" value="" style="width:50px;" />°C</td>
+	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p04" name="p04" value="" style="width:50px;" onblur="validateTemperatureCompensationInput(this)" />°C</td>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">제상 후 FAN ON<br>지연시간(sec)</td>
-	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p08" name="p08" value="" style="width:50px;" />초</td>
+	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p08" name="p08" value="" style="width:50px;" onblur="validateDelayInput(this)" />초</td>
 	                                    </tr>
 	                                    <tr>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">제상 정지시간<br>(hour)</td>
-	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p05" name="p05" value="" style="width:50px;" />시간</td>
+	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p05" name="p05" value="" style="width:50px;" onblur="validateHourInput(this)" />시간</td>
 	                                        <td align="center" valign="middle" style="font-size:10pt;">FAN OFF<br>지연시간(sec)</td>
-	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p09" name="p09" value="" style="width:50px;" />초</td>
+	                                        <td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p09" name="p09" value="" style="width:50px;" onblur="validateDelayInput(this)" />초</td>
 	                                    </tr>
 										<tr>
 											<td align="center" valign="middle" style="font-size:10pt;">저온방지<br>온도편차</td>
-											<td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p10" name="p10" value="" style="width:50px;" />°C</td>
+											<td align="left" valign="middle" style="font-size:10pt;"><input type="text" id="p10" name="p10" value="" style="width:50px;" onblur="validateLowTempPreventionInput(this)" />°C</td>
 											<td align="center" valign="middle" style="font-size:10pt;">COMP 누적 시간<br>제상 선택</td>
 											<td align="left" valign="middle" style="font-size:10pt;">
 												<select id="p11" name="p11" style="width:60px; font-size:10pt;">
@@ -323,7 +411,7 @@
 												</select>
 											</td>
 										</tr>
-                                    <tr>
+	                                    <tr>
                                         <td colspan="4" align="center" style="font-size:10pt;">
                                             <div style="margin-bottom:8px;">
                                               <c:if test="${userGrade ne 'B'}">
@@ -374,15 +462,15 @@
                     <div class="" style="margin-right: 10px; margin-left: 10px;">
                         <span class="btn btn-primary"><a href="javascript:void(0);" onclick="refreshAlarmSettings()">알람설정</a></span>
                         <div class="panel panel-primary">
-                            <div class="panel-heading" id="deviceName2">${sensorName}</div>
+                            <div class="panel-heading"><strong><span id="deviceName2${sensorUuid}">${sensor_name}</span> <span id="deviceType2${sensorUuid}" style="font-size: 12px; color: #ccc;">(쿨러)</span></strong></div>
                             <div class="panel-body">
                                 <!-- 센서 정보 표시 -->
                                 <div style="background-color: #d9edf7; padding: 10px; margin-bottom: 15px; border-radius: 5px;">
                                     <div style="font-weight: bold; margin-bottom: 5px;">센서 정보</div>
                                     <div style="font-size: 12px; line-height: 1.4;">
-                                        <div><strong>센서 정보:</strong> <span id="alarmSensorInfoDisplay">-</span></div>
-                                        <div><strong>온도 범위:</strong> <span id="alarmTempRangeDisplay">-</span></div>
-                                        <div><strong>장치종류:</strong> <span id="alarmDeviceTypeDisplay">-</span></div>
+                                        <div><strong>센서 정보:</strong> <span id="alarmSensorInfoDisplay">${sensorDisplayName != null ? sensorDisplayName : '-'}</span></div>
+                                        <div><strong>온도 범위:</strong> <span id="alarmTempRangeDisplay">${tempRange != null ? tempRange : '-'}</span></div>
+                                        <div><strong>장치 종류:</strong> <span id="alarmDeviceTypeDisplay">${deviceTypeText != null ? deviceTypeText : '-'}</span></div>
                                     </div>
                                 </div>
 								<table class="table table-striped">
@@ -504,7 +592,7 @@
 										</td>
 									</tr>
 									<tr>
-										<th align="center" rowspan="2" style="font-size: 12pt;">온도</th>
+										<th align="center" rowspan="2" style="font-size: 12pt;">저온알람</th>
 									</tr>
 									<tr>
 										<td>
@@ -716,7 +804,7 @@
 										</td>
 									</tr>
 									<tr>
-										<th align="center" rowspan="2" style="font-size: 12pt;">DI알람</th>
+										<th align="center" rowspan="2" style="font-size: 12pt;">DIN알람</th>
 									</tr>
 									<tr>
 										<td>
@@ -966,8 +1054,8 @@
 </div>
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-	<script src="/js/bootstrap.min.js"></script>
-	<script src="/js/templatemo_script.js"></script>
+<script src="/js/bootstrap.min.js"></script>
+<script src="/js/templatemo_script.js"></script>
 
 <!-- MQTT 라이브러리 파일들이 존재하지 않으므로 제거됨 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js" type="text/javascript"></script>
@@ -1244,6 +1332,12 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 						console.warn('UnifiedMQTTManager가 로드되지 않았습니다.');
 					}
 					
+					// 센서 정보 요청 (페이지 로딩 시)
+			setTimeout(function() {
+						console.log('페이지 로딩 완료 - 센서 정보 요청');
+        setSensor();
+					}, 3000); // MQTT 연결 후 3초 뒤에 센서 정보 요청
+					
 					console.log('센서설정 페이지 초기화 완료');
 				}
 				
@@ -1267,9 +1361,8 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 				deviceName = sensorUuid; // 기본값
 			}
 
-			// 장치 이름 표시
-			$('#deviceName').text(deviceName);
-			$('#deviceName2').text(deviceName);
+		// 장치 이름 표시 (기존 로직 유지)
+		$('#deviceName').text(deviceName);
 		}
 		
 		// p16 초기 설정 (페이지 로딩 시)
@@ -1279,7 +1372,7 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 			console.log("페이지 로딩 시 p16 Cooler 설정");
 		}
 
-			setTimeout(function() {
+    setTimeout(function() {
 				startInterval(60, chkError);
 			}, 30000);
 
@@ -1567,7 +1660,7 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 					$('#reDelayMin4').val(re_delay_min4).prop("selected", true);
 					$('#reDelayMin5').val(re_delay_min5).prop("selected", true);
 				}
-			} else {
+					} else {
 				$('#alarmYn1').val("N").prop("selected", true);
 				$('#alarmYn2').val("N").prop("selected", true);
 				$('#alarmYn3').val("N").prop("selected", true);
@@ -1582,86 +1675,176 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 		if (sensorUuid === $('#sensorUuid').val()) {
 			if (value === 'Error') {
 				$('#curTemp').html('Error');
-			} else {
+    	} else {
 				$('#curTemp').html(value + '°C');
 			}
-		}
-	}
-	
+    }
+}
+
 	// MQTT 메시지 처리 함수
-	function rcvMsg(topic, message) {
-		try {
-			var jsonObj = JSON.parse(message);
-			var topicArr = topic.split('/');
-			
-			if (topicArr.length >= 5 && topicArr[4] === 'DEV') {
-				var userId = topicArr[1];
-				var sensorUuid = topicArr[3];
-				
-				// 현재 센서와 일치하는지 확인
-				if (sensorUuid === $('#sensorUuid').val()) {
-					if (jsonObj.actcode === 'live') {
-						if (jsonObj.name === 'ain') {
-							updateCurrentTemperature(sensorUuid, jsonObj.value);
-						}
-					} else if (jsonObj.actcode === 'setres') {
+function rcvMsg(topic, message) {
+    try {
+        var jsonObj = JSON.parse(message);
+        var topicArr = topic.split('/');
+        
+        if (topicArr.length >= 5 && topicArr[4] === 'DEV') {
+            var userId = topicArr[1];
+            var sensorUuid = topicArr[3];
+            
+            // 현재 센서와 일치하는지 확인
+            if (sensorUuid === $('#sensorUuid').val()) {
+                if (jsonObj.actcode === 'live') {
+                    if (jsonObj.name === 'ain') {
+                        updateCurrentTemperature(sensorUuid, jsonObj.value);
+						} else if (jsonObj.name === 'output') {
+							// 출력 상태 변화 알림 → 버튼 하이라이트 반영
+							console.log('출력 상태 변화 수신:', jsonObj);
+							updateOutputButtonState(jsonObj);
+                    }
+                } else if (jsonObj.actcode === 'setres') {
 						// 설정 응답 수신 시 센서 정보 업데이트
-						updateSensorInfo(jsonObj);
-					}
-				}
+                    updateSensorInfo(jsonObj);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('MQTT 메시지 파싱 에러:', e);
+    }
+}
+
+	// handleSetresMessage 함수는 sensor-setting.js에서 정의됨
+	
+	// 제상/히터 라벨 업데이트 함수 (메인 페이지와 동일)
+	function updateDefrostLabel(elementId, deviceType) {
+		var element = document.getElementById(elementId);
+		if (element) {
+			if (deviceType === '1') {
+				element.textContent = '히터';
+			} else {
+				element.textContent = '제상';
 			}
-		} catch (e) {
-			console.error('MQTT 메시지 파싱 에러:', e);
 		}
 	}
 	
+	// 제상/히터 아이콘 업데이트 함수 (메인 페이지와 동일)
+	function updateDefrostIndicator(elementId, status, deviceType) {
+		var element = document.getElementById(elementId);
+		if (element) {
+			var defrostIcon = element.querySelector('.defrost-icon');
+			var heaterIcon = element.querySelector('.heater-icon');
+			if (deviceType === '1') {
+				if (defrostIcon) defrostIcon.style.display = 'none';
+				if (heaterIcon) heaterIcon.style.display = 'inline';
+			} else {
+				if (defrostIcon) defrostIcon.style.display = 'inline';
+				if (heaterIcon) heaterIcon.style.display = 'none';
+			}
+			element.className = 'status-indicator ' + status;
+		}
+	}
+	
+	// 전역 함수로 등록
+	window.updateDefrostLabel = updateDefrostLabel;
+	window.updateDefrostIndicator = updateDefrostIndicator;
+
 	// 센서 정보 업데이트 함수
-	function updateSensorInfo(msg) {
-		var sensorType = msg.p12; // 온도 센서 타입
-		var deviceType = msg.p16; // 장치종류
-		
-		// 전역 변수 업데이트
-		currentSensorType = sensorType;
-		
-		var sensorInfo = "";
-		var tempRange = "";
-		var deviceTypeText = "";
-		
-		// 센서 타입에 따른 정보 설정
-		if(sensorType == "2") { // T3
-			sensorInfo = "PT100(T3)";
-			tempRange = "-200°C ~ 850°C";
-		} else if(sensorType == "0") { // T1
-			sensorInfo = "NTC 10K(T1)";
-			tempRange = "-50°C ~ 125°C";
-		} else if(sensorType == "1") { // T2
-			sensorInfo = "NTC 5K(T2)";
-			tempRange = "-50°C ~ 125°C";
-		} else {
-			sensorInfo = "NTC 10K(T1)"; // Default
-			tempRange = "-50°C ~ 125°C"; // Default
-		}
-		
-		// 장치종류 설정
-		if(deviceType == "0") {
-			deviceTypeText = "Cooler (냉각기)";
-		} else if(deviceType == "1") {
-			deviceTypeText = "Heater (가열기)";
-		} else {
-			deviceTypeText = "Cooler (냉각기)";
-		}
+function updateSensorInfo(msg) {
+    var sensorType = msg.p12; // 온도 센서 타입
+    var deviceType = msg.p16; // 장치종류
+    
+    // 전역 변수 업데이트
+    currentSensorType = sensorType;
+    
+    var sensorInfo = "";
+    var tempRange = "";
+    var deviceTypeText = "";
+    
+    // 센서 타입에 따른 정보 설정
+    if(sensorType == "2") { // T3
+        sensorInfo = "PT100(T3)";
+        tempRange = "-200°C ~ 850°C";
+    } else if(sensorType == "0") { // T1
+        sensorInfo = "NTC 10K(T1)";
+        tempRange = "-50°C ~ 125°C";
+    } else if(sensorType == "1") { // T2
+        sensorInfo = "NTC 5K(T2)";
+        tempRange = "-50°C ~ 125°C";
+                } else {
+        sensorInfo = "NTC 10K(T1)"; // Default
+        tempRange = "-50°C ~ 125°C"; // Default
+    }
+    
+    // 장치종류 설정 (센서 정보 섹션용 - 상세 정보)
+    var deviceTypeTextDetail = "";
+    if(deviceType == "0") {
+        deviceTypeTextDetail = "Cooler (쿨러)";
+    } else if(deviceType == "1") {
+        deviceTypeTextDetail = "Heater (히터)";
+    } else {
+        deviceTypeTextDetail = "Cooler (쿨러)";
+    }
+    
+    // 장치종류 설정 (패널 헤더용 - 간단한 정보)
+    var deviceTypeText = "";
+    if(deviceType == "0") {
+        deviceTypeText = "쿨러";
+    } else if(deviceType == "1") {
+        deviceTypeText = "히터";
+    } else {
+        deviceTypeText = "쿨러";
+    }
 		
 		// 화면 업데이트 (알람설정섹션)
 		$('#alarmSensorInfoDisplay').text(sensorInfo);
 		$('#alarmTempRangeDisplay').text(tempRange);
-		$('#alarmDeviceTypeDisplay').text(deviceTypeText);
+		$('#alarmDeviceTypeDisplay').text(deviceTypeTextDetail);
 		
-		console.log('센서 정보 업데이트:', {
-			sensorInfo: sensorInfo,
-			tempRange: tempRange,
-			deviceTypeText: deviceTypeText
-		});
-	}
+		// 화면 업데이트 (장치설정섹션)
+		$('#deviceSensorInfoDisplay').text(sensorInfo);
+		$('#deviceTempRangeDisplay').text(tempRange);
+		$('#deviceDeviceTypeDisplay').text(deviceTypeTextDetail);
+		
+		// 장치종류 표시 업데이트 (패널 헤더)
+		var currentSensorUuid = $('#sensorUuid').val();
+		if(currentSensorUuid) {
+			// 장치설정 섹션 헤더 업데이트
+			$('#deviceType' + currentSensorUuid).text('(' + deviceTypeText + ')');
+			// 알람설정 섹션 헤더 업데이트
+			$('#deviceType2' + currentSensorUuid).text('(' + deviceTypeText + ')');
+		}
+		
+		// 장치이름 업데이트 (센서 이름이 변경된 경우)
+		var sensorName = $('#sensor_name').val() || '센서';
+		if(currentSensorUuid) {
+			$('#deviceName' + currentSensorUuid).text(sensorName);
+			$('#deviceName2' + currentSensorUuid).text(sensorName);
+		}
+		
+		// 제상/히터 라벨 및 아이콘 업데이트 (메인 페이지와 동일한 방식)
+		if(typeof updateDefrostLabel === 'function') {
+			updateDefrostLabel('defrostLabel' + currentSensorUuid, deviceType);
+		}
+		
+		// 상태표시등 아이콘 업데이트 (제상/히터 아이콘 변경)
+		if(typeof updateDefrostIndicator === 'function') {
+			updateDefrostIndicator('defr' + currentSensorUuid, 'gray', deviceType);
+		}
+		
+		// p16 설정값 업데이트 (MQTT에서 수신된 값으로 설정)
+		$('#p16').val(deviceType);
+		console.log('p16 설정값 업데이트:', deviceType, '->', deviceTypeText);
+		
+		// 장치종류 변경 시 버튼 상태 업데이트
+		if(typeof updateOutputButtonsEnabled === 'function') {
+			updateOutputButtonsEnabled();
+    }
+    
+    console.log('센서 정보 업데이트:', {
+        sensorInfo: sensorInfo,
+        tempRange: tempRange,
+        deviceTypeText: deviceTypeText
+    });
+}
 	
 	// setSensor 함수 - 센서 설정 요청
 	function setSensor() {
@@ -2485,7 +2668,7 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 		}
 
 		$.ajax({
-			url: 'http://iot.hntsolution.co.kr:8888/main/sendAlarm',
+			url: 'http://iot.hntsolution.co.kr:8888/sendAlarm',
 			async: true,
 			type: 'POST',
 			data: JSON.stringify(sendData2),
@@ -2648,34 +2831,73 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 		console.log('window.originalValues.p13:', window.originalValues ? window.originalValues.p13 : 'undefined');
 		console.log('window.originalValues.p16:', window.originalValues ? window.originalValues.p16 : 'undefined');
 		
-		// 장치종류가 히터인 경우 모든 관련 버튼 비활성화 (수동조작 상태와 관계없이)
+		// 수동조작 상태에 따른 버튼 활성화/비활성화만 처리 (CSS는 단순하게 .is-active 클래스로 처리)
+		
+		// 장치종류 확인
 		var isHeater = (deviceType === '1');
-		console.log('히터 여부:', isHeater);
+		var isCooler = (deviceType === '0');
+		console.log('히터 여부:', isHeater, '쿨러 여부:', isCooler);
 		
 		if(isHeater) {
-			console.log('히터 장치: 모든 출력 제어 및 강제제상 버튼 비활성화');
-			// 콤프, 제상, 팬 온오프 버튼 비활성화
+			console.log('히터 장치: 모든 버튼 비활성화');
+			// 히터인 경우: 모든 버튼 비활성화 (수동조작 상태와 관계없이)
 			$('.device-output-btn').prop('disabled', true).css('opacity', '0.5');
-			// 강제제상/종료 버튼 비활성화
 			$('#defrost').prop('disabled', true);
 			$('#stopDefrost').prop('disabled', true);
-			// 강제제상 버튼 활성 상태 클래스 제거
 			$('#defrost, #stopDefrost').removeClass('is-active');
-		} else {
-			// Cooler 장치인 경우 기존 로직 적용
-			// 수동조작이 ON이고 장치종류가 Cooler일 때만 출력 제어 버튼 활성화
+			
+		} else if(isCooler) {
+			console.log('쿨러 장치: 수동조작 상태에 따라 출력 제어 버튼 활성화/비활성화');
+			// 쿨러인 경우: 수동조작 ON일 때만 버튼 클릭 가능, OFF일 때는 표시만 하고 클릭 불가
 			var enabled = (manualStored === '1');
-			console.log('쿨러 장치 - 출력 제어 버튼 활성화 여부:', enabled);
+			console.log('쿨러 장치 - 출력 제어 버튼 클릭 가능 여부:', enabled);
 			
-			$('.device-output-btn').prop('disabled', !enabled).css('opacity', enabled ? '1' : '0.5');
+			// 버튼 클릭 가능 여부만 설정하고, 상태 표시는 항상 가능하도록 함
+			$('.device-output-btn').prop('disabled', !enabled);
+			// 투명도는 클릭 불가능할 때만 약간 낮춤 (상태 표시는 명확하게)
+			$('.device-output-btn').css('opacity', enabled ? '1' : '0.8');
 			
-			// 수동조작 ON일 때(=1) 강제제상/종료는 비활성
+			// 강제제상/종료 버튼은 수동조작 ON일 때 비활성
 			var defrostDisabled = (manualStored === '1');
 			$('#defrost').prop('disabled', defrostDisabled);
 			$('#stopDefrost').prop('disabled', defrostDisabled);
+		} else {
+			console.log('알 수 없는 장치종류:', deviceType);
+			// 기본적으로 모든 버튼 비활성화
+			$('.device-output-btn').prop('disabled', true).css('opacity', '0.5');
+			$('#defrost').prop('disabled', true);
+			$('#stopDefrost').prop('disabled', true);
 		}
 		
 		console.log('=== 디버깅 완료 ===');
+	}
+
+	// 출력 버튼 상태 업데이트 함수
+	function updateOutputButtonState(msg) {
+		var type = msg.type;
+		var value = msg.value;
+		
+		console.log('출력 버튼 상태 업데이트:', type, value);
+		
+		// 타입에 따른 버튼 선택자 매핑
+		var buttonSelectors = {
+			'1': '.device-output-btn[data-type="1"]', // 콤프
+			'2': '.device-output-btn[data-type="2"]', // 제상
+			'3': '.device-output-btn[data-type="3"]'  // 팬
+		};
+		
+		var selector = buttonSelectors[type];
+		if (selector) {
+			// 해당 타입의 모든 버튼에서 is-active 클래스 제거
+			$(selector).removeClass('is-active');
+			
+			// 현재 값에 해당하는 버튼에 is-active 클래스 추가
+			$(selector + '[data-val="' + value + '"]').addClass('is-active');
+			
+			console.log('출력 버튼 상태 업데이트 완료 - 타입:', type, '값:', value);
+		} else {
+			console.warn('알 수 없는 출력 타입:', type);
+		}
 	}
 
 	// 출력 제어 버튼 이벤트 핸들러
@@ -2855,14 +3077,61 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 	
 	// MQTT 초기화
 	$(document).ready(function() {
+		// 센서 정보 초기화 (서버에서 전달받은 값으로 설정)
+		initializeSensorInfo();
+
 		// MQTT 연결 시작
 		startConnect();
-		
-		// 전역 함수 등록 (센서설정 페이지용)
-		window.rcvMsg = rcvMsg;
-		window.setSensor = setSensor;
-		window.getStatus = getStatus;
+
+// 전역 함수 등록 (센서설정 페이지용)
+window.rcvMsg = rcvMsg;
+window.setSensor = setSensor;
+window.getStatus = getStatus;
+		// handleSetresMessage는 sensor-setting.js에서 window 객체에 직접 할당됨
 	});
+
+	// 센서 정보 초기화 함수
+	function initializeSensorInfo() {
+		console.log('센서 정보 초기화 시작');
+		
+		// 서버에서 전달받은 값들
+		var sensorDisplayName = '${sensorDisplayName}';
+		var tempRange = '${tempRange}';
+		var deviceTypeText = '${deviceTypeText}';
+		
+		console.log('서버 값들:', {
+			sensorDisplayName: sensorDisplayName,
+			tempRange: tempRange,
+			deviceTypeText: deviceTypeText
+		});
+		
+		// JSP EL 변수가 제대로 렌더링되지 않은 경우 기본값 사용
+		if (sensorDisplayName === '${sensorDisplayName}' || sensorDisplayName === '') {
+			sensorDisplayName = '-';
+		}
+		if (tempRange === '${tempRange}' || tempRange === '') {
+			tempRange = '-';
+		}
+		if (deviceTypeText === '${deviceTypeText}' || deviceTypeText === '') {
+			deviceTypeText = '-';
+		}
+		
+		// 장치설정 섹션 업데이트
+		$('#deviceSensorInfoDisplay').text(sensorDisplayName);
+		$('#deviceTempRangeDisplay').text(tempRange);
+		$('#deviceDeviceTypeDisplay').text(deviceTypeText);
+		
+		// 알람설정 섹션도 동일하게 업데이트
+		$('#alarmSensorInfoDisplay').text(sensorDisplayName);
+		$('#alarmTempRangeDisplay').text(tempRange);
+		$('#alarmDeviceTypeDisplay').text(deviceTypeText);
+		
+		console.log('센서 정보 초기화 완료:', {
+			deviceSensorInfo: $('#deviceSensorInfoDisplay').text(),
+			deviceTempRange: $('#deviceTempRangeDisplay').text(),
+			deviceDeviceType: $('#deviceDeviceTypeDisplay').text()
+		});
+	}
 </script>
 
 </body>

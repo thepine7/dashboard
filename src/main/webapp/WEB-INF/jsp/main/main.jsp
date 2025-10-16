@@ -403,7 +403,7 @@
                       <tr>
                         <td align="center"><div id="status${item.sensor_uuid}" class="status-indicator green"><i class="bi bi-play-circle-fill"></i></div></td>
                         <td align="center"><div id="comp${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-gear-fill"></i></div></td>
-                        <td align="center"><div id="defr${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-snow"></i></div></td>
+                        <td align="center"><div id="defr${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-snow defrost-icon"></i><i class="bi bi-thermometer-half heater-icon" style="display:none;"></i></div></td>
 
                         <td align="center"><div id="fan${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-fan"></i></div></td>
                         <td align="center"><div id="error${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-exclamation-triangle-fill"></i></div></td>
@@ -1766,6 +1766,44 @@
         console.log('현재 사용자 ID:', $('#userId').val());
         console.log('현재 센서 ID:', $('#sensorId').val());
       }
+
+      // p16에 따른 제상/히터 라벨 업데이트 함수
+      function updateDefrostLabel(elementId, deviceType) {
+        var element = document.getElementById(elementId);
+        if (element) {
+          if (deviceType === '1') {
+            element.textContent = '히터';
+          } else {
+            element.textContent = '제상';
+          }
+        }
+      }
+
+      // p16에 따른 제상/히터 아이콘 업데이트 함수
+      function updateDefrostIndicator(elementId, status, deviceType) {
+        var element = document.getElementById(elementId);
+        if (element) {
+          var defrostIcon = element.querySelector('.defrost-icon');
+          var heaterIcon = element.querySelector('.heater-icon');
+          
+          if (deviceType === '1') {
+            // 히터 모드
+            if (defrostIcon) defrostIcon.style.display = 'none';
+            if (heaterIcon) heaterIcon.style.display = 'inline';
+          } else {
+            // 제상 모드
+            if (defrostIcon) defrostIcon.style.display = 'inline';
+            if (heaterIcon) heaterIcon.style.display = 'none';
+          }
+          
+          // 상태에 따른 클래스 업데이트
+          element.className = 'status-indicator ' + status;
+        }
+      }
+
+      // 전역 함수로 등록
+      window.updateDefrostLabel = updateDefrostLabel;
+      window.updateDefrostIndicator = updateDefrostIndicator;
     </script>
       </body>
   </html>

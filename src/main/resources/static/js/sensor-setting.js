@@ -72,12 +72,21 @@ function setupSessionData() {
     // MQTT 메시지 필터링을 위한 현재 사용자 ID 설정
     window.currentUserId = '${userId}';
     
-    // 페이지별 변수 설정
-    SensorSettingPage.currentUserId = '${userId}';
-    SensorSettingPage.currentSensorUuid = '${sensorUuid}';
-    SensorSettingPage.currentTopic = 'HBEE/${userId}/TC/${sensorUuid}/SER';
-    
-    console.log('세션 데이터 설정 완료:', window.SessionData);
+// 페이지별 변수 설정 (JSP에서 이미 설정됨)
+// SensorSettingPage.currentUserId, currentSensorUuid, currentTopic은 JSP에서 설정됨
+
+// 중복 요청 방지 플래그
+SensorSettingPage.requestFlags = {
+    type1Requested: false,
+    type2Requested: false,
+    type1Received: false,
+    type2Received: false
+};
+
+// 중복 메시지 처리 방지를 위한 메시지 ID 추적
+SensorSettingPage.processedMessages = new Set();
+
+console.log('세션 데이터 설정 완료:', window.SessionData);
 }
 
 /**
@@ -316,16 +325,10 @@ function onPageLoadComplete() {
  * MQTT 연결 성공 처리
  */
 function onMqttConnected() {
-    console.log('MQTT 연결 성공 - 초기 설정 요청');
+    console.log('MQTT 연결 성공 - unified-mqtt-manager의 초기 동기화 사용');
     
-    // 초기 설정 요청
-    setTimeout(function() {
-        sendMqttCommand('GET&type=1');
-    }, 500);
-    
-    setTimeout(function() {
-        sendMqttCommand('GET&type=2');
-    }, 2500);
+    // unified-mqtt-manager.js에서 초기 동기화를 처리하므로 여기서는 별도 요청하지 않음
+    // 플래그는 setSensor/getStatus 함수에서 설정됨
 }
 
 /**
@@ -349,6 +352,22 @@ function handleMqttMessage(topic, message) {
         topicUuid !== SensorSettingPage.currentSensorUuid) {
         console.log('다른 사용자 또는 장치의 메시지 - 무시:', topicUserId, topicUuid);
         return;
+    }
+    
+    // 중복 메시지 처리 방지
+    var messageId = topic + '|' + message;
+    if (SensorSettingPage.processedMessages.has(messageId)) {
+        console.log('중복 메시지 처리 방지:', messageId);
+        return;
+    }
+    
+    // 메시지 ID 등록
+    SensorSettingPage.processedMessages.add(messageId);
+    
+    // 메시지 ID 정리 (메모리 누수 방지)
+    if (SensorSettingPage.processedMessages.size > 100) {
+        var firstMessage = SensorSettingPage.processedMessages.values().next().value;
+        SensorSettingPage.processedMessages.delete(firstMessage);
     }
     
     // JSON 파싱
@@ -413,6 +432,16 @@ function updateCurrentTemperature(sensorUuid, value, isError) {
         return;
     }
     
+    // 중복 처리 방지 - 온도 메시지 ID 생성
+    var tempId = 'temp|' + value + '|' + Date.now();
+    if (SensorSettingPage.processedMessages.has(tempId)) {
+        console.log('중복 온도 메시지 처리 방지:', tempId);
+        return;
+    }
+    
+    // 온도 메시지 ID 등록
+    SensorSettingPage.processedMessages.add(tempId);
+    
     if (value === 'Error' || isError) {
         $('#curTemp').html('<font size="30px" style="color: #c9302c;">Error</font>');
     } else {
@@ -428,6 +457,20 @@ function updateCurrentTemperature(sensorUuid, value, isError) {
  */
 window.handleSetresMessage = function(msg) {
     console.log('handleSetresMessage 호출됨:', msg);
+    
+    // 중복 처리 방지 - setres 메시지 ID 생성
+    var setresId = 'setres|' + JSON.stringify(msg);
+    if (SensorSettingPage.processedMessages.has(setresId)) {
+        console.log('중복 setres 메시지 처리 방지:', setresId);
+        return;
+    }
+    
+    // setres 메시지 ID 등록
+    SensorSettingPage.processedMessages.add(setresId);
+    
+    // type1 응답 수신 플래그 설정
+    SensorSettingPage.requestFlags.type1Received = true;
+    console.log('type1 응답 수신 완료');
     
     // 장치 응답 데이터 저장 (문자열 형태로 저장)
     window.deviceResponseData = {
@@ -576,16 +619,19 @@ window.handleSetresMessage = function(msg) {
     
     // 장치종류에 따른 상태표시등 텍스트 및 아이콘 변경
     if(msg.p16) {
+        // 현재 센서 UUID 가져오기
+        var currentSensorUuid = document.getElementById('sensorUuid') ? document.getElementById('sensorUuid').value : '';
+        
         if(msg.p16 == "1") {
             // Heater
-            $('#defrostLabel').text("히터");
-            $('#defr .defrost-icon').hide();
-            $('#defr .heater-icon').show();
+            $('#defrostLabel' + currentSensorUuid).text("히터");
+            $('#defr' + currentSensorUuid + ' .defrost-icon').hide();
+            $('#defr' + currentSensorUuid + ' .heater-icon').show();
         } else {
             // Cooler
-            $('#defrostLabel').text("제상");
-            $('#defr .defrost-icon').show();
-            $('#defr .heater-icon').hide();
+            $('#defrostLabel' + currentSensorUuid).text("제상");
+            $('#defr' + currentSensorUuid + ' .defrost-icon').show();
+            $('#defr' + currentSensorUuid + ' .heater-icon').hide();
         }
     }
     
@@ -603,6 +649,16 @@ window.handleSetresMessage = function(msg) {
 function handleDinStatus(messageObj) {
     var value = parseInt(messageObj.value);
     var uuid = SensorSettingPage.currentSensorUuid;
+    
+    // 중복 처리 방지 - din 메시지 ID 생성
+    var dinId = 'din|' + value + '|' + Date.now();
+    if (SensorSettingPage.processedMessages.has(dinId)) {
+        console.log('중복 din 메시지 처리 방지:', dinId);
+        return;
+    }
+    
+    // din 메시지 ID 등록
+    SensorSettingPage.processedMessages.add(dinId);
     
     if (value === 1) {
         // DIN 이상 상태
@@ -624,6 +680,20 @@ function handleOutputStatus(messageObj) {
     var type = messageObj.type;
     var channel = messageObj.ch;
     var value = parseInt(messageObj.value);
+    
+    // 중복 처리 방지 - output 메시지 ID 생성
+    var outputId = 'output|' + type + '|' + channel + '|' + value + '|' + Date.now();
+    if (SensorSettingPage.processedMessages.has(outputId)) {
+        console.log('중복 output 메시지 처리 방지:', outputId);
+        return;
+    }
+    
+    // output 메시지 ID 등록
+    SensorSettingPage.processedMessages.add(outputId);
+    
+    // type2 응답 수신 플래그 설정 (output 메시지는 type2 응답)
+    SensorSettingPage.requestFlags.type2Received = true;
+    console.log('type2 응답 수신 완료');
     
     // 출력 상태에 따른 UI 업데이트
     var statusClass = value === 1 ? 'red' : 'gray';
@@ -782,15 +852,29 @@ function saveAlarmSetting() {
  * 장치 설정 새로고침
  */
 function refreshDeviceSettings() {
-    console.log('장치 설정 새로고침');
+    console.log('장치 설정 새로고침 - unified-mqtt-manager의 초기 동기화 사용');
     
-    // 설정값 읽기
-    sendMqttCommand('GET&type=1');
+    // 플래그 리셋 (새로고침 시)
+    SensorSettingPage.requestFlags.type1Requested = false;
+    SensorSettingPage.requestFlags.type2Requested = false;
+    SensorSettingPage.requestFlags.type1Received = false;
+    SensorSettingPage.requestFlags.type2Received = false;
     
-    // 상태 읽기
-    setTimeout(function() {
-        sendMqttCommand('GET&type=2');
-    }, 2000);
+    // unified-mqtt-manager.js의 초기 동기화 실행
+    if (typeof UnifiedMQTTManager !== 'undefined' && typeof UnifiedMQTTManager.executeInitialSync === 'function') {
+        console.log('unified-mqtt-manager 초기 동기화 실행');
+        UnifiedMQTTManager.executeInitialSync();
+    } else {
+        console.warn('unified-mqtt-manager를 찾을 수 없음 - 수동 요청');
+        // fallback: 수동으로 요청
+        SensorSettingPage.requestFlags.type1Requested = true;
+        sendMqttCommand('GET&type=1');
+        
+        setTimeout(function() {
+            SensorSettingPage.requestFlags.type2Requested = true;
+            sendMqttCommand('GET&type=2');
+        }, 2000);
+    }
 }
 
 /**
@@ -807,11 +891,20 @@ function controlOutput(type, channel, value) {
 function sendMqttCommand(command) {
     console.log('MQTT 명령 전송:', command);
     
+    // 토픽 동적 생성 (JSP에서 설정된 값 사용)
+    var userId = $('#userId').val();
+    var sensorUuid = $('#sensorUuid').val();
+    var topic = 'HBEE/' + userId + '/TC/' + sensorUuid + '/SER';
+    
+    console.log('발행 토픽:', topic);
+    console.log('사용자 ID:', userId);
+    console.log('센서 UUID:', sensorUuid);
+    
     if (typeof MQTTConnectionPool !== 'undefined' && MQTTConnectionPool.publish) {
-        MQTTConnectionPool.publish(SensorSettingPage.currentTopic, command);
+        MQTTConnectionPool.publish(topic, command);
     } else if (typeof client !== 'undefined' && client && client.isConnected()) {
         var message = new Paho.MQTT.Message(command);
-        message.destinationName = SensorSettingPage.currentTopic;
+        message.destinationName = topic;
         client.send(message);
     } else {
         console.warn('MQTT 클라이언트가 연결되지 않음');
@@ -828,6 +921,44 @@ if (typeof $ !== 'undefined') {
         initializeSensorSettingPage();
     });
 }
+
+/**
+ * setSensor 요청 함수 (unified-mqtt-manager에서 호출)
+ */
+window.setSensor = function() {
+    console.log('setSensor 요청: GET&type=1');
+    
+    // 중복 요청 방지
+    if (SensorSettingPage.requestFlags.type1Requested) {
+        console.log('setSensor 중복 요청 방지');
+        return;
+    }
+    
+    // 요청 플래그 설정
+    SensorSettingPage.requestFlags.type1Requested = true;
+    
+    // MQTT 명령 전송
+    sendMqttCommand('GET&type=1');
+};
+
+/**
+ * getStatus 요청 함수 (unified-mqtt-manager에서 호출)
+ */
+window.getStatus = function() {
+    console.log('getStatus 요청: GET&type=2');
+    
+    // 중복 요청 방지
+    if (SensorSettingPage.requestFlags.type2Requested) {
+        console.log('getStatus 중복 요청 방지');
+        return;
+    }
+    
+    // 요청 플래그 설정
+    SensorSettingPage.requestFlags.type2Requested = true;
+    
+    // MQTT 명령 전송
+    sendMqttCommand('GET&type=2');
+};
 
 // 전역 함수로 노출 (기존 코드와의 호환성 유지)
 window.SensorSettingPage = SensorSettingPage;

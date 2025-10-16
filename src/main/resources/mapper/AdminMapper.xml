@@ -655,4 +655,23 @@
 			mdf_dtm = NOW()
 	</insert>
 
+	<select id="selectSetting" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		select
+			user_id,
+			sensor_id,
+			sensor_uuid,
+			alarm_yn1, set_val1, delay_time1, re_delay_time1,
+			alarm_yn2, set_val2, delay_time2, re_delay_time2,
+			alarm_yn3, set_val3, delay_time3, re_delay_time3,
+			alarm_yn4, set_val4, delay_time4, re_delay_time4,
+			alarm_yn5, delay_time5, re_delay_time5,
+			topic,
+			inst_dtm,
+			mdf_dtm
+		from hnt_config
+		where 1 = 1
+		and sensor_uuid = #{sensorUuid}
+		limit 1
+	</select>
+
 </mapper>

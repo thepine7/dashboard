@@ -17,30 +17,21 @@ public class ServletInitializer extends SpringBootServletInitializer {
 
 	@Override
 	protected SpringApplicationBuilder configure(SpringApplicationBuilder application) {
-		// 중복 초기화 방지
-		synchronized (lock) {
-			if (isInitialized) {
-				logger.warn("ServletInitializer already initialized. Skipping duplicate initialization.");
-				return application;
-			}
-			isInitialized = true;
-		}
-		
 		logger.info("ServletInitializer configuration starting...");
 		return application.sources(HntSensorApiApplication.class);
 	}
 	
 	/**
-	 * 애플리케이션 종료 시 초기화 플래그 리셋
+	 * 중복 실행 방지 제거 - configure()에서만 초기화
 	 */
 	@Override
 	public void onStartup(javax.servlet.ServletContext servletContext) throws javax.servlet.ServletException {
 		try {
+			logger.info("ServletInitializer onStartup starting...");
 			super.onStartup(servletContext);
+			logger.info("ServletInitializer onStartup completed successfully");
 		} catch (Exception e) {
 			logger.error("ServletInitializer startup failed", e);
-			// 실패 시 플래그 리셋
-			isInitialized = false;
 			throw e;
 		}
 	}
