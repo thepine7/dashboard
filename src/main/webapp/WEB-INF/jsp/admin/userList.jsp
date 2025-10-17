@@ -42,7 +42,19 @@
             },
             goUserDetail: function(userId) {
                 console.log('PageNavigation.goUserDetail() 호출됨:', userId);
-                window.location.href = '/admin/userDetail?userId=' + userId;
+                // POST 방식으로 변경 (URL에 userId 노출 방지)
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/admin/userDetail';
+                
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'dtlUser';
+                input.value = userId;
+                
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
             },
             goUserModify: function(userId) {
                 console.log('PageNavigation.goUserModify() 호출됨:', userId);
@@ -158,6 +170,38 @@
 <body>
 <!-- jQuery 먼저 로딩 (의존성 해결) -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+
+<!-- 브라우저 확장 프로그램 에러 차단 (엣지/크롬 확장 프로그램 에러 무시) -->
+<script>
+(function() {
+    'use strict';
+    
+    // 확장 프로그램 에러 무시
+    var originalError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+        if (source && (source.includes('content.js') || source.includes('chrome-extension') || source.includes('moz-extension'))) {
+            return true; // 에러 무시
+        }
+        if (originalError) {
+            return originalError(message, source, lineno, colno, error);
+        }
+        return false;
+    };
+    
+    // Promise rejection 에러 무시 (확장 프로그램 관련)
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (
+            event.reason.name === 'i' || 
+            event.reason.code === 403 ||
+            (event.reason.message && event.reason.message.includes('not valid JSON'))
+        )) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+        }
+    }, true);
+})();
+</script>
 
 <div class="navbar navbar-inverse" role="navigation" style="background-color: #ffffff">
     <div class="navbar-header">
@@ -305,6 +349,17 @@
 <script src="/js/templatemo_script.js"></script>
 <script src="/js/session-manager.js"></script>
 <script>
+    // 성공/에러 메시지 표시 함수
+    function showSuccess(message) {
+        console.log('성공:', message);
+        alert(message);
+    }
+    
+    function showError(message) {
+        console.log('에러:', message);
+        alert('오류: ' + message);
+    }
+
     function goMain() {
         // 공통 페이지 이동 함수 사용 (세션 기반)
         PageNavigation.goMain();
@@ -429,11 +484,10 @@
     }
     
     window.onload = function() {
+        // 5초 후 시작, 이후 5초마다 사용자 목록 갱신
         setTimeout(() => {
-            startInterval(5, getChangeList);
+            setInterval(getChangeList, 5000);
         }, 5000);
-
-        // startInterval 함수는 common-utils.js에서 제공
     };
     
     // 사용자 목록 페이지 뒤로가기 처리 설정
@@ -472,7 +526,7 @@
         // 페이지 이탈 시 히스토리 정리
         window.addEventListener('beforeunload', function(event) {
             console.log('사용자 목록 페이지 이탈 - 히스토리 정리');
-            history.replaceState({page: 'main'}, '메인', '/main');
+            history.replaceState({page: 'main'}, '메인', '/main/main');
         });
     }
     

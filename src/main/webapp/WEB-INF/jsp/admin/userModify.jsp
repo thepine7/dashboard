@@ -19,6 +19,53 @@
     
     <!-- 공통 세션 정보 템플릿 -->
     <jsp:include page="/WEB-INF/jsp/common/session-info.jsp" />
+    
+    <!-- PageNavigation 객체 및 공통 함수 정의 -->
+    <script>
+        window.PageNavigation = {
+            goMain: function() {
+                console.log('PageNavigation.goMain() 호출됨');
+                window.location.href = '/main/main';
+            },
+            goLogin: function() {
+                console.log('PageNavigation.goLogin() 호출됨');
+                window.location.href = '/login/login';
+            },
+            goUserList: function() {
+                console.log('PageNavigation.goUserList() 호출됨');
+                window.location.href = '/admin/userList';
+            },
+            goCreateSub: function() {
+                console.log('PageNavigation.goCreateSub() 호출됨');
+                window.location.href = '/admin/createSub';
+            },
+            goUserDetail: function(userId) {
+                console.log('PageNavigation.goUserDetail() 호출됨:', userId);
+                // POST 방식으로 변경 (URL에 userId 노출 방지)
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/admin/userDetail';
+                
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'dtlUser';
+                input.value = userId;
+                
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            },
+            goBack: function() {
+                console.log('PageNavigation.goBack() 호출됨');
+                window.history.back();
+            }
+        };
+        
+        function logoutToLogin() {
+            console.log('logoutToLogin() 호출됨');
+            window.location.href = '/login/logout';
+        }
+    </script>
 </head>
 <body>
 
@@ -58,15 +105,15 @@
             <ol class="breadcrumb">
                 <li><a href="javascript:PageNavigation.goMain();">Main</a></li>
             </ol>
-            <h1><span style="color: #f0f8ff; ">사용자 상세</span></h1>
-            <p><span style="color: #f0f8ff; ">사용자 상세 화면입니다.</span></p>
+            <h1><span style="color: #f0f8ff; ">사용자 정보수정</span></h1>
+            <p><span style="color: #f0f8ff; ">사용자 정보수정 화면입니다.</span></p>
 
             <div class="templatemo-panels">
                 <div class="row">
                     <div class="" style="margin-right: 10px; margin-left: 10px;">
-                        <span class="btn btn-primary">사용자 상세</span>
+                        <span class="btn btn-primary">사용자 정보수정</span>
                         <div class="panel panel-primary">
-                            <div class="panel-heading">사용자 정보</div>
+                            <div class="panel-heading">사용자 정보수정</div>
                             <div class="panel-body">
                                 <table class="table table-striped">
                                     <thead>
@@ -140,6 +187,38 @@
 <!-- jQuery 먼저 로딩 (의존성 해결) -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 
+<!-- 브라우저 확장 프로그램 에러 차단 (엣지/크롬 확장 프로그램 에러 무시) -->
+<script>
+(function() {
+    'use strict';
+    
+    // 확장 프로그램 에러 무시
+    var originalError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+        if (source && (source.includes('content.js') || source.includes('chrome-extension') || source.includes('moz-extension'))) {
+            return true; // 에러 무시
+        }
+        if (originalError) {
+            return originalError(message, source, lineno, colno, error);
+        }
+        return false;
+    };
+    
+    // Promise rejection 에러 무시 (확장 프로그램 관련)
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (
+            event.reason.name === 'i' || 
+            event.reason.code === 403 ||
+            (event.reason.message && event.reason.message.includes('not valid JSON'))
+        )) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+        }
+    }, true);
+})();
+</script>
+
 <!-- 공통 에러 차단 시스템 -->
 <script src="/js/error-blocking-system.js"></script>
 
@@ -153,6 +232,14 @@
 <script src="/js/templatemo_script.js"></script>
 <script src="/js/session-manager.js"></script>
 <script>
+    // 페이지 로딩 시 등급 선택
+    $(document).ready(function() {
+        console.log('=== userModify 페이지 초기화 ===');
+        var initialGrade = '${userInfo.userGrade}';
+        $('#grade').val(initialGrade);
+        console.log('등급 선택 완료:', $('#grade').val());
+    });
+
     function goMain() {
         // 공통 페이지 이동 함수 사용 (세션 기반)
         PageNavigation.goMain();
@@ -160,9 +247,29 @@
 
     function modify() {
         var userId = '${userInfo.userId}';
-        var userGrade = $('#grade').val();
-        var userTel = $('#userTel').val();
-        var userEmail = $('#userEmail').val();
+        
+        // DOM 요소에서 직접 현재 값 읽기 (브라우저 캐시 우회)
+        var userTelElement = document.getElementById('userTel');
+        var userEmailElement = document.getElementById('userEmail');
+        var userGradeElement = document.getElementById('grade');
+        
+        var userTel = userTelElement ? userTelElement.value : '';
+        var userEmail = userEmailElement ? userEmailElement.value : '';
+        var userGrade = userGradeElement ? userGradeElement.value : '';
+
+        console.log('=== 입력값 확인 (DOM 직접 접근) ===');
+        console.log('userTel:', userTel);
+        console.log('userEmail:', userEmail);
+        console.log('userGrade:', userGrade);
+        console.log('userId:', userId);
+        
+        console.log('=== 전송 데이터 ===');
+        console.log('sendData:', {
+            userId: userId,
+            userTel: userTel,
+            userEmail: userEmail,
+            userGrade: userGrade
+        });
 
         if(userTel) {
             if(userTel.length < 10) {
@@ -204,20 +311,18 @@
             dataType: 'json',
             contentType: 'application/json',
             success: function(result) {
+                console.log('=== 수정 응답 ===', result);
                 if(result.resultCode == "200") {
                     alert("정보 수정 완료");
+                    // POST 방식으로 userDetail 페이지 이동
                     PageNavigation.goUserDetail('${userInfo.userId}');
                 } else {
-                    alert("정보 수정 실패");
-                    PageNavigation.goUserDetail('${userInfo.userId}');
+                    alert("정보 수정 실패: " + (result.resultMessage || "알 수 없는 오류"));
                 }
             },
-            error: function(result) {
-                alert("정보 수정 실패");
-                PageNavigation.goUserDetail('${userInfo.userId}');
-            },
-            complete: function(result) {
-                PageNavigation.goUserDetail('${userInfo.userId}');
+            error: function(xhr, status, error) {
+                console.log('=== 수정 에러 ===', {xhr: xhr, status: status, error: error});
+                alert("정보 수정 실패: " + error);
             }
         });
     }
@@ -263,7 +368,7 @@
         // 페이지 이탈 시 히스토리 정리
         window.addEventListener('beforeunload', function(event) {
             console.log('사용자 수정 페이지 이탈 - 히스토리 정리');
-            history.replaceState({page: 'main'}, '메인', '/main');
+            history.replaceState({page: 'main'}, '메인', '/main/main');
         });
     }
     

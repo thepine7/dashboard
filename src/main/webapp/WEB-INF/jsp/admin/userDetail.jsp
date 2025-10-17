@@ -4,6 +4,12 @@
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
 <%@ taglib prefix="sql" uri="http://java.sun.com/jsp/jstl/sql" %>
 <%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
+<%
+    // 브라우저 캐시 무효화
+    response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    response.setHeader("Pragma", "no-cache");
+    response.setDateHeader("Expires", 0);
+%>
 
 <!-- 공통 세션 정보 -->
 <jsp:include page="/WEB-INF/jsp/common/session-info.jsp" />
@@ -148,6 +154,10 @@
                                                 </span></strong>
                                             </td>
                                         </tr>
+                                        <tr>
+                                            <td align="center" valign="middle" style="background-color: #ffffff;" width="30%"  height="25"><strong><span style="font-size:10pt;">주계정ID</span></strong></td>
+                                            <td align="center" valign="middle" style="background-color: #ffffff;" width="70%" height="25"><strong><span style="font-size:10pt;">${userInfo.parentUserId}</span></strong></td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -181,7 +191,7 @@
                                 </table>
                             </div>
                             <div>
-                                <p align="center"><button id="modify" name="modify" style="width:100px; height:30px;" onclick="modify();">정보수정</button>&nbsp;&nbsp;<button id="goList" name="goList" style="width:100px; height:30px;" onclick="goback();">이전으로</button></p>
+                                <p align="center"><button id="modify" name="modify" style="width:100px; height:30px;" onclick="goUserModify('${userInfo.userId}');">정보수정</button>&nbsp;&nbsp;<button id="goList" name="goList" style="width:100px; height:30px;" onclick="goback();">이전으로</button></p>
                             </div>
                         </div>
                     </div>
@@ -212,6 +222,38 @@
 <!-- jQuery 먼저 로딩 (의존성 해결) -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 
+<!-- 브라우저 확장 프로그램 에러 차단 (엣지/크롬 확장 프로그램 에러 무시) -->
+<script>
+(function() {
+    'use strict';
+    
+    // 확장 프로그램 에러 무시
+    var originalError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+        if (source && (source.includes('content.js') || source.includes('chrome-extension') || source.includes('moz-extension'))) {
+            return true; // 에러 무시
+        }
+        if (originalError) {
+            return originalError(message, source, lineno, colno, error);
+        }
+        return false;
+    };
+    
+    // Promise rejection 에러 무시 (확장 프로그램 관련)
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (
+            event.reason.name === 'i' || 
+            event.reason.code === 403 ||
+            (event.reason.message && event.reason.message.includes('not valid JSON'))
+        )) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+        }
+    }, true);
+})();
+</script>
+
 <!-- 공통 에러 차단 시스템 -->
 <script src="/js/error-blocking-system.js"></script>
 
@@ -234,11 +276,23 @@
         // 공통 페이지 이동 함수 사용 (뒤로가기)
         PageNavigation.goBack();
     }
+    
+    function goUserModify(userId) {
+        // POST 방식으로 정보수정 페이지 이동 (URL에 userId 노출 방지)
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/userModify';
+        
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'userId';
+        input.value = userId;
+        
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+    }
 
-              function modify() {
-         // 공통 페이지 이동 함수 사용 (AJAX 기반)
-         PageNavigation.goUserModify('${userInfo.userId}');
-     }
 
     function changeUserGrade() {
         var newGrade = $('#userGradeSelect').val();
@@ -329,29 +383,13 @@
 		// 페이지 이탈 시 히스토리 정리
 		window.addEventListener('beforeunload', function(event) {
 			console.log('사용자 상세 페이지 이탈 - 히스토리 정리');
-			history.replaceState({page: 'main'}, '메인', '/main');
+			history.replaceState({page: 'main'}, '메인', '/main/main');
 		});
 	}
 	
 	// 사용자 상세 페이지 뒤로가기 처리 설정 실행
 	setupUserDetailBackNavigation();
     
-    // 즉시 페이지 모드 설정 (페이지 로딩보다 빠름)
-    (function() {
-        // 세션에서 gu 파라미터 확인 (URL 파라미터 대신 세션 사용)
-        var guParam = '${gu}';
-        if(guParam === 'm') {
-            console.log('정보수정 모드 감지됨');
-            document.getElementById('pageTitle').textContent = '사용자정보수정';
-            document.getElementById('pageDescription').textContent = '사용자정보수정 화면입니다.';
-            document.getElementById('pageButton').textContent = '사용자정보수정';
-        } else {
-            console.log('일반 모드 감지됨');
-            document.getElementById('pageTitle').textContent = '사용자정보';
-            document.getElementById('pageDescription').textContent = '사용자정보 화면입니다.';
-            document.getElementById('pageButton').textContent = '사용자정보';
-        }
-    })();
 </script>
 </body>
 </html>

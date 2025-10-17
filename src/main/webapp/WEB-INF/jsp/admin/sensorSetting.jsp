@@ -166,6 +166,26 @@ console.log('센서설정 페이지 변수 설정:', {
     sensorUuid: window.SensorSettingPage.currentSensorUuid,
     topic: window.SensorSettingPage.currentTopic
 });
+
+// 온도 값 포맷팅 함수 (전역 함수로 선언 - 페이지 초기 로딩 시에도 사용 가능)
+function formatTemperatureValue(value) {
+    if(value === null || value === undefined || value === '') {
+        return '';
+    }
+    
+    // 문자열을 숫자로 변환
+    var numValue = parseFloat(value);
+    
+    // NaN 체크
+    if(isNaN(numValue)) {
+        return value; // 숫자가 아니면 원본 반환
+    }
+    
+    // 소숫점 1자리로 고정
+    return numValue.toFixed(1);
+}
+
+console.log('formatTemperatureValue 함수 정의 완료');
 </script>
 <script src="/js/sensor-setting.js"></script>
 
@@ -1077,19 +1097,25 @@ console.log('센서설정 페이지 변수 설정:', {
 	
 	// 장치 응답 대기 및 비교 함수
 	function waitForDeviceResponse(changedValues) {
-		var responseTimeout = 10000; // 10초 타임아웃
-		var checkInterval = 1000; // 1초마다 체크
+		var responseTimeout = 20000; // 20초 타임아웃 (장치 응답 시간 여유 확보)
+		var checkInterval = 500; // 0.5초마다 체크 (더 빠른 응답 감지)
 		var elapsedTime = 0;
 		
-		console.log("장치 응답 대기 시작:", changedValues);
+		console.log("장치 응답 대기 시작 (최대 20초):", changedValues);
 		
 		var checkResponse = setInterval(function() {
 			elapsedTime += checkInterval;
 			
+			// 진행 상황 로그 (5초마다)
+			if(elapsedTime % 5000 === 0) {
+				console.log("장치 응답 대기 중... (" + (elapsedTime/1000) + "초 경과)");
+			}
+			
 			// 타임아웃 체크
 			if(elapsedTime >= responseTimeout) {
 				clearInterval(checkResponse);
-				alert("장치 응답 시간 초과\n장치설정 저장 실패");
+				console.error("장치 응답 시간 초과 (20초)");
+				alert("장치 응답 시간 초과\n장치가 응답하지 않습니다.\n\n설정이 저장되었는지 확인하려면\n페이지를 새로고침하세요.");
 				return;
 			}
 			
@@ -1097,6 +1123,7 @@ console.log('센서설정 페이지 변수 설정:', {
 			// rcvMsg 함수에서 처리된 응답을 확인
 			if(window.deviceResponseReceived) {
 				clearInterval(checkResponse);
+				console.log("장치 응답 수신 완료 (" + (elapsedTime/1000) + "초 경과)");
 				compareDeviceResponse(changedValues);
 			}
 		}, checkInterval);
@@ -1610,15 +1637,22 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 					$('#alarmYn4').val(alarmYn4).prop("selected", true);
 					$('#alarmYn5').val(alarmYn5).prop("selected", true);
 
-					setVal1 = alarmMap.set_val1 || "";
-					setVal2 = alarmMap.set_val2 || "";
-					setVal3 = alarmMap.set_val3 || "";
-					setVal4 = alarmMap.set_val4 || "";
+				setVal1 = alarmMap.set_val1 || "";
+				setVal2 = alarmMap.set_val2 || "";
+				setVal3 = alarmMap.set_val3 || "";
+				setVal4 = alarmMap.set_val4 || "";
 
-					$('#setVal1').val(setVal1);
-					$('#setVal2').val(setVal2);
-					$('#setVal3').val(setVal3);
-					$('#setVal4').val(setVal4);
+				// 온도 값에 소숫점 포맷팅 적용 (페이지 초기 로딩 시)
+				$('#setVal1').val(formatTemperatureValue(setVal1));
+				$('#setVal2').val(formatTemperatureValue(setVal2));
+				$('#setVal3').val(formatTemperatureValue(setVal3));
+				$('#setVal4').val(setVal4); // setVal4는 온도가 아니므로 포맷팅 제외
+				
+				console.log('초기 알람 설정값 로드 (소숫점 포맷팅 적용):', {
+					setVal1: formatTemperatureValue(setVal1),
+					setVal2: formatTemperatureValue(setVal2),
+					setVal3: formatTemperatureValue(setVal3)
+				});
 
 					delay_hour1 = alarmMap.delay_hour1 || "0";
 					delay_hour2 = alarmMap.delay_hour2 || "0";
@@ -1934,102 +1968,12 @@ function updateSensorInfo(msg) {
 		});
 	});
 
-
-	$('#save2').click(function() {
-		if('${userGrade}' === 'B') {
-			alert("부계정은 설정을 변경할 수 없습니다.");
-			return;
-		}
-		saveSensorSetting();
-	});
-
-	$('#save3').click(function() {
-		if('${userGrade}' === 'B') {
-			alert("부계정은 설정을 변경할 수 없습니다.");
-			return;
-		}
-		saveSensorSetting();
-	});
-
-	$('#save4').click(function() {
-		if('${userGrade}' === 'B') {
-			alert("부계정은 설정을 변경할 수 없습니다.");
-			return;
-		}
-		saveSensorSetting();
-	});
-
-	$('#save5').click(function() {
-		if('${userGrade}' === 'B') {
-			alert("부계정은 설정을 변경할 수 없습니다.");
-			return;
-		}
-		saveSensorSetting();
-	});
-
-	function saveSensorSetting() {
-		var saveData = {
-			userId: $('#loginUserId').val(),
-			sensorId: $('#userId').val(),
-			topicStr: $('#topicStr').val(),
-			sensorUuid: $('#sensorUuid').val(),
-			alarmYn1: $('#alarmYn1 option:selected').val(),
-			setVal1: $('#setVal1').val(),
-			delayHour1: $('#delayHour1 option:selected').val(),
-			delayMin1: $('#delayMin1 option:selected').val(),
-			alarmYn2: $('#alarmYn2 option:selected').val(),
-			setVal2: $('#setVal2').val(),
-			delayHour2: $('#delayHour2 option:selected').val(),
-			delayMin2: $('#delayMin2 option:selected').val(),
-			alarmYn3: $('#alarmYn3 option:selected').val() || "N",
-			setVal3: $('#setVal3').val() || "",
-			delayHour3: $('#delayHour3 option:selected').val() || "0",
-			delayMin3: $('#delayMin3 option:selected').val() || "0",
-			alarmYn4: $('#alarmYn4 option:selected').val() || "N",
-			setVal4: $('#setVal4').val() || "",
-			delayHour4: $('#delayHour4 option:selected').val() || "0",
-			delayMin4: $('#delayMin4 option:selected').val() || "0",
-			alarmYn5: $('#alarmYn5 option:selected').val() || "N",
-			delayHour5: $('#delayHour5 option:selected').val() || "0",
-			delayMin5: $('#delayMin5 option:selected').val() || "0",
-			reDelayHour1: $('#reDelayHour1 option:selected').val() || "0",
-			reDelayMin1: $('#reDelayMin1 option:selected').val() || "0",
-			reDelayHour2: $('#reDelayHour2 option:selected').val() || "0",
-			reDelayMin2: $('#reDelayMin2 option:selected').val() || "0",
-			reDelayHour3: $('#reDelayHour3 option:selected').val() || "0",
-			reDelayMin3: $('#reDelayMin3 option:selected').val() || "0",
-			reDelayHour4: $('#reDelayHour4 option:selected').val() || "0",
-			reDelayMin4: $('#reDelayMin4 option:selected').val() || "0",
-			reDelayHour5: $('#reDelayHour5 option:selected').val() || "0",
-			reDelayMin5: $('#reDelayMin5 option:selected').val() || "0"
-		}
-
-		$.ajax({
-			url: '/admin/saveSensorSetting',
-			async: true,
-			type: 'POST',
-			data: JSON.stringify(saveData),
-			dataType: 'json',
-			contentType: 'application/json',
-			success: function(result) {
-				if(null != result) {
-					if("200" == result.resultCode) {
-						alert("설정 저장 성공");
-					} else {
-						alert("설정 저장 실패");
-					}
-				} else {
-					alert("설정 저장 실패");
-				}
-			},
-			error: function(result) {
-				alert("설정 저장 실패");
-			},
-			complete: function(result) {
-
-			}
-		});
-	}
+	// ============================================
+	// 레거시 코드 정리 완료 (2025-10-17)
+	// - save2~save5 버튼: HTML에 존재하지 않는 버튼들의 이벤트 핸들러 제거
+	// - saveSensorSetting() 함수: 사용되지 않는 함수 제거
+	// - 현재 사용 중인 버튼: saveSensor, saveAlarm
+	// ============================================
 
     $('#saveSensor').click(function() {
     	if('${userGrade}' === 'B') {
@@ -2375,6 +2319,11 @@ function updateSensorInfo(msg) {
             contentType: 'application/json',
             success: function(result) {
                 if(result.resultCode == "200") {
+					// 응답 플래그 초기화 (새로운 응답을 기다리기 위해)
+					window.deviceResponseReceived = false;
+					window.deviceResponseData = null;
+					console.log("장치 설정 전송 성공 - 응답 플래그 초기화 완료");
+					
 					// 장치 응답 대기 및 비교 로직
 					waitForDeviceResponse(changedValues);
 
@@ -2637,13 +2586,22 @@ function updateSensorInfo(msg) {
 									msg.p10 = "0.0";
 								}
 							}
-							$('#p10').val(msg.p10);
-							$('#p11').val(msg.p11).prop("selected", true);
-							$('#p12').val(msg.p12).prop("selected", true);
-							$('#p13').val(msg.p13).prop("selected", true);
-							$('#p14').val(msg.p14).prop("selected", true);
-							$('#p15').val(msg.p15).prop("selected", true);
-						} else if (msg.actcode == "actres") {
+						$('#p10').val(msg.p10);
+						$('#p11').val(msg.p11).prop("selected", true);
+						$('#p12').val(msg.p12).prop("selected", true);
+						$('#p13').val(msg.p13).prop("selected", true);
+						$('#p14').val(msg.p14).prop("selected", true);
+						$('#p15').val(msg.p15).prop("selected", true);
+						$('#p16').val(msg.p16).prop("selected", true);
+						
+						// 센서 정보 업데이트 (장치 종류 포함)
+						updateSensorInfo(msg);
+						
+						// 버튼 상태 업데이트 (장치 종류 변경 시)
+						if(typeof updateOutputButtonsEnabled === 'function') {
+							updateOutputButtonsEnabled();
+						}
+					} else if (msg.actcode == "actres") {
 
 						}
 					}
@@ -2668,7 +2626,7 @@ function updateSensorInfo(msg) {
 		}
 
 		$.ajax({
-			url: 'http://iot.hntsolution.co.kr:8888/sendAlarm',
+			url: '/sendAlarm',
 			async: true,
 			type: 'POST',
 			data: JSON.stringify(sendData2),
@@ -2676,10 +2634,11 @@ function updateSensorInfo(msg) {
 			contentType: 'application/json',
 			success: function (result) {
 				if (result.resultCode == "200") {
+					console.log('알람 발송 성공 - uuid: ' + uuid + ', value: ' + sensorVal);
 				}
 			},
 			error: function (result) {
-                
+				console.error('알람 발송 실패 - uuid: ' + uuid + ', error:', result);
 			}
 		});
 	}
@@ -2973,6 +2932,7 @@ function updateSensorInfo(msg) {
 			var alarmData = {
 				userId: $('#userId').val(),
 				sensorUuid: $('#sensorUuid').val(),
+				topicStr: $('#topicStr').val(),  // topicStr 추가
 				alarmYn1: $('#alarmYn1').val(),
 				setVal1: $('#setVal1').val(),
 				delayHour1: $('#delayHour1').val(),
@@ -2992,6 +2952,7 @@ function updateSensorInfo(msg) {
 				reDelayHour3: $('#reDelayHour3').val(),
 				reDelayMin3: $('#reDelayMin3').val(),
 				alarmYn4: $('#alarmYn4').val(),
+				setVal4: $('#setVal4').val() || "",  // setVal4 추가
 				delayHour4: $('#delayHour4').val(),
 				delayMin4: $('#delayMin4').val(),
 				reDelayHour4: $('#reDelayHour4').val(),
@@ -3006,7 +2967,7 @@ function updateSensorInfo(msg) {
 			console.log('알람설정 저장 요청:', alarmData);
 			
 			$.ajax({
-				url: '/admin/saveAlarmSettings',
+				url: '/admin/saveSensorSetting',  // 올바른 URL로 변경
 				type: 'POST',
 				async: true,
 				data: JSON.stringify(alarmData),
@@ -3014,8 +2975,12 @@ function updateSensorInfo(msg) {
 				contentType: 'application/json',
 				success: function(res){
 					if(res && res.resultCode === '200'){
-						alert('알람설정이 성공적으로 저장되었습니다.');
-						console.log('알람설정 저장 성공');
+						// 변경 내역 알림
+						alert(res.resultMessage || '알람설정이 성공적으로 저장되었습니다.');
+						console.log('알람설정 저장 성공:', res);
+						
+						// DB에서 저장된 설정을 다시 읽어와서 UI 갱신
+						reloadAlarmSettings();
 					} else {
 						alert('알람설정 저장에 실패했습니다: ' + (res.resultMessage || '알 수 없는 오류'));
 						console.error('알람설정 저장 실패:', res);
@@ -3027,6 +2992,155 @@ function updateSensorInfo(msg) {
 				}
 			});
 		});
+		
+		// 알람 설정을 DB에서 다시 읽어와서 UI를 갱신하는 함수
+		function reloadAlarmSettings() {
+			var userId = $('#userId').val();
+			var sensorUuid = $('#sensorUuid').val();
+			
+			console.log('알람설정 재조회 요청: userId=' + userId + ', sensorUuid=' + sensorUuid);
+			
+			$.ajax({
+				url: '/data/getSensorSettings',
+				type: 'POST',
+				async: true,
+				data: { sensorUuid: sensorUuid },
+				dataType: 'json',
+				success: function(result) {
+					if(result && result.resultCode === '200' && result.settings) {
+						var settings = result.settings;
+						console.log('알람설정 재조회 성공:', settings);
+						
+						// UI 갱신
+						updateAlarmUI(settings);
+						
+						// 성공 메시지
+						console.log('✅ 알람설정이 DB에서 다시 로드되어 UI가 갱신되었습니다.');
+						
+						// 사용자에게 알림 (선택적)
+						setTimeout(function() {
+							alert('알람설정 변경이 완료되었습니다.\n설정값이 정상적으로 저장되었습니다.');
+						}, 500);
+						
+					} else {
+						console.warn('알람설정 재조회 실패:', result);
+					}
+				},
+				error: function(xhr, status, error) {
+					console.error('알람설정 재조회 중 오류:', xhr, status, error);
+				}
+			});
+		}
+		
+		// 알람 설정 UI를 업데이트하는 함수
+		function updateAlarmUI(settings) {
+			console.log('=== 알람 설정 UI 갱신 시작 ===');
+			
+			// 알람1 (고온알람)
+			if(settings.alarm_yn1) {
+				$('#alarmYn1').val(settings.alarm_yn1);
+				console.log('고온알람 사용여부: ' + settings.alarm_yn1);
+			}
+			if(settings.set_val1) {
+				// 소숫점 포맷팅: 정수인 경우 .0 추가
+				var setVal1 = formatTemperatureValue(settings.set_val1);
+				$('#setVal1').val(setVal1);
+				console.log('고온 설정값: ' + setVal1 + ' (원본: ' + settings.set_val1 + ')');
+			}
+			if(settings.delay_time1 !== undefined && settings.delay_time1 !== null) {
+				var delayTime1 = parseInt(settings.delay_time1);
+				var hour1 = Math.floor(delayTime1 / 60);
+				var min1 = delayTime1 % 60;
+				$('#delayHour1').val(hour1);
+				$('#delayMin1').val(min1);
+				console.log('고온알람 지연시간: ' + hour1 + '시간 ' + min1 + '분');
+			}
+			if(settings.re_delay_time1 !== undefined && settings.re_delay_time1 !== null) {
+				var reDelayTime1 = parseInt(settings.re_delay_time1);
+				var reHour1 = Math.floor(reDelayTime1 / 60);
+				var reMin1 = reDelayTime1 % 60;
+				$('#reDelayHour1').val(reHour1);
+				$('#reDelayMin1').val(reMin1);
+				console.log('고온알람 재전송지연시간: ' + reHour1 + '시간 ' + reMin1 + '분');
+			}
+			
+			// 알람2 (저온알람)
+			if(settings.alarm_yn2) {
+				$('#alarmYn2').val(settings.alarm_yn2);
+			}
+			if(settings.set_val2) {
+				// 소숫점 포맷팅: 정수인 경우 .0 추가
+				var setVal2 = formatTemperatureValue(settings.set_val2);
+				$('#setVal2').val(setVal2);
+				console.log('저온 설정값: ' + setVal2 + ' (원본: ' + settings.set_val2 + ')');
+			}
+			if(settings.delay_time2 !== undefined && settings.delay_time2 !== null) {
+				var delayTime2 = parseInt(settings.delay_time2);
+				$('#delayHour2').val(Math.floor(delayTime2 / 60));
+				$('#delayMin2').val(delayTime2 % 60);
+			}
+			if(settings.re_delay_time2 !== undefined && settings.re_delay_time2 !== null) {
+				var reDelayTime2 = parseInt(settings.re_delay_time2);
+				$('#reDelayHour2').val(Math.floor(reDelayTime2 / 60));
+				$('#reDelayMin2').val(reDelayTime2 % 60);
+			}
+			
+			// 알람3 (특정온도알람)
+			if(settings.alarm_yn3) {
+				$('#alarmYn3').val(settings.alarm_yn3);
+			}
+			if(settings.set_val3) {
+				// 소숫점 포맷팅: 정수인 경우 .0 추가
+				var setVal3 = formatTemperatureValue(settings.set_val3);
+				$('#setVal3').val(setVal3);
+				console.log('특정온도 설정값: ' + setVal3 + ' (원본: ' + settings.set_val3 + ')');
+			}
+			if(settings.delay_time3 !== undefined && settings.delay_time3 !== null) {
+				var delayTime3 = parseInt(settings.delay_time3);
+				$('#delayHour3').val(Math.floor(delayTime3 / 60));
+				$('#delayMin3').val(delayTime3 % 60);
+			}
+			if(settings.re_delay_time3 !== undefined && settings.re_delay_time3 !== null) {
+				var reDelayTime3 = parseInt(settings.re_delay_time3);
+				$('#reDelayHour3').val(Math.floor(reDelayTime3 / 60));
+				$('#reDelayMin3').val(reDelayTime3 % 60);
+			}
+			
+			// 알람4 (DI알람)
+			if(settings.alarm_yn4) {
+				$('#alarmYn4').val(settings.alarm_yn4);
+			}
+			if(settings.set_val4) {
+				$('#setVal4').val(settings.set_val4);
+			}
+			if(settings.delay_time4 !== undefined && settings.delay_time4 !== null) {
+				var delayTime4 = parseInt(settings.delay_time4);
+				$('#delayHour4').val(Math.floor(delayTime4 / 60));
+				$('#delayMin4').val(delayTime4 % 60);
+			}
+			if(settings.re_delay_time4 !== undefined && settings.re_delay_time4 !== null) {
+				var reDelayTime4 = parseInt(settings.re_delay_time4);
+				$('#reDelayHour4').val(Math.floor(reDelayTime4 / 60));
+				$('#reDelayMin4').val(reDelayTime4 % 60);
+			}
+			
+			// 알람5 (통신이상알람)
+			if(settings.alarm_yn5) {
+				$('#alarmYn5').val(settings.alarm_yn5);
+			}
+			if(settings.delay_time5 !== undefined && settings.delay_time5 !== null) {
+				var delayTime5 = parseInt(settings.delay_time5);
+				$('#delayHour5').val(Math.floor(delayTime5 / 60));
+				$('#delayMin5').val(delayTime5 % 60);
+			}
+			if(settings.re_delay_time5 !== undefined && settings.re_delay_time5 !== null) {
+				var reDelayTime5 = parseInt(settings.re_delay_time5);
+				$('#reDelayHour5').val(Math.floor(reDelayTime5 / 60));
+				$('#reDelayMin5').val(reDelayTime5 % 60);
+			}
+			
+			console.log('=== 알람 설정 UI 갱신 완료 ===');
+		}
 	});
 
 	function goMain() {

@@ -19,6 +19,37 @@
     <link rel="stylesheet" href="/css/responsive-common.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" media="print" onload="this.media='all'">
     
+    <!-- PageNavigation 객체 및 공통 함수 정의 -->
+    <script>
+        window.PageNavigation = {
+            goMain: function() {
+                console.log('PageNavigation.goMain() 호출됨');
+                window.location.href = '/main/main';
+            },
+            goUserList: function() {
+                console.log('PageNavigation.goUserList() 호출됨');
+                window.location.href = '/admin/userList';
+            },
+            goCreateSub: function() {
+                console.log('PageNavigation.goCreateSub() 호출됨');
+                window.location.href = '/admin/createSub';
+            },
+            goSensorSetting: function() {
+                console.log('PageNavigation.goSensorSetting() 호출됨');
+                window.location.href = '/admin/sensorSetting';
+            }
+        };
+        
+        function showError(message) {
+            console.log('에러:', message);
+            alert('오류: ' + message);
+        }
+        function showSuccess(message) {
+            console.log('성공:', message);
+            alert('성공: ' + message);
+        }
+    </script>
+    
     <!-- 앱 레이아웃 개선 스타일 -->
     <style>
         /* 모바일에서 레이아웃 개선 */
@@ -99,6 +130,38 @@
 <!-- jQuery 먼저 로딩 (의존성 해결) -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 
+<!-- 브라우저 확장 프로그램 에러 차단 (엣지/크롬 확장 프로그램 에러 무시) -->
+<script>
+(function() {
+    'use strict';
+    
+    // 확장 프로그램 에러 무시
+    var originalError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+        if (source && (source.includes('content.js') || source.includes('chrome-extension') || source.includes('moz-extension'))) {
+            return true; // 에러 무시
+        }
+        if (originalError) {
+            return originalError(message, source, lineno, colno, error);
+        }
+        return false;
+    };
+    
+    // Promise rejection 에러 무시 (확장 프로그램 관련)
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (
+            event.reason.name === 'i' || 
+            event.reason.code === 403 ||
+            (event.reason.message && event.reason.message.includes('not valid JSON'))
+        )) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+        }
+    }, true);
+})();
+</script>
+
 <div class="navbar navbar-inverse" role="navigation" style="background-color: #ffffff">
     <div class="navbar-header">
         		<div class="logo"><h1><a href="javascript:PageNavigation.goMain();"><img src="/images/hntbi.png" width="70" height="32"></a></h1></div>
@@ -147,6 +210,13 @@
                 <div class="row">
                     <div class="" style="margin-right: 10px; margin-left: 10px;">
                         <span class="btn btn-primary"><a href="javascript:PageNavigation.goSensorSetting();">챠트설정</a></span>
+
+                        <!-- Hidden inputs for session and sensor data -->
+                        <input type="hidden" id="loginUserId" name="loginUserId" value="${userId}">
+                        <input type="hidden" id="userId" name="userId" value="${userId}">
+                        <input type="hidden" id="sensorUuid" name="sensorUuid" value="${sensorUuid}">
+                        <input type="hidden" id="chartType" name="chartType" value="${chartType}">
+                        <input type="hidden" id="topicStr" name="topicStr" value="${topicStr}">
 
                         <div class="panel panel-primary" width="100%">
                             <div class="panel-heading">챠트 종류</div>
@@ -241,6 +311,17 @@
     function goMain() {
         // 공통 페이지 이동 함수 사용 (세션 기반)
         PageNavigation.goMain();
+    }
+    
+    // 공통 알림 함수
+    function showError(message) {
+        console.log('에러:', message);
+        alert('오류: ' + message);
+    }
+    
+    function showSuccess(message) {
+        console.log('성공:', message);
+        alert('성공: ' + message);
     }
 
     $('#save').click(function() {

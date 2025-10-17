@@ -26,6 +26,38 @@
 <!-- jQuery 먼저 로딩 (의존성 해결) -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 
+<!-- 브라우저 확장 프로그램 에러 차단 (엣지/크롬 확장 프로그램 에러 무시) -->
+<script>
+(function() {
+    'use strict';
+    
+    // 확장 프로그램 에러 무시
+    var originalError = window.onerror;
+    window.onerror = function(message, source, lineno, colno, error) {
+        if (source && (source.includes('content.js') || source.includes('chrome-extension') || source.includes('moz-extension'))) {
+            return true; // 에러 무시
+        }
+        if (originalError) {
+            return originalError(message, source, lineno, colno, error);
+        }
+        return false;
+    };
+    
+    // Promise rejection 에러 무시 (확장 프로그램 관련)
+    window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (
+            event.reason.name === 'i' || 
+            event.reason.code === 403 ||
+            (event.reason.message && event.reason.message.includes('not valid JSON'))
+        )) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+        }
+    }, true);
+})();
+</script>
+
 <div class="navbar navbar-inverse" role="navigation" style="background-color: #ffffff">
     <div class="navbar-header">
         		<div class="logo"><h1><a href="javascript:PageNavigation.goMain();"><img src="/images/hntbi.png" width="70" height="32"></a></h1></div>
@@ -106,18 +138,18 @@
 
                                 <div class="form-group">
                                     <div class="col-md-12">
-                                        <label for="userTel" class="col-sm-2 control-label">전화번호</label>
+                                        <label for="subUserTel" class="col-sm-2 control-label">전화번호</label>
                                         <div class="col-sm-10">
-                                            <input type="text" class="form-control" id="userTel" placeholder="전화번호">
+                                            <input type="text" class="form-control" id="subUserTel" placeholder="전화번호">
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="form-group">
                                     <div class="col-md-12">
-                                        <label for="userEmail" class="col-sm-2 control-label">메일주소</label>
+                                        <label for="subUserEmail" class="col-sm-2 control-label">메일주소</label>
                                         <div class="col-sm-10">
-                                            <input type="text" class="form-control" id="userEmail" placeholder="메일주소">
+                                            <input type="text" class="form-control" id="subUserEmail" placeholder="메일주소">
                                         </div>
                                     </div>
                                 </div>
@@ -204,9 +236,17 @@
                 var subNm = $('#subNm').val();
                 var subId = $('#subId').val();
                 var subPass = $('#subPass').val();
-                var userTel = $('#userTel').val();
-                var userEmail = $('#userEmail').val();
+                var userTel = $('#subUserTel').val();  // 수정: subUserTel로 변경
+                var userEmail = $('#subUserEmail').val();  // 수정: subUserEmail로 변경
                 var userId = $('#userId').val();
+                
+                console.log('부계정 생성 데이터:', {
+                    subNm: subNm,
+                    subId: subId,
+                    userTel: userTel,
+                    userEmail: userEmail,
+                    userId: userId
+                });
 
                 if(subId !== '' && subPass !== '' && subNm !== '') {
                     var sendData = {
