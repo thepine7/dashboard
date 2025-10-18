@@ -1335,7 +1335,7 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 						console.log('CSS 로딩 완료 확인됨 - 상태표시 아이콘과 메인 콘텐츠 모두 렌더링됨');
 						initializeSensorSetting();
 					} else if (cssCheckCount < maxCssChecks) {
-						setTimeout(checkCSSLoaded, 500); // 0.5초 간격으로 확인
+						setTimeout(checkCSSLoaded, 100); // 0.1초 간격으로 확인 (속도 개선)
 					} else {
 						console.warn('CSS 로딩 확인 시간 초과, 강제 초기화 진행');
 						initializeSensorSetting();
@@ -1591,14 +1591,14 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 			} catch(e) {
 				console.error('[ERROR] 알람 설정 로드 중 예외 발생:', e);
 			}
-		}, 2000); // 센서 정보 요청 후 즉시 알람 설정 로드 (2초 대기)
+		}, 500); // 센서 정보 요청 후 알람 설정 로드 (500ms 대기 - 속도 개선)
 				
 				console.log('센서설정 페이지 초기화 완료');
 			}
 				
-				// CSS 로딩 확인 시작
+				// CSS 로딩 확인 즉시 시작 (속도 개선)
 				checkCSSLoaded();
-			}, 2000); // 2초 대기 (페이지 로딩 시간 증가)
+			}); // $(document).ready - 즉시 실행
 			
 					// 장치 이름 설정 (main 페이지와 동일한 형식)
 		var sensorUuid = $('#sensorUuid').val();
