@@ -2,9 +2,6 @@
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
 
-<!-- 공통 세션 정보 -->
-<jsp:include page="/WEB-INF/jsp/common/session-info.jsp" />
-
 <!DOCTYPE html>
 
 <html lang="ko" class="">
@@ -455,7 +452,7 @@
 
 <!-- MQTT 관련 스크립트 -->
 <script src="/js/mqttws31-min.js"></script>
-    <script src="/js/unified-mqtt-manager.js?v=20251007"></script>
+    <script src="/js/unified-mqtt-manager.js?v=20251018003"></script>
     <script src="/js/mqtt-message-validator.js"></script>
     <script src="/js/session-timeout-manager.js"></script>
 
@@ -489,6 +486,12 @@
     }
     console.log('=== 세션 정보 설정 완료 ===');
     console.log('window.SessionData:', window.SessionData);
+
+    // 차트 페이지용 allowedSensorIds 설정 (부계정 지원)
+    var sensorId = $('#sensorId').val();
+    var currentUserId = $('#userId').val();
+    window.allowedSensorIds = sensorId ? [sensorId] : (currentUserId ? [currentUserId] : []);
+    console.log('차트 페이지 allowedSensorIds 설정:', window.allowedSensorIds);
 
     var setp01 = 0;
     
@@ -1257,12 +1260,18 @@ function updateStatusIndicatorFromOutput(type, value) {
             var uuid = topicArr[3];
             var userId = topicArr[1];
 
-            // 현재 사용자의 장치만 처리 (부계정 사용자 고려) - main.jsp와 동일한 로직
-            var currentSensorId = $('#sensorId').val();
+            // 현재 사용자의 장치만 처리 (부계정 사용자 고려) - allowedSensorIds 확인
             var currentUserId = $('#userId').val();
+            var allowedSensorIds = window.allowedSensorIds || [];
             
-            // 현재 사용자의 장치가 아닌 경우 처리 중단
-            if (userId !== currentSensorId && userId !== currentUserId) {
+            // 현재 사용자 또는 allowedSensorIds에 포함된 userId만 처리
+            var isAllowedUser = (userId === currentUserId) || (allowedSensorIds.indexOf(userId) >= 0);
+            if (!isAllowedUser) {
+                console.log('차트 페이지: 사용자 ID 불일치로 메시지 필터링됨:', {
+                    messageUserId: userId,
+                    currentUserId: currentUserId,
+                    allowedSensorIds: allowedSensorIds
+                });
                 return;
             }
 
@@ -1431,7 +1440,9 @@ function updateStatusIndicatorFromOutput(type, value) {
                     updateFanChart('gray');
                     updateErrorChart('red');
                     
-                    $('#curTemp').html('통신에러');
+                    // 현재온도 표시를 Error로 변경
+                    $('#sensorVal').text('Error');
+                    console.log('[Chart] 현재온도 UI를 Error로 변경');
                 }
             }
         } else if (deviceLastDataTime[sensorUuid] > 0) {

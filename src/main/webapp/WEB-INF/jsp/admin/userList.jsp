@@ -68,7 +68,7 @@
         
         function logoutToLogin() {
             console.log('logoutToLogin() 호출됨');
-            window.location.href = '/login/logout';
+            window.location.href = '/login/login';
         }
     </script>
     

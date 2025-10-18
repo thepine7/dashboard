@@ -317,6 +317,8 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 			userInfo.setUserGrade("U");
 			userInfo.setInstId("hnt");
 			userInfo.setMdfId("hnt");
+			// 신규 가입 시 parent_user_id를 자기 자신으로 설정
+			userInfo.setParentUserId(userInfo.getUserId());
 
 			String userPass = userInfo.getUserPass();
 			String userId = userInfo.getUserId();

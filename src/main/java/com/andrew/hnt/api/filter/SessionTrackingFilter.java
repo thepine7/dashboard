@@ -94,6 +94,7 @@ public class SessionTrackingFilter implements Filter {
     
     /**
      * 정적 리소스 요청인지 확인합니다.
+     * MQTT 상태 확인 같은 빈번한 API 요청도 필터링합니다.
      */
     private boolean isStaticResource(String requestURI) {
         return requestURI.startsWith("/css/") ||
@@ -112,7 +113,9 @@ public class SessionTrackingFilter implements Filter {
                requestURI.endsWith(".woff2") ||
                requestURI.endsWith(".ttf") ||
                requestURI.endsWith(".eot") ||
-               requestURI.endsWith(".svg");
+               requestURI.endsWith(".svg") ||
+               requestURI.contains("/api/mqtt/status") || // MQTT 상태 확인 API 필터링
+               requestURI.contains("/admin/setSensor"); // 센서 설정 API 필터링
     }
     
     /**

@@ -61,6 +61,7 @@ public class SessionListener implements HttpSessionListener {
         HttpSession session = se.getSession();
         String sessionId = session.getId();
         String userId = (String) session.getAttribute("userId");
+        String saveId = (String) session.getAttribute("saveId");
         
         // 동시성 안전한 세션 목록에서 제거
         synchronized (processedSessions) {
@@ -74,14 +75,19 @@ public class SessionListener implements HttpSessionListener {
                     sessionSecurityService.removeSessionInfo(userId);
                 }
                 
+                // 하이브리드 방식: SaveId가 'Y'가 아닐 때만 DB 업데이트
                 if (loginService != null) {
-                    try {
-                        LoginVO loginVO = new LoginVO();
-                        loginVO.setUserId(userId);
-                        loginService.updateLogoutDtm(loginVO);
-                        logger.info("세션 만료로 인한 자동 로그아웃 처리 완료 - userId: {}, 세션 ID: {}", userId, sessionId);
-                    } catch (Exception e) {
-                        logger.error("세션 만료 시 로그아웃 처리 실패 - userId: {}, 세션 ID: {}, error: {}", userId, sessionId, e.getMessage());
+                    if (!"Y".equals(saveId)) {
+                        try {
+                            LoginVO loginVO = new LoginVO();
+                            loginVO.setUserId(userId);
+                            loginService.updateLogoutDtm(loginVO);
+                            logger.info("세션 타임아웃 - DB 업데이트 완료 (SaveId 아님) - userId: {}, 세션 ID: {}", userId, sessionId);
+                        } catch (Exception e) {
+                            logger.error("세션 만료 시 로그아웃 처리 실패 - userId: {}, 세션 ID: {}, error: {}", userId, sessionId, e.getMessage());
+                        }
+                    } else {
+                        logger.info("세션 타임아웃 - DB 업데이트 스킵 (SaveId 사용자) - userId: {}, 세션 ID: {}", userId, sessionId);
                     }
                 } else {
                     logger.warn("LoginService가 null입니다. 세션 만료 로그만 기록 - userId: {}, 세션 ID: {}", userId, sessionId);

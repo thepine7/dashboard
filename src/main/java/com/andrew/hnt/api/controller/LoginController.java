@@ -66,7 +66,7 @@ public class LoginController {
 		return "login/login";
 	}
 
-	@RequestMapping(value = "/logout/logout",method = RequestMethod.GET)
+	@RequestMapping(value = "/login/logout",method = RequestMethod.GET)
     public String logout(
         HttpServletRequest req
         , HttpServletResponse res
@@ -104,7 +104,7 @@ public class LoginController {
   return result;
 }
 
-	@RequestMapping(value = "/logout/logoutProcess", method = RequestMethod.POST)
+	@RequestMapping(value = "/login/logoutProcess", method = RequestMethod.POST)
 	public @ResponseBody Map<String, Object> logoutProcess(
 			HttpServletRequest req
 			, HttpServletResponse res
@@ -193,37 +193,37 @@ public class LoginController {
 									String sensorId = (userInfo.getSensorId() != null && !"".equals(userInfo.getSensorId())) 
 										? userInfo.getSensorId() : userInfo.getUserId();
 									
-								// 세션 정보 설정 (통일된 방식)
-								sessionManagementService.setSessionInfo(session, userInfo.getUserId(), userInfo.getUserGrade(), userInfo.getUserNm());
-								
-								// 세션 보안 서비스를 통한 세션 정보 설정
-								sessionSecurityService.setSessionInfo(session, req, userInfo.getUserId(), userInfo.getUserGrade(), userInfo.getUserNm());
-								
-								// Constants 키로 세션에 직접 설정 (JSP에서 접근 가능)
-								session.setAttribute(Constants.SESSION_USER_ID, userInfo.getUserId());
-								session.setAttribute(Constants.SESSION_USER_GRADE, userInfo.getUserGrade());
-								session.setAttribute(Constants.SESSION_USER_NM, userInfo.getUserNm());
-								session.setAttribute(Constants.SESSION_SENSOR_ID, sensorId);
-								session.setAttribute(Constants.SESSION_USER_EMAIL, userInfo.getUserEmail());
-								session.setAttribute(Constants.SESSION_USER_TEL, userInfo.getUserTel());
-								session.setAttribute(Constants.SESSION_TOKEN, userInfo.getToken());
-								
-								// 세션 설정 완료 로그
-								logger.info("=== LoginController 세션 설정 완료 ===");
-								logger.info("세션 ID: {}", session.getId());
-								logger.info("설정된 사용자 정보:");
-								logger.info("- SESSION_USER_ID: {}", session.getAttribute(Constants.SESSION_USER_ID));
-								logger.info("- SESSION_USER_GRADE: {}", session.getAttribute(Constants.SESSION_USER_GRADE));
-								logger.info("- SESSION_USER_NM: {}", session.getAttribute(Constants.SESSION_USER_NM));
-								logger.info("- userId: {}", session.getAttribute("userId"));
-								logger.info("- userGrade: {}", session.getAttribute("userGrade"));
-								logger.info("- userNm: {}", session.getAttribute("userNm"));
-								
-								// 기본 키로도 설정 (호환성)
-								session.setAttribute("userId", userInfo.getUserId());
-								session.setAttribute("userGrade", userInfo.getUserGrade());
-								session.setAttribute("userNm", userInfo.getUserNm());
-								session.setAttribute("sensorId", sensorId);
+									// 세션 정보 설정 (통일된 방식)
+									sessionManagementService.setSessionInfo(session, userInfo.getUserId(), userInfo.getUserGrade(), userInfo.getUserNm());
+									
+									// 세션 보안 서비스를 통한 세션 정보 설정
+									sessionSecurityService.setSessionInfo(session, req, userInfo.getUserId(), userInfo.getUserGrade(), userInfo.getUserNm());
+									
+									// Constants 키로 세션에 직접 설정 (JSP에서 접근 가능)
+									session.setAttribute(Constants.SESSION_USER_ID, userInfo.getUserId());
+									session.setAttribute(Constants.SESSION_USER_GRADE, userInfo.getUserGrade());
+									session.setAttribute(Constants.SESSION_USER_NM, userInfo.getUserNm());
+									session.setAttribute(Constants.SESSION_SENSOR_ID, sensorId);
+									session.setAttribute(Constants.SESSION_USER_EMAIL, userInfo.getUserEmail());
+									session.setAttribute(Constants.SESSION_USER_TEL, userInfo.getUserTel());
+									session.setAttribute(Constants.SESSION_TOKEN, userInfo.getToken());
+									
+									// 세션 설정 완료 로그
+									logger.info("=== LoginController 세션 설정 완료 ===");
+									logger.info("세션 ID: {}", session.getId());
+									logger.info("설정된 사용자 정보:");
+									logger.info("- SESSION_USER_ID: {}", session.getAttribute(Constants.SESSION_USER_ID));
+									logger.info("- SESSION_USER_GRADE: {}", session.getAttribute(Constants.SESSION_USER_GRADE));
+									logger.info("- SESSION_USER_NM: {}", session.getAttribute(Constants.SESSION_USER_NM));
+									logger.info("- userId: {}", session.getAttribute("userId"));
+									logger.info("- userGrade: {}", session.getAttribute("userGrade"));
+									logger.info("- userNm: {}", session.getAttribute("userNm"));
+									
+									// 기본 키로도 설정 (호환성)
+									session.setAttribute("userId", userInfo.getUserId());
+									session.setAttribute("userGrade", userInfo.getUserGrade());
+									session.setAttribute("userNm", userInfo.getUserNm());
+									session.setAttribute("sensorId", sensorId);
 									
 									// 부계정 여부 확인 및 설정
 									try {
@@ -235,6 +235,7 @@ public class LoginController {
 												session.setAttribute(Constants.SESSION_LOGIN_USER_ID, mainUserId);
 												session.setAttribute("isSubAccount", true);
 												session.setAttribute("mainUserId", mainUserId);
+												session.setAttribute("parentUserId", mainUserId);
 												logger.info("부계정 로그인 - 부계정: {}, 메인 사용자: {}", userInfo.getUserId(), mainUserId);
 											} else {
 												session.setAttribute(Constants.SESSION_LOGIN_USER_ID, userInfo.getUserId());
@@ -262,21 +263,24 @@ public class LoginController {
 							} else {
 								resultMap.put("resultCode", "999");
 								resultMap.put("resultMessage", "회원 로그인 실패 - 사용자 정보 없음");
+							}
+						}
+					} catch(Exception e) {
+						unifiedErrorHandler.logError("로그인 처리", e);
+						resultMap.put("resultCode", "500");
+						resultMap.put("resultMessage", "로그인 처리 중 오류가 발생했습니다.");
 					}
-				}
-	} catch(Exception e) {
-		unifiedErrorHandler.logError("로그아웃 처리", e);
-	}
-			} else {
+				} else {
 					resultMap.put("resultCode", "999");
-					resultMap.put("resultMessage", "회원 로그인 실패 - 사용자 아이디 없음");
+					resultMap.put("resultMessage", "회원 로그인 실패 - 사용자 비밀번호 없음");
 				}
 			} else {
 				resultMap.put("resultCode", "999");
-				resultMap.put("resultMessage", "회원 로그인 실패 - 사용자 비밀번호 없음");
+				resultMap.put("resultMessage", "회원 로그인 실패 - 사용자 아이디 없음");
 			}
 		} else {
-
+			resultMap.put("resultCode", "999");
+			resultMap.put("resultMessage", "회원 로그인 실패 - 요청 데이터 없음");
 		}
 		
 		return resultMap;

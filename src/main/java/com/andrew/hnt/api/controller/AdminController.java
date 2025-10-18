@@ -153,7 +153,18 @@ public class AdminController extends DefaultController {
         
         // 세션에서 사용자 정보를 모델에 직접 설정
         model.addAttribute("userId", sessionUserId);
-        model.addAttribute("sensorId", StringUtil.isEmpty(sessionUserId) ? "" : sessionUserId); // 센서 ID는 사용자 ID와 동일
+        model.addAttribute("loginUserId", sessionUserId);
+        
+        // 세션에서 parentUserId 가져오기 (부계정인 경우 메인 사용자 ID)
+        String parentUserId = (String) session.getAttribute("parentUserId");
+        if(!StringUtil.isEmpty(parentUserId)) {
+            model.addAttribute("parentUserId", parentUserId);
+        } else {
+            model.addAttribute("parentUserId", sessionUserId); // 주계정인 경우 자기 자신
+        }
+        
+        // sensorId는 DB에서 조회한 후에 설정 (중복 설정 방지)
+        // model.addAttribute("sensorId", StringUtil.isEmpty(sessionUserId) ? "" : sessionUserId); // 주석 처리
         model.addAttribute("sensorUuid", sensorUuid); // 센서 UUID 추가
         
         if(!StringUtil.isEmpty(sessionUserNm)) {
@@ -167,13 +178,20 @@ public class AdminController extends DefaultController {
         // topicStr은 센서 정보 조회 후에 설정됨
         String topicStr = "";
         
-        // 센서 정보 조회
+        // 센서 정보 조회 (센서의 실제 소유자 ID 확인용)
+        String actualSensorOwnerId = sessionUserId; // 기본값
         try {
             Map<String, Object> sensorInfo = adminService.getSensorInfoByUuid(sensorUuid);
             if (sensorInfo != null && !sensorInfo.isEmpty()) {
                 model.addAttribute("sensorInfo", sensorInfo);
                 model.addAttribute("sensor_name", sensorInfo.get("sensor_name"));
                 model.addAttribute("sensorUuid", sensorUuid);
+                
+                // 센서의 실제 소유자 ID 추출 (부계정 지원)
+                if (sensorInfo.get("sensor_id") != null) {
+                    actualSensorOwnerId = String.valueOf(sensorInfo.get("sensor_id"));
+                    logger.info("센서의 실제 소유자 ID: {}", actualSensorOwnerId);
+                }
                 
                 // 센서 정보 초기값 설정
                 String sensorType = String.valueOf(sensorInfo.get("sensor_type") != null ? sensorInfo.get("sensor_type") : "0");
@@ -229,62 +247,64 @@ public class AdminController extends DefaultController {
             // 예외 발생 시에도 기본값 설정
             model.addAttribute("sensorDisplayName", "-");
             model.addAttribute("tempRange", "-");
-            model.addAttribute("deviceTypeText", "-");
-        }
-        
-        // 세션 우선: DB에서 직접 사이드바 데이터 조회 (세션 userId 사용)
-        commonController.addSidebarData(sessionUserId, model, session);
-        
-        UserInfo user = new UserInfo();
+			model.addAttribute("deviceTypeText", "-");
+		}
+		
+		// 세션 우선: DB에서 직접 사이드바 데이터 조회 (세션 userId 사용)
+		// commonController.addSidebarData(sessionUserId, model, session); // 주석 처리 - 339번째 줄에서 호출
+		
+		UserInfo user = new UserInfo();
 
 		try {
 			// 사용자 아이디가 있을 경우 사용자 아이디로 사용자 정보와 연결된 센서 정보를 가져온다.
+			// 부계정인 경우 센서의 실제 소유자 ID(actualSensorOwnerId)를 사용하여 조회
 			// userId와 sensorUuid는 이미 위에서 설정했으므로 중복 설정 제거
 
 			Map<String, Object> userInfo = new HashMap<String, Object>();
-			userInfo = adminService.getUserInfo(sessionUserId, sensorUuid);
+			logger.info("getUserInfo 호출 - actualSensorOwnerId: {}, sensorUuid: {}", actualSensorOwnerId, sensorUuid);
+			userInfo = adminService.getUserInfo(actualSensorOwnerId, sensorUuid);
 
 			if(null != userInfo && !"".equals(userInfo)) {
 				user = (UserInfo) userInfo.get("userInfo");
 				Map<String, Object> sensor = (Map<String, Object>) userInfo.get("sensorInfo");
 
-                if(null != sensor && 0 < sensor.size()) {
-                    // 출력 제어 및 설정 전송 토픽은 'TC' 고정 세그먼트를 사용
-                    String sensorId = String.valueOf(sensor.get("sensor_id"));
-                    String sensorUuidFromSensor = String.valueOf(sensor.get("sensor_uuid"));
-                    
-                    // null 체크 추가
-                    if (!"null".equals(sensorId) && !"null".equals(sensorUuidFromSensor)) {
-                        topicStr = "HBEE/" + sensorId + "/TC/" + sensorUuidFromSensor + "/SER";
-                    } else {
-                        // fallback: sessionUserId와 sensorUuid 사용
-                        topicStr = "HBEE/" + sessionUserId + "/TC/" + sensorUuid + "/SER";
-                    }
-                } else {
-                    // 센서 정보가 없는 경우 fallback
-                    topicStr = "HBEE/" + sessionUserId + "/TC/" + sensorUuid + "/SER";
-                }
-                
-                // 토픽 구조 검증
-                TopicParserUtil.TopicParseResult topicValidation = TopicParserUtil.parseTopic(topicStr);
-                if (!topicValidation.isValid()) {
-                    logger.warn("생성된 토픽이 유효하지 않음: {} - {}", topicStr, topicValidation.getReason());
-                    
-                    // 파싱 오류 처리 및 로깅
-                    ParsingErrorHandler.handleTopicParseError(
-                        topicValidation.getReason(), 
-                        topicStr, 
-                        "AdminController.sensorSetting"
-                    );
-                    
-                    // 기본 토픽으로 대체
-                    topicStr = "HBEE/" + sessionUserId + "/TC/" + sensorUuid + "/SER";
-                } else {
-                    logger.debug("토픽 생성 성공: {} (타입: {})", topicStr, topicValidation.getTopicType());
-                }
-                
-                // topicStr을 모델에 추가 (한 번만)
-                model.addAttribute("topicStr", topicStr);
+				if(null != sensor && 0 < sensor.size()) {
+					// 출력 제어 및 설정 전송 토픽은 'TC' 고정 세그먼트를 사용
+					String sensorId = String.valueOf(sensor.get("sensor_id"));
+					String sensorUuidFromSensor = String.valueOf(sensor.get("sensor_uuid"));
+					
+					// null 체크 추가
+					if (!"null".equals(sensorId) && !"null".equals(sensorUuidFromSensor)) {
+						topicStr = "HBEE/" + sensorId + "/TC/" + sensorUuidFromSensor + "/SER";
+					} else {
+						// fallback: sessionUserId와 sensorUuid 사용
+						topicStr = "HBEE/" + sessionUserId + "/TC/" + sensorUuid + "/SER";
+					}
+				} else {
+					// 센서 정보가 없는 경우 fallback
+					topicStr = "HBEE/" + sessionUserId + "/TC/" + sensorUuid + "/SER";
+				}
+				
+				// 토픽 구조 검증
+				TopicParserUtil.TopicParseResult topicValidation = TopicParserUtil.parseTopic(topicStr);
+				if (!topicValidation.isValid()) {
+					logger.warn("생성된 토픽이 유효하지 않음: {} - {}", topicStr, topicValidation.getReason());
+					
+					// 파싱 오류 처리 및 로깅
+					ParsingErrorHandler.handleTopicParseError(
+						topicValidation.getReason(), 
+						topicStr, 
+						"AdminController.sensorSetting"
+					);
+					
+					// 기본 토픽으로 대체
+					topicStr = "HBEE/" + sessionUserId + "/TC/" + sensorUuid + "/SER";
+				} else {
+					logger.debug("토픽 생성 성공: {} (타입: {})", topicStr, topicValidation.getTopicType());
+				}
+				
+				// topicStr을 모델에 추가 (한 번만)
+				model.addAttribute("topicStr", topicStr);
 
 				String sensorName = "";
 				// DB에서 센서 이름 가져오기
@@ -302,16 +322,30 @@ public class AdminController extends DefaultController {
 				model.addAttribute("sensorName", sensorName);
 				model.addAttribute("token", session.getAttribute("token"));
 				
-				// CommonController를 통한 세션 정보 추가
-				commonController.addSidebarData(sessionUserId, model, session);
+				// sensorId 설정 (센서 정보가 있는 경우만, DB에서 조회한 실제 sensor_id 사용)
+				// CommonController보다 먼저 설정하여 덮어쓰기 방지
+				logger.info("=== sensorId 설정 시작 ===");
+				logger.info("sensor null 여부: {}", (sensor == null));
+				if(sensor != null) {
+					logger.info("sensor.size(): {}", sensor.size());
+					logger.info("sensor.get(\"sensor_id\"): {}", sensor.get("sensor_id"));
+				}
 				
-				// sensorId 설정 (센서 정보가 있는 경우만, null이면 기존 값 유지)
 				if(null != sensor && 0 < sensor.size() && sensor.get("sensor_id") != null) {
 					String dbSensorId = String.valueOf(sensor.get("sensor_id"));
+					logger.info("dbSensorId: {}", dbSensorId);
 					if (!"null".equals(dbSensorId)) {
 						model.addAttribute("sensorId", dbSensorId);
+						logger.info("[OK] 센서 소유자 ID 설정 완료: {}", dbSensorId);
+					} else {
+						logger.warn("[ERROR] dbSensorId가 'null' 문자열임");
 					}
+				} else {
+					logger.warn("[ERROR] sensor 조건 실패 - sensorId 설정 불가");
 				}
+				
+				// CommonController를 통한 세션 정보 추가 (sensorId가 이미 설정되어 있으면 덮어쓰지 않음)
+				commonController.addSidebarData(sessionUserId, model, session);
 				
 				// 센서 정보 추가
 				if(null != sensor && 0 < sensor.size()) {
@@ -346,15 +380,17 @@ public class AdminController extends DefaultController {
 					model.addAttribute("sensorDisplayName", sensorDisplayName);
 				}
 
-				// DB에 저장된 알람 설정 정보를 가져온다.
-				Map<String, Object> alarmMap = new HashMap<String, Object>();
-				Map<String, Object> param = new HashMap<String, Object>();
-				// 부계정이 메인 계정의 장치 알람설정을 조회할 때는 sensorId를 실제 장치 소유자 ID로 설정
-				// MyBatis HashMap은 언더스코어 그대로 반환하므로 sensor_id로 조회
-				String actualSensorId = String.valueOf(sensor.get("sensor_id"));
-				param.put("userId", sessionUserId);
-				param.put("sensorId", actualSensorId);  // 실제 장치 소유자 ID 사용
-				param.put("sensorUuid", sensorUuid);
+			// DB에 저장된 알람 설정 정보를 가져온다.
+			Map<String, Object> alarmMap = new HashMap<String, Object>();
+			Map<String, Object> param = new HashMap<String, Object>();
+			// 부계정이 메인 계정의 장치 알람설정을 조회할 때는 sensorId를 실제 장치 소유자 ID로 설정
+			// MyBatis HashMap은 언더스코어 그대로 반환하므로 sensor_id로 조회
+			String actualSensorId = (sensor != null && sensor.get("sensor_id") != null) 
+				? String.valueOf(sensor.get("sensor_id")) 
+				: sessionUserId; // sensor가 null이면 sessionUserId 사용
+			param.put("userId", sessionUserId);
+			param.put("sensorId", actualSensorId);  // 실제 장치 소유자 ID 사용
+			param.put("sensorUuid", sensorUuid);
 				logger.info("알람 설정 조회 파라미터 - userId: {}", sessionUserId);
 				logger.info("알람 설정 조회 파라미터 - sensor_id from DB: {}", actualSensorId);
 				logger.info("알람 설정 조회 파라미터 - sensorUuid: {}", sensorUuid);
@@ -449,19 +485,40 @@ public class AdminController extends DefaultController {
     		
     		HttpSession session = req.getSession();
     		
-    		// 세션 검증
-    		if(!sessionManagementService.isValidSession(session)) {
-    			return unifiedErrorHandler.createUnauthorizedResponse();
-    		}
-    		
-    		Map<String, Object> resultMap = new HashMap<String, Object>();
-    		
-    		if(null != sensorMap && 0 < sensorMap.size()) {
-    		String sendTopic = "";
-    		String payload = "";
-    		String setGu = "";
-    		String userId = "";
-    		String p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11, p12, p13, p14, p15, p16;
+		// 세션 검증
+		if(!sessionManagementService.isValidSession(session)) {
+			return unifiedErrorHandler.createUnauthorizedResponse();
+		}
+		
+		// 부계정 권한 확인 - 설정 변경은 불가, 조회는 가능
+		String sessionUserId = (String) session.getAttribute("userId");
+		String parentUserId = (String) session.getAttribute("parentUserId");
+		boolean isSubAccount = (parentUserId != null && !parentUserId.isEmpty() && !parentUserId.equals(sessionUserId));
+		
+		// setGu 값 확인 (조회 vs 설정 변경 구분)
+		String setGu = sensorMap != null ? String.valueOf(sensorMap.get("setGu")) : "";
+		
+		// 부계정은 설정 변경 불가 (param, defrost, stopDefrost, initdevice, output 등)
+		if(isSubAccount) {
+			boolean isReadOnlyRequest = "readparam".equals(setGu) || "readstatus".equals(setGu);
+			
+			if(!isReadOnlyRequest) {
+				Map<String, Object> errorMap = new HashMap<>();
+				errorMap.put("resultCode", "403");
+				errorMap.put("resultMessage", "부계정 사용자는 장치 설정을 변경할 수 없습니다. (읽기 전용)");
+				logger.warn("부계정 사용자 장치 설정 변경 시도 차단 - userId: {}, parentUserId: {}, setGu: {}", 
+					sessionUserId, parentUserId, setGu);
+				return errorMap;
+			}
+		}
+		
+		Map<String, Object> resultMap = new HashMap<String, Object>();
+		
+		if(null != sensorMap && 0 < sensorMap.size()) {
+		String sendTopic = "";
+		String payload = "";
+		String userId = "";
+   		String p01, p02, p03, p04, p05, p06, p07, p08, p09, p10, p11, p12, p13, p14, p15, p16;
     		
     		sendTopic = String.valueOf(sensorMap.get("topicStr"));
     		setGu = String.valueOf(sensorMap.get("setGu"));
@@ -894,6 +951,16 @@ public class AdminController extends DefaultController {
 		if(null != sessionUserId && !"".equals(sessionUserId)) {
 			// 사용자 아이디가 있을 경우 사용자 아이디로 사용자 정보와 연결된 센서 정보를 가져온다.
 			model.addAttribute("userId", sessionUserId);
+			model.addAttribute("loginUserId", sessionUserId);
+			
+			// 세션에서 parentUserId 가져오기
+			String parentUserId = (String) session.getAttribute("parentUserId");
+			if(!StringUtil.isEmpty(parentUserId)) {
+				model.addAttribute("parentUserId", parentUserId);
+			} else {
+				model.addAttribute("parentUserId", sessionUserId);
+			}
+			
 			model.addAttribute("sensorUuid", sensorUuid);
 
 			Map<String, Object> userInfo = new HashMap<String, Object>();
@@ -1194,16 +1261,29 @@ public class AdminController extends DefaultController {
 			, @RequestBody Map<String, Object> modifyMap
 	) {
     	Map<String, Object> resultMap = new HashMap<String, Object>();
+    	
+    	logger.info("=== 사용자 정보 수정 요청 시작 ===");
+    	logger.info("수정 데이터: {}", modifyMap);
 
     	if(null != modifyMap && 0 < modifyMap.size()) {
     		try {
     			adminService.updateUser(modifyMap);
     			resultMap.put("resultCode", "200");
-			} catch(Exception e) {
-    			unifiedErrorHandler.logError("데이터 처리", e);
-			}
+    			resultMap.put("resultMessage", "사용자 정보 수정 성공");
+    			logger.info("사용자 정보 수정 성공 - userId: {}", modifyMap.get("userId"));
+		} catch(Exception e) {
+    			unifiedErrorHandler.logError("사용자 정보 수정", e);
+    			resultMap.put("resultCode", "500");
+    			resultMap.put("resultMessage", "사용자 정보 수정 실패: " + e.getMessage());
+    			logger.error("사용자 정보 수정 실패 - userId: {}, error: {}", modifyMap.get("userId"), e.toString());
 		}
+	} else {
+		resultMap.put("resultCode", "400");
+		resultMap.put("resultMessage", "수정 데이터가 없습니다");
+		logger.warn("사용자 정보 수정 실패 - 수정 데이터가 비어있음");
+	}
 
+    	logger.info("=== 사용자 정보 수정 요청 종료 - resultCode: {} ===", resultMap.get("resultCode"));
     	return resultMap;
 	}
 
@@ -1218,12 +1298,11 @@ public class AdminController extends DefaultController {
 	 * @param model
 	 * @return
 	 */
-	@RequestMapping(value = "/userDetail", method = RequestMethod.GET)
+	@RequestMapping(value = "/userDetail", method = {RequestMethod.GET, RequestMethod.POST})
 	public String userDetail(
 			HttpServletRequest req
 			, HttpServletResponse res
-			, @RequestParam(name = "dtlUser", required = true) String dtlUser
-			, @RequestParam(name = "gu", required = false) String gu
+			, @RequestParam(name = "dtlUser", required = false) String dtlUser
 			, Model model
 		) {
     	String result = "admin/userDetail";
@@ -1245,15 +1324,18 @@ public class AdminController extends DefaultController {
     String sessionUserGrade = sessionInfo.getUserGrade();
     String sessionUserNm = sessionInfo.getUserNm();
 
-    	if(null != gu && !"".equals(gu) && 0 < gu.length()) {
-    		if("m".equals(gu)) {
-    			result = "admin/userModify";
-			}
-		}
-
-
     // 사이드바 데이터는 세션의 userId로 보강
     commonController.addSidebarData(sessionUserId, model, session);
+    
+    // dtlUser가 없으면 세션에서 가져오기 (새로고침 대응)
+    if(dtlUser == null || dtlUser.isEmpty()) {
+        dtlUser = (String) session.getAttribute("targetDetailUserId");
+        logger.info("파라미터 dtlUser 없음, 세션에서 복구: {}", dtlUser);
+    } else {
+        // 새로운 dtlUser가 있으면 세션에 저장
+        session.setAttribute("targetDetailUserId", dtlUser);
+        logger.info("targetDetailUserId 세션에 저장: {}", dtlUser);
+    }
 		
 		
 
@@ -1271,28 +1353,31 @@ public class AdminController extends DefaultController {
 							logger.error("사용자 상세 정보 조회 실패 - dtlUser: {}, error: {}", dtlUser, e.getMessage());
 						}
 
-						if(null != userInfo) {
-							model.addAttribute("userInfo", userInfo);
-							// 사용자 정보가 있으면 해당 사용자의 장치 정보를 가져온다.
-							List<Map<String, Object>> sensorList = new ArrayList<Map<String, Object>>();
-							
-							if("A".equals(sessionUserGrade)) {
-								// A 등급은 모든 사용자의 장치 정보 조회 가능
-								sensorList = adminService.getSensorList(dtlUser);
-							} else {
-								// U 등급은 자신이 생성한 B 계정의 장치 정보 또는 자신의 장치 정보 조회 가능
-								if(dtlUser.equals(sessionUserId)) {
-									// 자신의 장치 정보 조회
-									sensorList = adminService.getSensorList(dtlUser);
-								} else {
-									// B 계정의 장치 정보 조회
-									sensorList = adminService.getSubSensorList(sessionUserId, dtlUser);
-								}
-							}
+					if(null != userInfo) {
+						logger.info("사용자 상세 정보 조회 성공 - dtlUser: {}, userTel: {}, userEmail: {}", 
+							dtlUser, userInfo.getUserTel(), userInfo.getUserEmail());
+						model.addAttribute("userInfo", userInfo);
+						// 사용자 정보가 있으면 해당 사용자의 장치 정보를 가져온다.
+						List<Map<String, Object>> sensorList = new ArrayList<Map<String, Object>>();
+						
+						// UserInfo에서 parent_user_id 가져오기
+						String parentUserId = userInfo.getParentUserId();
+						if(parentUserId == null || parentUserId.length() == 0 || "null".equalsIgnoreCase(parentUserId)) {
+							parentUserId = dtlUser;  // parent_user_id가 없으면 자기 자신이 주계정
+						}
+						
+						try {
+							sensorList = adminService.getFullSensorList(dtlUser, parentUserId);
+							logger.info("장치 조회 - targetUserId: {}, parentUserId: {}, 조회된 장치 수: {}", 
+								dtlUser, parentUserId, (sensorList != null ? sensorList.size() : 0));
+						} catch(Exception e) {
+							logger.error("사용자 장치 정보 조회 실패 - targetUserId: {}, parentId: {}, error: {}", 
+								dtlUser, parentUserId, e.toString());
+						}
 
-							if(null != sensorList && 0 < sensorList.size()) {
-								model.addAttribute("sensorList", sensorList);
-							}
+						if(null != sensorList && 0 < sensorList.size()) {
+							model.addAttribute("sensorList", sensorList);
+						}
 						} else {
 							logger.warn("사용자 정보를 찾을 수 없습니다 - dtlUser: {}", dtlUser);
 						}
@@ -1302,6 +1387,15 @@ public class AdminController extends DefaultController {
 
 					model.addAttribute("userId", sessionUserId);
 					model.addAttribute("userGrade", sessionUserGrade);
+					model.addAttribute("loginUserId", sessionUserId);
+					
+					// 세션에서 parentUserId 가져오기
+					String parentUserId_userList = (String) session.getAttribute("parentUserId");
+					if(!StringUtil.isEmpty(parentUserId_userList)) {
+						model.addAttribute("parentUserId", parentUserId_userList);
+					} else {
+						model.addAttribute("parentUserId", sessionUserId);
+					}
 				} else {
 					result = "redirect:/main/main";
 				}
@@ -1313,6 +1407,97 @@ public class AdminController extends DefaultController {
 		}
 
     	return result;
+	}
+
+	/**
+	 * 사용자 정보 수정 화면
+	 * @param req
+	 * @param res
+	 * @param userId
+	 * @param model
+	 * @return
+	 */
+	@RequestMapping(value = "/userModify", method = {RequestMethod.GET, RequestMethod.POST})
+	public String userModify(
+			HttpServletRequest req
+			, HttpServletResponse res
+			, @RequestParam(name = "userId", required = false) String userId
+			, Model model
+		) {
+		String result = "admin/userModify";
+		HttpSession session = req.getSession();
+
+		// 공통 세션 관리 서비스 사용
+		SessionManagementService.SessionInfo sessionInfo = sessionManagementService.validateAndGetSessionInfo(session, req);
+		
+		if (!sessionInfo.isValid()) {
+			logger.warn("사용자 수정 페이지 접근 - 세션 검증 실패, 리다이렉트: {}", sessionInfo.getRedirectUrl());
+			return sessionInfo.getRedirectUrl();
+		}
+		
+		// 세션 정보를 모델에 설정
+		sessionManagementService.setSessionInfoToModel(session, model);
+		
+		// 세션에서 사용자 정보 가져오기
+		String sessionUserId = sessionInfo.getUserId();
+		String sessionUserGrade = sessionInfo.getUserGrade();
+
+		// 사이드바 데이터는 세션의 userId로 보강
+		commonController.addSidebarData(sessionUserId, model, session);
+
+		// userId가 없으면 세션에서 가져오기 (새로고침 대응)
+		if(userId == null || userId.isEmpty()) {
+			userId = (String) session.getAttribute("targetUserId");
+			logger.info("파라미터 userId 없음, 세션에서 복구: {}", userId);
+		} else {
+			// 새로운 userId가 있으면 세션에 저장
+			session.setAttribute("targetUserId", userId);
+			logger.info("targetUserId 세션에 저장: {}", userId);
+		}
+
+		if(null != sessionUserId && !"".equals(sessionUserId) && 0 < sessionUserId.length()) {
+			if(null != sessionUserGrade && !"".equals(sessionUserGrade) && 0 < sessionUserGrade.length()) {
+				if("A".equals(sessionUserGrade) || "U".equals(sessionUserGrade)) {
+					if(null != userId && !"".equals(userId) && 0 < userId.length()) {
+						// 사용자 정보가 있고 등급이 관리자(A) 또는 일반사용자(U) 일때 사용자 수정 화면 표시
+						UserInfo userInfo = null;
+
+						try {
+							// 비밀번호 검증 없이 사용자 정보만 조회
+							userInfo = loginService.getUserInfoByUserId(userId);
+						} catch (Exception e) {
+							logger.error("사용자 수정 정보 조회 실패 - userId: {}, error: {}", userId, e.getMessage());
+						}
+
+						if(null != userInfo) {
+							model.addAttribute("userInfo", userInfo);
+						} else {
+							logger.warn("사용자 정보를 찾을 수 없습니다 - userId: {}", userId);
+						}
+					}
+
+					model.addAttribute("userId", sessionUserId);
+					model.addAttribute("userGrade", sessionUserGrade);
+					model.addAttribute("loginUserId", sessionUserId);
+					
+					// 세션에서 parentUserId 가져오기
+					String parentUserId_userDetail = (String) session.getAttribute("parentUserId");
+					if(!StringUtil.isEmpty(parentUserId_userDetail)) {
+						model.addAttribute("parentUserId", parentUserId_userDetail);
+					} else {
+						model.addAttribute("parentUserId", sessionUserId);
+					}
+				} else {
+					result = "redirect:/main/main";
+				}
+			} else {
+				result = "redirect:/main/main";
+			}
+		} else {
+			result = "redirect:/login/login";
+		}
+
+		return result;
 	}
 
 	/**
@@ -1361,6 +1546,15 @@ public class AdminController extends DefaultController {
     	// 세션에서 사용자 정보를 모델에 직접 설정
     	if(!StringUtil.isEmpty(sessionUserId)) {
     		model.addAttribute("userId", sessionUserId);
+    		model.addAttribute("loginUserId", sessionUserId);
+    		
+    		// 세션에서 parentUserId 가져오기
+    		String parentUserId_userModify = (String) session.getAttribute("parentUserId");
+    		if(!StringUtil.isEmpty(parentUserId_userModify)) {
+    			model.addAttribute("parentUserId", parentUserId_userModify);
+    		} else {
+    			model.addAttribute("parentUserId", sessionUserId);
+    		}
     	}
     	
     	if(!StringUtil.isEmpty(sessionUserGrade)) {
@@ -1379,40 +1573,49 @@ public class AdminController extends DefaultController {
     	// 사용자 아이디가 있을 경우
     	if(null != sessionUserId && !"".equals(sessionUserId) && 0 < sessionUserId.length()) {
     		// 해당 사용자 등급이 U, A 인 경우에만 부계정 생성 가능
-			if(null != sessionUserGrade && !"".equals(sessionUserGrade) && 0 < sessionUserGrade.length()) {
-				// A(관리자) 또는 U(일반사용자)인 경우에만 부계정 생성 가능
-				if("A".equals(sessionUserGrade) || "U".equals(sessionUserGrade)) {
-					model.addAttribute("userId", sessionUserId);
-					model.addAttribute("userGrade", sessionUserGrade);
-					
-					// U 등급 사용자의 경우 부계정 목록 확인
-					if("U".equals(sessionUserGrade)) {
-						try {
-							Map<String, Object> subUserMap = loginService.getSubUserList(sessionUserId);
-							if(null != subUserMap && subUserMap.size() > 0) {
-								List<UserInfo> subUserList = (List<UserInfo>) subUserMap.get("userList");
-								if(null != subUserList && subUserList.size() > 0) {
-									model.addAttribute("hasSubUsers", true);
-								} else {
-									model.addAttribute("hasSubUsers", false);
-								}
-							} else {
-								model.addAttribute("hasSubUsers", false);
-							}
-						} catch(Exception e) {
-							unifiedErrorHandler.logError("하위 사용자 조회", e);
-							model.addAttribute("hasSubUsers", false);
-						}
-					} else {
-						model.addAttribute("hasSubUsers", true); // A 등급은 항상 true
-					}
-				} else {
-					result = "redirect:/main/main";
-				}
-			}
-		} else {
-			result = "redirect:/login/login";
-		}
+    		if(null != sessionUserGrade && !"".equals(sessionUserGrade) && 0 < sessionUserGrade.length()) {
+    			// A(관리자) 또는 U(일반사용자)인 경우에만 부계정 생성 가능
+    			if("A".equals(sessionUserGrade) || "U".equals(sessionUserGrade)) {
+    				model.addAttribute("userId", sessionUserId);
+    				model.addAttribute("userGrade", sessionUserGrade);
+    				model.addAttribute("loginUserId", sessionUserId);
+    				
+    				// 세션에서 parentUserId 가져오기
+    				String parentUserId_createSub = (String) session.getAttribute("parentUserId");
+    				if(!StringUtil.isEmpty(parentUserId_createSub)) {
+    					model.addAttribute("parentUserId", parentUserId_createSub);
+    				} else {
+    					model.addAttribute("parentUserId", sessionUserId);
+    				}
+    				
+    				// U 등급 사용자의 경우 부계정 목록 확인
+    				if("U".equals(sessionUserGrade)) {
+    					try {
+    						Map<String, Object> subUserMap = loginService.getSubUserList(sessionUserId);
+    						if(null != subUserMap && subUserMap.size() > 0) {
+    							List<UserInfo> subUserList = (List<UserInfo>) subUserMap.get("userList");
+    							if(null != subUserList && subUserList.size() > 0) {
+    								model.addAttribute("hasSubUsers", true);
+    							} else {
+    								model.addAttribute("hasSubUsers", false);
+    							}
+    						} else {
+    							model.addAttribute("hasSubUsers", false);
+    						}
+    					} catch(Exception e) {
+    						unifiedErrorHandler.logError("하위 사용자 조회", e);
+    						model.addAttribute("hasSubUsers", false);
+    					}
+    				} else {
+    					model.addAttribute("hasSubUsers", true); // A 등급은 항상 true
+    				}
+    			} else {
+    				result = "redirect:/main/main";
+    			}
+    		}
+    	} else {
+    		result = "redirect:/login/login";
+    	}
 
     	return result;
 	}
@@ -1434,13 +1637,32 @@ public class AdminController extends DefaultController {
 
     	if(null != createMap && 0 < createMap.size()) {
     		try {
+    			// 세션에서 userId 가져오기
+    			HttpSession session = req.getSession();
+    			String sessionUserId = (String) session.getAttribute("userId");
+    			
+    			// createMap에 userId가 없으면 세션에서 설정
+    			if(!createMap.containsKey("userId") || createMap.get("userId") == null || 
+    			   "null".equalsIgnoreCase(String.valueOf(createMap.get("userId"))) ||
+    			   String.valueOf(createMap.get("userId")).isEmpty()) {
+    				logger.warn("createMap에 userId 없음, 세션에서 설정: {}", sessionUserId);
+    				createMap.put("userId", sessionUserId);
+    			}
+    			
+    			logger.info("부계정 생성 요청 - createMap: {}", createMap);
     			adminService.createSubProc(createMap);
 
     			resultMap.put("resultCode", "200");
-			} catch(Exception e) {
-    			unifiedErrorHandler.logError("데이터 처리", e);
-			}
+    			resultMap.put("resultMessage", "부계정 생성 성공");
+		} catch(Exception e) {
+    			unifiedErrorHandler.logError("부계정 생성", e);
+    			resultMap.put("resultCode", "500");
+    			resultMap.put("resultMessage", "부계정 생성 실패: " + e.getMessage());
 		}
+	} else {
+		resultMap.put("resultCode", "400");
+		resultMap.put("resultMessage", "요청 데이터가 없습니다");
+	}
 
     	return resultMap;
 	}
@@ -1654,6 +1876,26 @@ public class AdminController extends DefaultController {
         Map<String, Object> resultMap = new HashMap<String, Object>();
         
         try {
+            HttpSession session = req.getSession();
+            
+            // 세션 검증
+            if(!sessionManagementService.isValidSession(session)) {
+                return unifiedErrorHandler.createUnauthorizedResponse();
+            }
+            
+            // 부계정 권한 확인 - 알람 설정 수정 불가
+            // 조건: parentUserId가 null이 아니고 userId와 다르면 부계정
+            String userId = (String) session.getAttribute("userId");
+            String parentUserId = (String) session.getAttribute("parentUserId");
+            boolean isSubAccount = (parentUserId != null && !parentUserId.isEmpty() && !parentUserId.equals(userId));
+            
+            if(isSubAccount) {
+                resultMap.put("resultCode", "403");
+                resultMap.put("resultMessage", "부계정 사용자는 알람 설정을 변경할 수 없습니다. (읽기 전용)");
+                logger.warn("부계정 사용자 알람 설정 변경 시도 차단 - userId: {}, parentUserId: {}", userId, parentUserId);
+                return resultMap;
+            }
+            
             logger.info("알람 설정 저장 요청: {}", alarmData);
             
             if(null != alarmData && 0 < alarmData.size()) {

@@ -28,11 +28,12 @@
             , u.last_login_dtm as loginDtm
             , u.logout_dtm as logoutDtm
             , u.token
+            , u.parent_user_id as mainId
             , case 
-                when u.user_id = #{currentUserId} then 'Y'
-                when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then 'Y'
-                else 'N'
-              end as activityStatus
+                when u.user_id = #{currentUserId} then '활성'
+                when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then '활성'
+                else '비활성'
+              end as loginYn
         from hnt_user u
         where u.del_yn = 'N'
         order by u.no desc
@@ -99,11 +100,12 @@
             , u.last_login_dtm as loginDtm
             , u.logout_dtm as logoutDtm
             , u.token
+            , u.parent_user_id as mainId
             , case 
-                when u.user_id = #{currentUserId} then 'Y'
-                when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then 'Y'
-                else 'N'
-              end as activityStatus
+                when u.user_id = #{currentUserId} then '활성'
+                when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then '활성'
+                else '비활성'
+              end as loginYn
         from hnt_user u
         left join hnt_sensor_info s on u.user_id = s.user_id and s.sensor_id = #{userId}
         where u.del_yn = 'N'
@@ -130,7 +132,7 @@
         and del_yn = 'N'
     </select>
 
-    <select id="getUserInfoByUserId" parameterType="java.lang.String" resultType="com.andrew.hnt.api.model.UserInfo">
+    <select id="getUserInfoByUserId" parameterType="java.lang.String" resultType="com.andrew.hnt.api.model.UserInfo" useCache="false" flushCache="true">
         select
             user_id as userId,
             user_nm as userNm,
@@ -141,7 +143,8 @@
             del_yn as delYn,
             last_login_dtm as loginDtm,
             logout_dtm as logoutDtm,
-            token
+            token,
+            parent_user_id as parentUserId
         from hnt_user
         where user_id = #{userId}
         and del_yn = 'N'

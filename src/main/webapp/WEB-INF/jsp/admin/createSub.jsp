@@ -178,7 +178,7 @@
                     <h4 class="modal-title" id="myModalLabel">로그아웃 하시겠습니까?</h4>
                 </div>
                 <div class="modal-footer">
-                    <a href="/login/logout" class="btn btn-primary">Yes</a>
+                    <a href="/login/login" class="btn btn-primary">Yes</a>
                     <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
                 </div>
             </div>

@@ -75,10 +75,6 @@ public class ChartController extends DefaultController {
         // 세션 userId 사용하여 사이드바 데이터 설정
         commonController.addSidebarData(sessionUserId, model, session);
         
-        // 엑셀 다운로드를 위한 sensorId 모델 추가 (sessionUserId와 동일)
-        model.addAttribute("sensorId", sessionUserId);
-        logger.info("차트 페이지 sensorId 설정: {}", sessionUserId);
-        
         // sensorUuid 파라미터를 모델에 추가
         if (sensorUuid != null && !sensorUuid.isEmpty()) {
             model.addAttribute("sensorUuid", sensorUuid);
@@ -96,6 +92,15 @@ public class ChartController extends DefaultController {
                         sensorName = dbSensorName;
                     }
                     deviceType = String.valueOf(sensorInfo.get("p16") != null ? sensorInfo.get("p16") : "0");
+                    
+                    // 센서의 실제 소유자 ID(sensor_id)로 MQTT 토픽 설정 (부계정 지원)
+                    String sensorOwnerId = (String) sensorInfo.get("sensor_id");
+                    if (sensorOwnerId != null && !sensorOwnerId.isEmpty()) {
+                        String topicStr = "HBEE/" + sensorOwnerId + "/TC/" + sensorUuid + "/SER";
+                        model.addAttribute("topicStr", topicStr);
+                        model.addAttribute("sensorId", sensorOwnerId); // 센서 실제 소유자 ID
+                        logger.info("차트 페이지 토픽 설정: topicStr={}, sensorId={}", topicStr, sensorOwnerId);
+                    }
                 }
                 
                 // 장치종류에 따른 표시명 생성

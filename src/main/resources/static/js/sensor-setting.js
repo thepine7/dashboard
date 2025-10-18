@@ -350,7 +350,7 @@ function handleMqttMessage(topic, message) {
     // 현재 사용자와 장치 확인
     if (topicUserId !== SensorSettingPage.currentUserId || 
         topicUuid !== SensorSettingPage.currentSensorUuid) {
-        console.log('다른 사용자 또는 장치의 메시지 - 무시:', topicUserId, topicUuid);
+        console.debug('다른 사용자 또는 장치의 메시지 - 무시:', topicUserId, topicUuid);
         return;
     }
     

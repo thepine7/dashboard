@@ -18,6 +18,7 @@ public class UserInfo {
     public String logoutDtm = "";
     public String loginYn;
     public String mainId;
+    public String parentUserId;
     
     // Getters
     public int getNo() { return no; }
@@ -37,6 +38,7 @@ public class UserInfo {
     public String getLogoutDtm() { return logoutDtm; }
     public String getLoginYn() { return loginYn; }
     public String getMainId() { return mainId; }
+    public String getParentUserId() { return parentUserId; }
     
     // Setters
     public void setNo(int no) { this.no = no; }
@@ -56,4 +58,5 @@ public class UserInfo {
     public void setLogoutDtm(String logoutDtm) { this.logoutDtm = logoutDtm; }
     public void setLoginYn(String loginYn) { this.loginYn = loginYn; }
     public void setMainId(String mainId) { this.mainId = mainId; }
+    public void setParentUserId(String parentUserId) { this.parentUserId = parentUserId; }
 }

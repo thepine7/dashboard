@@ -95,4 +95,12 @@ public interface AdminService {
 	 * @param alarmData 알람 설정 데이터
 	 */
 	public void saveAlarmSetting(Map<String, Object> alarmData);
+	
+	/**
+	 * 주계정/부계정 장치 전체 조회 (parent_user_id 기반)
+	 * @param targetUserId 조회할 사용자 ID
+	 * @param parentUserId 주계정 사용자 ID
+	 * @return 센서 리스트
+	 */
+	public List<Map<String, Object>> getFullSensorList(String targetUserId, String parentUserId);
 }

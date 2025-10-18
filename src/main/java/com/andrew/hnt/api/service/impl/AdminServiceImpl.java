@@ -169,6 +169,34 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 	}
 
 	@Override
+	public List<Map<String, Object>> getFullSensorList(String targetUserId, String parentUserId) {
+		List<Map<String, Object>> resultList = new ArrayList<Map<String, Object>>();
+
+		if(null != targetUserId && targetUserId.length() > 0) {
+			Map<String, Object> param = new HashMap<String, Object>();
+			param.put("targetUserId", targetUserId);
+			param.put("parentUserId", parentUserId);
+
+			try {
+				resultList = adminMapper.getFullSensorList(param);
+
+				if(null != resultList && 0 < resultList.size()) {
+					for(int i=0; i < resultList.size(); i++) {
+						String name = String.valueOf(resultList.get(i).get("sensor_name"));
+						if(name == null || name.length() == 0 || "null".equalsIgnoreCase(name)) {
+							resultList.get(i).put("sensor_name", "장치" + (i + 1));
+						}
+					}
+				}
+			} catch(Exception e) {
+				logger.error("Error in getFullSensorList: {}", e.toString());
+			}
+		}
+
+		return resultList;
+	}
+
+	@Override
 	public void insertSetting(Map<String, Object> settingMap) {
 		if(null != settingMap && 0 < settingMap.size()) {
 			logger.info("userId : " + String.valueOf(settingMap.get("userId")));
@@ -513,9 +541,18 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 	public void updateUser(Map<String, Object> param) {
 		if(null != param && 0 < param.size()) {
 			try {
+				logger.info("=== updateUser 실행 직전 ===");
+				logger.info("수정할 userId: {}", param.get("userId"));
+				logger.info("수정할 userTel: {}", param.get("userTel"));
+				logger.info("수정할 userEmail: {}", param.get("userEmail"));
+				logger.info("수정할 userGrade: {}", param.get("userGrade"));
+				
 				adminMapper.updateUser(param);
+				
+				logger.info("=== updateUser 실행 완료 ===");
 			} catch(Exception e) {
-				logger.error("Error : " + e.toString());
+				logger.error("updateUser 실패 - userId: {}, error: {}", param.get("userId"), e.toString());
+				throw new RuntimeException("사용자 정보 업데이트 실패", e);
 			}
 		}
 	}
@@ -552,6 +589,14 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 				}
 			}
 
+			// parent_user_id 유효성 검사
+			String parentUserId = String.valueOf(param.get("userId"));
+			if(parentUserId == null || parentUserId.isEmpty() || "null".equalsIgnoreCase(parentUserId)) {
+				logger.error("부계정 생성 실패 - parentUserId가 없음: {}", param);
+				throw new Exception("주계정 ID가 없습니다");
+			}
+			logger.info("부계정 생성 시작 - subId: {}, parentUserId: {}", subId, parentUserId);
+
 			UserInfo userInfo = new UserInfo();
 			userInfo.setUserId(subId);
 			userInfo.setUserPass(subPass);
@@ -563,20 +608,20 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 			userInfo.setDelYn("N");
 			userInfo.setInstId("hnt");
 			userInfo.setMdfId("hnt");
+			userInfo.setParentUserId(parentUserId);
 
 			try {
 				loginMapper.insertUser(userInfo);
+				logger.info("부계정 생성 성공 - subId: {}, parentUserId: {}", subId, parentUserId);
+				logger.info("DB 저장 확인 - UserInfo.parentUserId: {}", userInfo.getParentUserId());
 			} catch(Exception e) {
-				logger.error("Error : " + e.toString());
+				logger.error("부계정 생성 실패 - subId: {}, parentUserId: {}, error: {}", subId, parentUserId, e.toString());
 				throw new Exception();
 			}
 
-			// 서브 사용자에게 메인 사용자의 장치 정보 입력
-			try {
-				adminMapper.insertSubSensorInfo(param);
-			} catch(Exception e) {
-				logger.error("Error : " + e.toString());
-				throw new Exception();
+			// 부계정은 장치를 직접 소유하지 않으며 parent_user_id 기반으로 장치를 조회한다.
+			if(param.containsKey("sensorInfoCopy")) {
+				logger.warn("sensorInfoCopy 파라미터는 더 이상 사용되지 않습니다 - userId: {}", subId);
 			}
 		}
 	}
@@ -625,36 +670,38 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 	@Override
 	public boolean isSubAccount(String userId) {
 		try {
-			// parent_user_id 컬럼 기반으로 부계정 여부 확인 (통일된 방식)
-			Map<String, Object> param = new HashMap<String, Object>();
-			param.put("userId", userId);
-			
-			// 부계정인지 확인: parent_user_id가 NULL이 아닌 경우 부계정
-			boolean isSub = adminMapper.isSubAccount(param);
-			logger.info("부계정 여부 확인 (parent_user_id 기반) - userId: {}, isSubAccount: {}", userId, isSub);
-			return isSub;
-		} catch (Exception e) {
+			// hnt_user 테이블의 parent_user_id 확인
+			UserInfo userInfo = loginMapper.getUserInfoByUserId(userId);
+			if(userInfo != null) {
+				String parentId = userInfo.getParentUserId();
+				// parent_user_id가 자기 자신이 아니면 부계정
+				boolean isSub = parentId != null && !parentId.equals(userId) && !parentId.equals("null");
+				logger.info("부계정 여부 확인 (parent_user_id 기반) - userId: {}, parentId: {}, isSubAccount: {}", 
+					userId, parentId, isSub);
+				return isSub;
+			}
+		} catch(Exception e) {
 			logger.error("부계정 여부 확인 실패 - userId: {}, error: {}", userId, e.toString());
-			return false;
 		}
+		return false;
 	}
 	
 	@Override
 	public String getMainUserIdForSubUser(String subUserId) {
 		try {
-			// parent_user_id 컬럼에서 부계정의 메인 사용자 ID 조회 (통일된 방식)
-			Map<String, Object> param = new HashMap<String, Object>();
-			param.put("subUserId", subUserId);
-			
-			Map<String, Object> result = adminMapper.getMainUserIdForSubUser(param);
-			if (result != null && result.size() > 0) {
-				return String.valueOf(result.get("parent_user_id"));
+			// hnt_user 테이블의 parent_user_id 직접 반환
+			UserInfo userInfo = loginMapper.getUserInfoByUserId(subUserId);
+			if(userInfo != null) {
+				String parentId = userInfo.getParentUserId();
+				String resultId = parentId != null && !parentId.equals("null") ? parentId : subUserId;
+				logger.info("부계정의 메인 사용자 ID 조회 (parent_user_id 기반) - subUserId: {}, parentId: {}, resultId: {}", 
+					subUserId, parentId, resultId);
+				return resultId;
 			}
-			return null;
-		} catch (Exception e) {
-			logger.error("부계정의 메인 사용자 ID 조회 실패 (parent_user_id 기반) - subUserId: {}, error: {}", subUserId, e.toString());
-			return null;
+		} catch(Exception e) {
+			logger.error("부계정의 메인 사용자 ID 조회 실패 - subUserId: {}, error: {}", subUserId, e.toString());
 		}
+		return subUserId;
 	}
 
 	@Override

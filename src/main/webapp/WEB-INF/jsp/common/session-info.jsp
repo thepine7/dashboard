@@ -12,6 +12,10 @@
     userGrade: ${userGrade}<br>
     userNm: ${userNm}<br>
     sensorId: ${sensorId}<br>
+    loginUserId: ${loginUserId}<br>
+    parentUserId: ${parentUserId}<br>
+    userEmail: ${userEmail}<br>
+    userTel: ${userTel}<br>
     token: ${token}<br>
     sensorUuid: ${sensorUuid}<br>
     topicStr: ${topicStr}
@@ -23,6 +27,8 @@
 <input type="hidden" id="userGrade" name="userGrade" value="${userGrade}" />
 <input type="hidden" id="userNm" name="userNm" value="${userNm}" />
 <input type="hidden" id="sensorId" name="sensorId" value="${sensorId}" />
+<input type="hidden" id="loginUserId" name="loginUserId" value="${loginUserId}" />
+<input type="hidden" id="parentUserId" name="parentUserId" value="${parentUserId}" />
 <input type="hidden" id="token" name="token" value="${token}" />
 
 <!-- 선택적 세션 정보 (있는 경우만) -->
@@ -51,6 +57,7 @@ function initializeSessionInfo() {
     console.log('  userNm: ${userNm}');
     console.log('  sensorId: ${sensorId}');
     console.log('  loginUserId: ${loginUserId}');
+    console.log('  parentUserId: ${parentUserId}');
     console.log('  userEmail: ${userEmail}');
     console.log('  userTel: ${userTel}');
     console.log('  token: ${token}');
@@ -62,17 +69,23 @@ function initializeSessionInfo() {
     console.log('  userNm:', $('#userNm').val());
     console.log('  sensorId:', $('#sensorId').val());
     console.log('  loginUserId:', $('#loginUserId').val());
+    console.log('  parentUserId:', $('#parentUserId').val());
     console.log('  userEmail:', $('#userEmail').val());
     console.log('  userTel:', $('#userTel').val());
     console.log('  token:', $('#token').val());
     
-    // SessionManager 초기화
+    // SessionManager 초기화 (이미 초기화되었다면 스킵)
     if (typeof SessionManager !== 'undefined') {
-        if (!SessionManager.initialize()) {
-            console.error('SessionManager 초기화 실패');
-            return false;
+        // SessionManager가 이미 초기화되었는지 확인
+        if (!SessionManager.isInitialized || !SessionManager.isInitialized()) {
+            if (!SessionManager.initialize()) {
+                console.error('SessionManager 초기화 실패');
+                return false;
+            }
+            console.log('SessionManager 초기화 성공 (session-info.jsp)');
+        } else {
+            console.log('SessionManager 이미 초기화됨 - 스킵');
         }
-        console.log('SessionManager 초기화 성공');
     } else {
         console.warn('SessionManager가 로드되지 않았습니다. session-manager.js를 포함해주세요.');
     }
@@ -105,6 +118,7 @@ function initializeSessionInfo() {
     window.currentUserNm = userNm || '';
     window.currentSensorId = sensorId || userId;
     window.currentLoginUserId = loginUserId || userId;
+    window.currentParentUserId = $('#parentUserId').val() || userId;
     window.currentUserEmail = $('#userEmail').val() || '';
     window.currentUserTel = $('#userTel').val() || '';
     window.currentToken = $('#token').val() || '';
@@ -116,6 +130,7 @@ function initializeSessionInfo() {
         userNm: userNm || '',
         sensorId: sensorId || userId,
         loginUserId: loginUserId || userId,
+        parentUserId: $('#parentUserId').val() || userId,
         userEmail: $('#userEmail').val() || '',
         userTel: $('#userTel').val() || '',
         token: $('#token').val() || '',

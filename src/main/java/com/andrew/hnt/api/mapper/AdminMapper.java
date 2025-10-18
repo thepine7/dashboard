@@ -142,5 +142,12 @@ public interface AdminMapper {
 	 * @param alarmData 알람 설정 데이터
 	 */
 	public void saveAlarmSetting(Map<String, Object> alarmData);
+	
+	/**
+	 * 주계정/부계정 장치 전체 조회 (parent_user_id 기반)
+	 * @param param targetUserId, parentUserId 포함
+	 * @return 센서 리스트
+	 */
+	public List<Map<String, Object>> getFullSensorList(Map<String, Object> param);
 
 }

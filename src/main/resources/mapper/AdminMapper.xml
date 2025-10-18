@@ -71,10 +71,12 @@
 		and sensor_id = #{sensorId}
 	</select>
 
-	<!-- 부계정 센서 리스트 조회 (UNION 최적화) -->
+	<!-- 부계정 센서 리스트 조회 (주계정 장치 + 부계정 장치, 중복 제거) -->
 	<select id="getSubSensorList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
-		-- 주계정이 소유한 센서 (부계정이 공유 사용)
-		SELECT
+		-- 1. 주계정이 소유한 센서 (sensor_id = 주계정 ID)
+		-- 2. 부계정이 직접 소유한 센서 (sensor_id = 부계정 ID)
+		-- DISTINCT로 중복 제거
+		SELECT DISTINCT
 			s.user_id,
 			s.sensor_id,
 			s.sensor_uuid,
@@ -84,26 +86,9 @@
 			s.sensor_gu,
 			s.chart_type
 		FROM hnt_sensor_info s
-		WHERE s.sensor_id = #{mainUserId} 
-			AND s.user_id = s.sensor_id
-		
-		UNION ALL
-		
-		-- 부계정이 직접 소유한 센서
-		SELECT
-			s.user_id,
-			s.sensor_id,
-			s.sensor_uuid,
-			s.sensor_name,
-			s.sensor_loc,
-			s.sensor_type,
-			s.sensor_gu,
-			s.chart_type
-		FROM hnt_sensor_info s
-		WHERE s.user_id = #{subUserId} 
-			AND s.user_id = s.sensor_id
-		
-		ORDER BY sensor_name
+		WHERE s.sensor_id = #{mainUserId}
+		   OR s.sensor_id = #{subUserId}
+		ORDER BY s.sensor_name
 	</select>
 
 	<!-- 사용자 관리에서 주계정의 모든 센서 조회 -->
@@ -120,6 +105,30 @@
 		from hnt_sensor_info s
 		where s.sensor_id = #{userId}
 		  and s.user_id = s.sensor_id
+	</select>
+
+	<!-- 주계정/부계정 장치 전체 조회 (parent_user_id 기반) -->
+	<select id="getFullSensorList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+		SELECT DISTINCT
+			s.user_id
+			, s.sensor_id
+			, s.sensor_uuid
+			, s.sensor_name
+			, s.sensor_loc
+			, s.sensor_type
+			, s.sensor_gu
+			, s.chart_type
+			, CASE
+				WHEN s.user_id = s.sensor_id THEN 'MAIN'
+				WHEN s.user_id != s.sensor_id THEN 'SUB'
+				ELSE 'UNKNOWN'
+			  END AS owner_type
+		FROM hnt_sensor_info s
+		WHERE (
+			s.sensor_id = #{parentUserId}  -- 주계정이 소유한 장치
+			OR s.user_id = #{targetUserId}  -- 또는 대상 사용자가 직접 사용하는 장치
+		)
+		ORDER BY s.sensor_name
 	</select>
 
 	<!-- selectSetting 쿼리는 MqttMapper.xml에서 공통 사용 -->
@@ -509,11 +518,13 @@
 		and user_grade = 'B'
 	</delete>
 
-	<update id="updateUser" parameterType="java.util.HashMap">
+	<update id="updateUser" parameterType="java.util.HashMap" flushCache="true">
 		update hnt_user set
             user_tel = #{userTel}
             , user_email = #{userEmail}
             , user_grade = #{userGrade}
+            , mdf_id = 'hnt'
+            , mdf_dtm = now()
         where user_id = #{userId}
 	</update>
 
@@ -550,6 +561,7 @@
 		from hnt_user 
 		where user_id = #{userId}
 		  and parent_user_id is not null
+		  and parent_user_id != user_id
 		  and del_yn = 'N'
 	</select>
 
@@ -669,8 +681,8 @@
 			inst_dtm,
 			mdf_dtm
 		from hnt_config
-		where 1 = 1
-		and sensor_uuid = #{sensorUuid}
+		where sensor_uuid = #{sensorUuid}
+		and user_id = sensor_id
 		limit 1
 	</select>
 

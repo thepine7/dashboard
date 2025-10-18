@@ -11,12 +11,26 @@ var SessionManager = (function() {
     var currentUserNm = null;
     var currentSensorId = null;
     var currentToken = null;
+    var initialized = false;  // 초기화 상태 추적
+    
+    /**
+     * 초기화 여부 확인
+     */
+    function isInitialized() {
+        return initialized;
+    }
     
     /**
      * 세션 정보 초기화
      * 페이지 로드 시 호출
      */
     function initialize() {
+        // 이미 초기화되었다면 스킵
+        if (initialized) {
+            console.log('SessionManager 이미 초기화됨 - 스킵');
+            return true;
+        }
+        
         console.log('=== SessionManager 초기화 시작 ===');
         
         // DOM에서 세션 정보 읽기
@@ -47,6 +61,9 @@ var SessionManager = (function() {
             redirectToLogin();
             return false;
         }
+        
+        // 초기화 완료 표시
+        initialized = true;
         
         return true;
     }
@@ -199,6 +216,7 @@ var SessionManager = (function() {
     // 공개 API
     return {
         initialize: initialize,
+        isInitialized: isInitialized,
         getCurrentUserId: getCurrentUserId,
         getCurrentUserGrade: getCurrentUserGrade,
         getCurrentUserNm: getCurrentUserNm,

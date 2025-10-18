@@ -190,47 +190,97 @@ var UnifiedMQTTManager = (function() {
     var pageTopicHandlers = {
         'main': function() {
             console.log('메인 페이지 토픽 구독');
-            // 현재 사용자의 모든 센서 토픽 구독
-            var currentUserId = getCurrentUserId();
-            console.log('getCurrentUserId() 결과:', currentUserId || 'undefined');
+            // 모든 센서의 실제 소유자 ID로 토픽 구독
+            var sensorIds = window.allowedSensorIds || [];
+            console.log('구독할 센서 ID 목록:', sensorIds);
             
-            if (currentUserId) {
-                var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
-                console.log('메인 페이지 토픽 구독:', topic);
-                console.log('subscribe 함수 호출 전');
-                var result = subscribe(topic, function(message) {
-                    console.log('메인 페이지 메시지 수신:', message.destinationName, message.payloadString);
-                    handleSensorMessage(message);
+            if (sensorIds.length > 0) {
+                // 각 센서 소유자 ID별로 토픽 구독 (중복 제거)
+                var uniqueSensorIds = Array.from(new Set(sensorIds));
+                uniqueSensorIds.forEach(function(sensorId) {
+                    var topic = 'HBEE/' + sensorId + '/+/+/DEV';
+                    console.log('메인 페이지 토픽 구독:', topic);
+                    subscribe(topic, function(message) {
+                        console.log('메인 페이지 메시지 수신:', message.destinationName, message.payloadString);
+                        handleSensorMessage(message);
+                    });
                 });
-                console.log('subscribe 함수 호출 결과:', result);
             } else {
-                console.error('사용자 ID가 없어 토픽 구독 불가');
+                // fallback: 현재 사용자 ID로 구독
+                var currentUserId = getCurrentUserId();
+                console.log('allowedSensorIds가 없어 currentUserId로 구독:', currentUserId);
+                if (currentUserId) {
+                    var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
+                    console.log('메인 페이지 토픽 구독 (fallback):', topic);
+                    subscribe(topic, function(message) {
+                        console.log('메인 페이지 메시지 수신:', message.destinationName, message.payloadString);
+                        handleSensorMessage(message);
+                    });
+                } else {
+                    console.error('사용자 ID가 없어 토픽 구독 불가');
+                }
             }
         },
         'sensorSetting': function() {
             console.log('센서설정 페이지 토픽 구독');
-            // 현재 사용자의 모든 센서 토픽 구독
+            // 센서설정 페이지는 센서의 실제 소유자 ID로 토픽 구독 (부계정 지원)
+            var sensorId = $('#sensorId').val(); // 센서 실제 소유자 ID
             var currentUserId = getCurrentUserId();
-            if (currentUserId) {
-                var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
-                console.log('센서설정 페이지 토픽 구독:', topic);
+            
+            console.log('센서설정 페이지 토픽 구독 정보:', {
+                sensorId: sensorId,
+                currentUserId: currentUserId
+            });
+            
+            if (sensorId) {
+                // 센서 소유자 ID로 구독 (부계정이 주계정 센서를 조회하는 경우)
+                var topic = 'HBEE/' + sensorId + '/+/+/DEV';
+                console.log('센서설정 페이지 토픽 구독 (센서 소유자 ID):', topic);
                 subscribe(topic, function(message) {
                     console.log('센서설정 페이지 메시지 수신:', message.destinationName, message.payloadString);
                     handleSensorMessage(message);
                 });
+            } else if (currentUserId) {
+                // fallback: 현재 사용자 ID로 구독
+                var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
+                console.log('센서설정 페이지 토픽 구독 (현재 사용자 ID):', topic);
+                subscribe(topic, function(message) {
+                    console.log('센서설정 페이지 메시지 수신:', message.destinationName, message.payloadString);
+                    handleSensorMessage(message);
+                });
+            } else {
+                console.error('센서설정 페이지: 센서 소유자 ID 및 사용자 ID가 없어 토픽 구독 불가');
             }
         },
         'chart': function() {
             console.log('차트 페이지 토픽 구독');
-            // 현재 사용자의 모든 센서 토픽 구독
+            // 차트 페이지는 센서의 실제 소유자 ID로 토픽 구독 (부계정 지원)
+            var sensorId = $('#sensorId').val(); // 센서 실제 소유자 ID
             var currentUserId = getCurrentUserId();
-            if (currentUserId) {
-                var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
-                console.log('차트 페이지 토픽 구독:', topic);
+            
+            console.log('차트 페이지 토픽 구독 정보:', {
+                sensorId: sensorId,
+                currentUserId: currentUserId
+            });
+            
+            if (sensorId) {
+                // 센서 소유자 ID로 구독 (부계정이 주계정 센서를 조회하는 경우)
+                var topic = 'HBEE/' + sensorId + '/+/+/DEV';
+                console.log('차트 페이지 토픽 구독 (센서 소유자 ID):', topic);
                 subscribe(topic, function(message) {
                     console.log('차트 페이지 메시지 수신:', message.destinationName, message.payloadString);
                     handleSensorMessage(message);
                 });
+            } else if (currentUserId) {
+                // fallback: 현재 사용자 ID로 구독
+                var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
+                console.log('차트 페이지 토픽 구독 (현재 사용자 ID):', topic);
+                subscribe(topic, function(message) {
+                    console.log('차트 페이지 메시지 수신:', message.destinationName, message.payloadString);
+                    handleSensorMessage(message);
+                });
+            } else {
+                console.error('차트 페이지: 센서 소유자 ID 및 사용자 ID가 없어 토픽 구독 불가');
             }
         }
     };
@@ -1679,17 +1729,22 @@ var UnifiedMQTTManager = (function() {
                 suffix: suffix
             });
                 
-                // 1단계: 사용자 ID 필터링 (강화)
+                // 1단계: 사용자 ID 필터링 (부계정 지원)
                 var currentUserId = getCurrentUserId();
                 if (!currentUserId) {
                     console.warn('현재 사용자 ID가 없어 메시지를 처리할 수 없습니다.');
                     return;
                 }
                 
-                if (userId !== currentUserId) {
+                // 부계정인 경우 allowedSensorIds에 포함된 userId도 허용
+                var allowedSensorIds = window.allowedSensorIds || [];
+                var isAllowedUser = (userId === currentUserId) || (allowedSensorIds.indexOf(userId) >= 0);
+                
+                if (!isAllowedUser) {
                     console.log('사용자 ID 불일치로 메시지 필터링됨:', {
                         messageUserId: userId,
-                        currentUserId: currentUserId
+                        currentUserId: currentUserId,
+                        allowedSensorIds: allowedSensorIds
                     });
                     return;
                 }
@@ -1801,11 +1856,11 @@ var UnifiedMQTTManager = (function() {
                     } else if (window.location.pathname === '/admin/sensorSetting') {
                         var currentSensorUuid = document.getElementById('sensorUuid') ? document.getElementById('sensorUuid').value : null;
                         if (currentSensorUuid && sensorUuid === currentSensorUuid) {
-                            console.log('센서설정 페이지 rcvMsg 함수 호출 (필터링됨):', message.destinationName, message.payloadString);
-                            window.rcvMsg(message.destinationName, message.payloadString);
-                        } else {
-                            console.log('센서설정 페이지 메시지 필터링됨:', sensorUuid, '!==', currentSensorUuid);
-                        }
+                        console.log('센서설정 페이지 rcvMsg 함수 호출 (필터링됨):', message.destinationName, message.payloadString);
+                        window.rcvMsg(message.destinationName, message.payloadString);
+                    } else {
+                        console.debug('센서설정 페이지 메시지 필터링됨:', sensorUuid, '!==', currentSensorUuid);
+                    }
                     } else {
                         console.log('메인 페이지 rcvMsg 함수 호출:', message.destinationName, message.payloadString);
                         window.rcvMsg(message.destinationName, message.payloadString);
@@ -2308,17 +2363,32 @@ var UnifiedMQTTManager = (function() {
             return false;
         }
         
-        // 현재 사용자 ID와 센서 UUID 가져오기
+        // 센서 소유자 ID와 센서 UUID 가져오기 (부계정 지원)
+        var sensorOwnerId = $('#sensorId').val(); // 센서 실제 소유자 ID
         var currentUserId = getCurrentUserId();
         var sensorUuid = getCurrentSensorUuid();
         
-        if (!currentUserId || !sensorUuid) {
-            console.error('사용자 ID 또는 센서 UUID가 없어 센서 요청 발행 불가');
+        // 센서 소유자 ID 우선, 없으면 현재 사용자 ID 사용
+        var userId = sensorOwnerId || currentUserId;
+        
+        if (!userId || !sensorUuid) {
+            console.error('사용자 ID 또는 센서 UUID가 없어 센서 요청 발행 불가', {
+                sensorOwnerId: sensorOwnerId,
+                currentUserId: currentUserId,
+                sensorUuid: sensorUuid
+            });
             return false;
         }
         
-        // 토픽 생성: HBEE/{userId}/TC/{sensorUuid}/SER
-        var topic = 'HBEE/' + currentUserId + '/TC/' + sensorUuid + '/SER';
+        // 토픽 생성: HBEE/{sensorOwnerId}/TC/{sensorUuid}/SER (부계정 지원)
+        var topic = 'HBEE/' + userId + '/TC/' + sensorUuid + '/SER';
+        
+        console.log('센서 요청 발행 - 토픽:', topic, '메시지:', message, {
+            sensorOwnerId: sensorOwnerId,
+            currentUserId: currentUserId,
+            userId: userId,
+            sensorUuid: sensorUuid
+        });
         
         return publish(topic, message, 0, false);
     }
@@ -3297,23 +3367,27 @@ var UnifiedMQTTManager = (function() {
      */
     function getSensorUuidList() {
         var uuids = [];
+        var uuidSet = new Set();  // 중복 제거를 위한 Set
         
         // DOM에서 센서 UUID 추출
         $('input[id^="sensorUuid"]').each(function() {
             var uuid = $(this).val();
             if (uuid && uuid.trim() !== '') {
-                uuids.push(uuid.trim());
+                uuidSet.add(uuid.trim());
             }
         });
         
-        // window.SessionData에서 센서 목록 추출
+        // window.SessionData에서 센서 목록 추출 (중복 자동 제거)
         if (window.SessionData && window.SessionData.sensorList) {
             window.SessionData.sensorList.forEach(function(sensor) {
-                if (sensor.sensor_uuid && uuids.indexOf(sensor.sensor_uuid) === -1) {
-                    uuids.push(sensor.sensor_uuid);
+                if (sensor.sensor_uuid) {
+                    uuidSet.add(sensor.sensor_uuid);
                 }
             });
         }
+        
+        // Set을 배열로 변환 (중복 제거됨)
+        uuids = Array.from(uuidSet);
         
         console.log('센서 UUID 목록:', uuids);
         return uuids;

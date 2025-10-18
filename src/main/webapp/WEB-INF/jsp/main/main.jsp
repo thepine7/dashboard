@@ -124,7 +124,7 @@
   <!-- Paho MQTT 라이브러리 -->
   <script src="/js/mqttws31-min.js"></script>
   <!-- 통일된 MQTT 관리 모듈 사용 (버전 쿼리로 캐시 무효화) -->
-  <script src="/js/unified-mqtt-manager.js?v=20251007"></script>
+  <script src="/js/unified-mqtt-manager.js?v=20251018"></script>
 </head>
 <body>
 <input type="hidden" id="userId" name="userId" value="${not empty userId ? userId : ''}">
@@ -1160,22 +1160,35 @@
         </c:choose>
       });
 
+      // 장치 리스트에서 sensor_id와 sensor_uuid 목록 추출 (페이지 로딩 시 한 번만 생성)
+      var allowedSensorIds = [];
+      var allowedSensorUuids = [];
+      
+      // 서버에서 전달된 센서 목록을 먼저 배열로 저장
+      var tempSensorIds = [<c:forEach items="${sensorList}" var="item" varStatus="status">'${item.sensor_id}'<c:if test="${!status.last}">,</c:if></c:forEach>];
+      var tempSensorUuids = [<c:forEach items="${sensorList}" var="item" varStatus="status">'${item.sensor_uuid}'<c:if test="${!status.last}">,</c:if></c:forEach>];
+      
+      // 중복 제거 (Set 사용)
+      allowedSensorIds = [...new Set(tempSensorIds)];
+      allowedSensorUuids = [...new Set(tempSensorUuids)];
+      
+      console.log('센서 ID 목록 (중복 제거):', allowedSensorIds);
+      console.log('센서 UUID 목록 (중복 제거):', allowedSensorUuids);
+
       function rcvMsg(topic, message) {
         if(topic) {
           var topicArr = new Array();
           topicArr = topic.split("/");
           let uuid = topicArr[3];
-          let userId = topicArr[1];
+          let topicUserId = topicArr[1];  // 토픽의 userId (장치 소유자)
 
           // 현재 사용자의 장치만 처리 (부계정 사용자 고려)
-          // userId는 토픽의 사용자 ID, sensorId는 실제 장치 소유자
-          var currentSensorId = $('#sensorId').val();
-          var currentUserId = $('#userId').val();
+          var currentUserId = $('#userId').val();  // 현재 로그인 사용자
           
-          // 현재 사용자의 장치가 아닌 경우 처리 중단
-          if (userId !== currentSensorId && userId !== currentUserId) {
-        return;
-      }
+          // 토픽의 userId가 허용된 sensor_id 중 하나이거나 현재 로그인 사용자이면 처리
+          if (!allowedSensorIds.includes(topicUserId) && topicUserId !== currentUserId) {
+            return;  // 현재 사용자의 장치가 아닌 경우 처리 중단
+          }
       
           ////console.log("topic : " + topic);
           ////console.log("message : " + message);
@@ -1186,11 +1199,10 @@
               ////console.log("msg : " + msg);
 
               if(msg.actcode == 'live') {
-                if(userId == $('#sensorId').val() || userId == $('#userId').val()) {
-                  // 센서 정보 입력 처리 제거 - 불필요한 API 호출 방지 (404 에러)
-                  // 실시간 데이터 수신 시 별도의 센서 정보 저장 불필요
-                  // (MQTT 메시지 수신만으로 충분)
-                }
+                // 이미 필터링 완료되었으므로 추가 체크 불필요
+                // 센서 정보 입력 처리 제거 - 불필요한 API 호출 방지 (404 에러)
+                // 실시간 데이터 수신 시 별도의 센서 정보 저장 불필요
+                // (MQTT 메시지 수신만으로 충분)
 
                 if(msg.name == 'ain') {
                   // 현재 온도 알림 - 공통 함수 사용
@@ -1211,7 +1223,7 @@
                       window['yval_' + sensorUuid] = 'Error';
                     }
                     
-                    if($('#userId').val() == topicArr[1]) {
+                    if(currentUserId == topicUserId) {
                       sendNoti("Error", 'ain', topicArr[3], msg.type);
                     }
       } else {
@@ -1255,7 +1267,7 @@
                     // 온도 데이터 수신 시점에 바로 에러 체크
                     chkError(sensorUuid);
                     
-                    if($('#userId').val() == topicArr[1]) {
+                    if(currentUserId == topicUserId) {
                       // 온도 알람이 사용 설정된 경우에만 알림 전송
                       // 메인 페이지에서는 알람 설정을 DB에서 확인할 수 없으므로
                       // 서버 측에서만 알람 조건을 체크하도록 함
@@ -1276,14 +1288,14 @@
                       updateStatusIndicator('status'+topicArr[3], 'green', 'status');
                       window['deviceDinErrorStates_' + topicArr[3]] = true;
                       updateStatusIndicator('error'+topicArr[3], 'red', 'error');
-                      if($('#userId').val() == topicArr[1]) {
+                      if(currentUserId == topicUserId) {
                         sendNoti(msg.value, 'din', topicArr[3], msg.type);
                       }
                     } else {
                       // din, type 1, ch1, value 0인 경우: 이상 해제
                       window['deviceDinErrorStates_' + topicArr[3]] = false;
                       updateStatusIndicator('error'+topicArr[3], 'gray', 'error');
-                      if($('#userId').val() == topicArr[1]) {
+                      if(currentUserId == topicUserId) {
                         sendNoti(msg.value, 'din', topicArr[3], msg.type);
                       }
                     }

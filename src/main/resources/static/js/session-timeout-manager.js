@@ -492,11 +492,11 @@ var SessionTimeoutManager = (function() {
             method: 'GET'
         })
         .then(function() {
-            window.location.href = '/login';
+            window.location.href = '/login/login';
         })
         .catch(function(error) {
             console.error('로그아웃 실패:', error);
-            window.location.href = '/login';
+            window.location.href = '/login/login';
         });
     }
     

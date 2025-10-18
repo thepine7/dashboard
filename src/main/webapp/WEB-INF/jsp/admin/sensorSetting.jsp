@@ -152,19 +152,30 @@
 <!-- Paho MQTT 라이브러리 -->
 <script src="/js/mqttws31-min.js"></script>
 <!-- 통일된 MQTT 관리 모듈 사용 (버전 쿼리로 캐시 무효화) -->
-<script src="/js/unified-mqtt-manager.js?v=20251007"></script>
+<script src="/js/unified-mqtt-manager.js?v=20251018004"></script>
 <!-- 센서 설정 페이지 전용 JavaScript -->
 <script>
 // sensor-setting.js에서 사용할 변수들을 JSP에서 설정
 window.SensorSettingPage = window.SensorSettingPage || {};
 window.SensorSettingPage.currentUserId = '${userId}';
+window.SensorSettingPage.currentSensorId = '${sensorId}'; // 센서 실제 소유자 ID
 window.SensorSettingPage.currentSensorUuid = '${sensorUuid}';
-window.SensorSettingPage.currentTopic = 'HBEE/' + window.SensorSettingPage.currentUserId + '/TC/' + window.SensorSettingPage.currentSensorUuid + '/SER';
+window.SensorSettingPage.currentTopic = 'HBEE/' + window.SensorSettingPage.currentSensorId + '/TC/' + window.SensorSettingPage.currentSensorUuid + '/SER'; // sensorId 사용
 
 console.log('센서설정 페이지 변수 설정:', {
     userId: window.SensorSettingPage.currentUserId,
+    sensorId: window.SensorSettingPage.currentSensorId,
     sensorUuid: window.SensorSettingPage.currentSensorUuid,
     topic: window.SensorSettingPage.currentTopic
+});
+
+// 센서 설정 페이지용 allowedSensorIds 설정 (부계정 지원)
+// DOMContentLoaded 이벤트 후에 실행하여 hidden input이 로드된 후 값을 가져옴
+document.addEventListener('DOMContentLoaded', function() {
+    var sensorId = document.getElementById('sensorId') ? document.getElementById('sensorId').value : '';
+    var currentUserId = document.getElementById('userId') ? document.getElementById('userId').value : '';
+    window.allowedSensorIds = sensorId ? [sensorId] : (currentUserId ? [currentUserId] : []);
+    console.log('센서설정 페이지 allowedSensorIds 설정 (DOMContentLoaded):', window.allowedSensorIds);
 });
 
 // 온도 값 포맷팅 함수 (전역 함수로 선언 - 페이지 초기 로딩 시에도 사용 가능)
@@ -194,12 +205,13 @@ console.log('formatTemperatureValue 함수 정의 완료');
 <input type="hidden" id="userId" name="userId" value="${userId}" />
 <input type="hidden" id="userNm" name="userNm" value="${userNm}" />
 <input type="hidden" id="userGrade" name="userGrade" value="${userGrade}" />
+<input type="hidden" id="parentUserId" name="parentUserId" value="${parentUserId}" />
+<input type="hidden" id="sensorId" name="sensorId" value="${sensorId}" />
 <input type="hidden" id ="topicStr" name="topicStr" value="${topicStr}" />
 <input type="hidden" id="sensorUuid" name="sensorUuid" value="${sensorUuid}" />
 <input type="hidden" id="sensor_name" name="sensor_name" value="${sensor_name}" />
 <input type="hidden" id="alarmMap" name="alarmMap" value='${alarmMap}' />
 <input type="hidden" id="token" name="token" value="${token}" />
-<input type="hidden" id="sensorId" name="sensorId" value="${sensorId}" />
 <input type="hidden" id="loginUserId" name="loginUserId" value="${loginUserId}"/>
 
 <div class="navbar navbar-inverse" role="navigation" style="background-color: #ffffff">
@@ -1060,7 +1072,7 @@ console.log('formatTemperatureValue 함수 정의 완료');
                     <h4 class="modal-title" id="myModalLabel">로그아웃 하시겠습니까?</h4>
                 </div>
                 <div class="modal-footer">
-                    <a href="/login/logout?userId=${loginUserId}" class="btn btn-primary">Yes</a>
+                    <a href="/login/login" class="btn btn-primary">Yes</a>
                     <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
                 </div>
             </div>
@@ -1331,10 +1343,45 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 				}
 				
 				function initializeSensorSetting() {
-					// B 등급 사용자의 경우 모든 입력 필드를 읽기 전용으로 설정
-					if('${userGrade}' === 'B') {
-						$('input[type="text"], select').prop('readonly', true).prop('disabled', true).css('background-color', '#f5f5f5');
-					}
+					// 부계정 판단: parentUserId가 null이 아니고 userId와 다르면 부계정
+					var userGrade = '${userGrade}';
+					var userId = '${userId}';
+					var parentUserId = '${parentUserId}';
+					var isSubAccount = (parentUserId && parentUserId !== '' && parentUserId !== 'null' && parentUserId !== userId);
+					
+				if(isSubAccount) {
+					// 입력 필드 비활성화
+					$('input[type="text"], select').prop('readonly', true).prop('disabled', true).css('background-color', '#f5f5f5');
+					
+					// 저장 버튼 비활성화
+					$('#saveSensor, #saveAlarm').prop('disabled', true).css({
+						'background-color': '#cccccc',
+						'cursor': 'not-allowed',
+						'opacity': '0.6'
+					});
+					
+					// 강제제상/종료 버튼 비활성화
+					$('#defrost, #stopDefrost').prop('disabled', true).css({
+						'background-color': '#cccccc',
+						'cursor': 'not-allowed',
+						'opacity': '0.6'
+					});
+					
+					// 출력 제어 버튼들 (콤프, 제상, 팬 ON/OFF) 비활성화
+					$('.out-btn, .device-output-btn').prop('disabled', true).css({
+						'cursor': 'not-allowed',
+						'opacity': '0.6',
+						'pointer-events': 'none'
+					});
+					
+					console.log('부계정 - 모든 입력 필드, 저장 버튼, 제어 버튼 비활성화 (읽기 전용 모드)', {
+						userGrade: userGrade,
+						userId: userId,
+						parentUserId: parentUserId,
+						isSubAccount: isSubAccount,
+						disabledButtons: $('.out-btn, .device-output-btn').length
+					});
+				}
 					
 					// 센서설정 페이지 에러 체크 변수 초기화 (메인 페이지와 동일한 방식)
 					var sensorUuid = $('#sensorUuid').val();
@@ -1357,16 +1404,197 @@ function updateOriginalValuesFromDeviceResponse(deviceResponse) {
 						UnifiedMQTTManager.executeInitialSync();
 					} else {
 						console.warn('UnifiedMQTTManager가 로드되지 않았습니다.');
+			}
+				
+			// 알람 설정 UI를 업데이트하는 함수 (전역 함수로 등록)
+			window.updateAlarmUI = function(settings) {
+				console.log('=== 알람 설정 UI 갱신 시작 ===');
+					
+					// 알람1 (고온알람)
+					if(settings.alarm_yn1) {
+						$('#alarmYn1').val(settings.alarm_yn1);
+						console.log('고온알람 사용여부: ' + settings.alarm_yn1);
+					}
+					if(settings.set_val1) {
+						// 소숫점 포맷팅: 정수인 경우 .0 추가
+						var setVal1 = formatTemperatureValue(settings.set_val1);
+						$('#setVal1').val(setVal1);
+						console.log('고온 설정값: ' + setVal1 + ' (원본: ' + settings.set_val1 + ')');
+					}
+					if(settings.delay_time1 !== undefined && settings.delay_time1 !== null) {
+						var delayTime1 = parseInt(settings.delay_time1);
+						var hour1 = Math.floor(delayTime1 / 60);
+						var min1 = delayTime1 % 60;
+						$('#delayHour1').val(hour1);
+						$('#delayMin1').val(min1);
+						console.log('고온알람 지연시간: ' + hour1 + '시간 ' + min1 + '분');
+					}
+					if(settings.re_delay_time1 !== undefined && settings.re_delay_time1 !== null) {
+						var reDelayTime1 = parseInt(settings.re_delay_time1);
+						var reHour1 = Math.floor(reDelayTime1 / 60);
+						var reMin1 = reDelayTime1 % 60;
+						$('#reDelayHour1').val(reHour1);
+						$('#reDelayMin1').val(reMin1);
+						console.log('고온알람 재전송지연시간: ' + reHour1 + '시간 ' + reMin1 + '분');
 					}
 					
-					// 센서 정보 요청 (페이지 로딩 시)
-			setTimeout(function() {
-						console.log('페이지 로딩 완료 - 센서 정보 요청');
-        setSensor();
-					}, 3000); // MQTT 연결 후 3초 뒤에 센서 정보 요청
+					// 알람2 (저온알람)
+					if(settings.alarm_yn2) {
+						$('#alarmYn2').val(settings.alarm_yn2);
+					}
+					if(settings.set_val2) {
+						// 소숫점 포맷팅: 정수인 경우 .0 추가
+						var setVal2 = formatTemperatureValue(settings.set_val2);
+						$('#setVal2').val(setVal2);
+						console.log('저온 설정값: ' + setVal2 + ' (원본: ' + settings.set_val2 + ')');
+					}
+					if(settings.delay_time2 !== undefined && settings.delay_time2 !== null) {
+						var delayTime2 = parseInt(settings.delay_time2);
+						$('#delayHour2').val(Math.floor(delayTime2 / 60));
+						$('#delayMin2').val(delayTime2 % 60);
+					}
+					if(settings.re_delay_time2 !== undefined && settings.re_delay_time2 !== null) {
+						var reDelayTime2 = parseInt(settings.re_delay_time2);
+						$('#reDelayHour2').val(Math.floor(reDelayTime2 / 60));
+						$('#reDelayMin2').val(reDelayTime2 % 60);
+					}
 					
-					console.log('센서설정 페이지 초기화 완료');
+					// 알람3 (특정온도알람)
+					if(settings.alarm_yn3) {
+						$('#alarmYn3').val(settings.alarm_yn3);
+					}
+					if(settings.set_val3) {
+						// 소숫점 포맷팅: 정수인 경우 .0 추가
+						var setVal3 = formatTemperatureValue(settings.set_val3);
+						$('#setVal3').val(setVal3);
+						console.log('특정온도 설정값: ' + setVal3 + ' (원본: ' + settings.set_val3 + ')');
+					}
+					if(settings.delay_time3 !== undefined && settings.delay_time3 !== null) {
+						var delayTime3 = parseInt(settings.delay_time3);
+						$('#delayHour3').val(Math.floor(delayTime3 / 60));
+						$('#delayMin3').val(delayTime3 % 60);
+					}
+					if(settings.re_delay_time3 !== undefined && settings.re_delay_time3 !== null) {
+						var reDelayTime3 = parseInt(settings.re_delay_time3);
+						$('#reDelayHour3').val(Math.floor(reDelayTime3 / 60));
+						$('#reDelayMin3').val(reDelayTime3 % 60);
+					}
+					
+					// 알람4 (DI알람)
+					if(settings.alarm_yn4) {
+						$('#alarmYn4').val(settings.alarm_yn4);
+					}
+					if(settings.set_val4) {
+						$('#setVal4').val(settings.set_val4);
+					}
+					if(settings.delay_time4 !== undefined && settings.delay_time4 !== null) {
+						var delayTime4 = parseInt(settings.delay_time4);
+						$('#delayHour4').val(Math.floor(delayTime4 / 60));
+						$('#delayMin4').val(delayTime4 % 60);
+					}
+					if(settings.re_delay_time4 !== undefined && settings.re_delay_time4 !== null) {
+						var reDelayTime4 = parseInt(settings.re_delay_time4);
+						$('#reDelayHour4').val(Math.floor(reDelayTime4 / 60));
+						$('#reDelayMin4').val(reDelayTime4 % 60);
+					}
+					
+					// 알람5 (통신이상알람)
+					if(settings.alarm_yn5) {
+						$('#alarmYn5').val(settings.alarm_yn5);
+					}
+					if(settings.delay_time5 !== undefined && settings.delay_time5 !== null) {
+						var delayTime5 = parseInt(settings.delay_time5);
+						$('#delayHour5').val(Math.floor(delayTime5 / 60));
+						$('#delayMin5').val(delayTime5 % 60);
+					}
+					if(settings.re_delay_time5 !== undefined && settings.re_delay_time5 !== null) {
+						var reDelayTime5 = parseInt(settings.re_delay_time5);
+						$('#reDelayHour5').val(Math.floor(reDelayTime5 / 60));
+						$('#reDelayMin5').val(reDelayTime5 % 60);
+					}
+					
+					console.log('=== 알람 설정 UI 갱신 완료 ===');
 				}
+					
+				// 페이지 초기 로딩 시 알람 설정을 DB에서 읽어와서 UI를 갱신하는 함수
+				function loadInitialAlarmSettings() {
+					var userId = $('#userId').val();
+					var sensorUuid = $('#sensorUuid').val();
+					
+					console.log('=== 알람설정 초기 로드 시작 ===');
+					console.log('userId:', userId);
+					console.log('sensorUuid:', sensorUuid);
+					console.log('AJAX 요청 URL: /data/getSensorSettings');
+					console.log('AJAX 요청 데이터:', { sensorUuid: sensorUuid });
+					
+					$.ajax({
+						url: '/data/getSensorSettings',
+						type: 'POST',
+						async: true,
+						data: { sensorUuid: sensorUuid },
+						dataType: 'json',
+						success: function(result) {
+							console.log('=== AJAX 응답 수신 ===');
+							console.log('result:', result);
+							console.log('result.resultCode:', result ? result.resultCode : 'undefined');
+							console.log('result.resultMessage:', result ? result.resultMessage : 'undefined');
+							console.log('result.settings:', result ? result.settings : 'undefined');
+							
+							if(result && result.resultCode === '200') {
+								if(result.settings && Object.keys(result.settings).length > 0) {
+								var settings = result.settings;
+								console.log('[OK] 알람설정 초기 로드 성공');
+								console.log('settings 객체:', settings);
+								console.log('settings 키 목록:', Object.keys(settings));
+								
+								// UI 갱신
+								window.updateAlarmUI(settings);
+									
+									console.log('[OK] 알람설정 UI 갱신 완료');
+								} else {
+									console.warn('[WARN] 알람설정 데이터가 비어있음 (DB에 데이터 없음)');
+									console.warn('hnt_config 테이블에 sensor_uuid=' + sensorUuid + ' 데이터가 없습니다.');
+									console.warn('기본값으로 UI를 초기화합니다.');
+								}
+							} else if(result && result.resultCode === '404') {
+								console.warn('[WARN] 알람설정 데이터 없음 (404) - 기본값으로 초기화');
+								console.warn('주계정이 아직 알람 설정을 저장하지 않았습니다.');
+							} else {
+								console.error('[ERROR] 알람설정 초기 로드 실패');
+								console.error('resultCode:', result ? result.resultCode : 'undefined');
+								console.error('resultMessage:', result ? result.resultMessage : 'undefined');
+							}
+						},
+						error: function(xhr, status, error) {
+							console.error('[ERROR] 알람설정 초기 로드 AJAX 오류');
+							console.error('xhr:', xhr);
+							console.error('status:', status);
+							console.error('error:', error);
+							console.error('xhr.status:', xhr.status);
+							console.error('xhr.responseText:', xhr.responseText);
+						}
+					});
+				}
+				
+				// 센서 정보 요청 (페이지 로딩 시)
+		setTimeout(function() {
+					console.log('페이지 로딩 완료 - 센서 정보 요청');
+    setSensor();
+				}, 3000); // MQTT 연결 후 3초 뒤에 센서 정보 요청
+				
+		// 알람 설정 로드 (페이지 로딩 시) - 즉시 실행
+		console.log('[DEBUG] 알람 설정 로드 타이머 설정 중...');
+		setTimeout(function() {
+			console.log('[DEBUG] 페이지 로딩 완료 - 알람 설정 로드 시작');
+			try {
+				loadInitialAlarmSettings();
+			} catch(e) {
+				console.error('[ERROR] 알람 설정 로드 중 예외 발생:', e);
+			}
+		}, 2000); // 센서 정보 요청 후 즉시 알람 설정 로드 (2초 대기)
+				
+				console.log('센서설정 페이지 초기화 완료');
+			}
 				
 				// CSS 로딩 확인 시작
 				checkCSSLoaded();
@@ -2656,7 +2884,10 @@ function updateSensorInfo(msg) {
 		var currentTime = Date.now();
 		var timeDiff = currentTime - deviceLastDataTime;
 		
-		console.log(`[SensorSetting] 에러 체크: sensorUuid=${sensorUuid}, timeDiff=${timeDiff}ms, counter=${deviceErrorCounters}, errorState=${deviceErrorStates}`);
+		// 에러 상태일 때만 로그 출력 (정상 상태에서는 로그 생략)
+		if (deviceErrorStates || deviceErrorCounters > 0 || timeDiff > 9000) {
+			console.log(`[SensorSetting] 에러 체크: sensorUuid=${sensorUuid}, timeDiff=${timeDiff}ms, counter=${deviceErrorCounters}, errorState=${deviceErrorStates}`);
+		}
 		
 		// 9초 동안 온도 데이터 미수신 시 에러 체크 (메인 페이지와 동일)
 		if (timeDiff > 9000 && !deviceErrorStates) {
@@ -2778,6 +3009,27 @@ function updateSensorInfo(msg) {
 	}
 
 	function updateOutputButtonsEnabled(){
+		// 부계정 체크 - 부계정이면 모든 버튼 비활성화 유지
+		var userId = '${userId}';
+		var parentUserId = '${parentUserId}';
+		var isSubAccount = (parentUserId && parentUserId !== '' && parentUserId !== 'null' && parentUserId !== userId);
+		
+		if(isSubAccount) {
+			console.log('[부계정] updateOutputButtonsEnabled 호출 - 모든 버튼 비활성화 유지');
+			// 부계정은 모든 버튼 비활성화 유지
+			$('.out-btn, .device-output-btn').prop('disabled', true).css({
+				'cursor': 'not-allowed',
+				'opacity': '0.6',
+				'pointer-events': 'none'
+			});
+			$('#defrost, #stopDefrost').prop('disabled', true).css({
+				'cursor': 'not-allowed',
+				'opacity': '0.6',
+				'pointer-events': 'none'
+			});
+			return; // 함수 종료
+		}
+		
 		var manualStored = getStoredManualState();
 		// MQTT에서 받아온 실제 장치종류 값 사용 (window.originalValues.p16)
 		var deviceType = (window.originalValues && window.originalValues.p16) ? window.originalValues.p16 : '0';
@@ -2992,155 +3244,45 @@ function updateSensorInfo(msg) {
 				}
 			});
 		});
+	
+	// 알람 설정을 DB에서 다시 읽어와서 UI를 갱신하는 함수 (저장 후)
+	function reloadAlarmSettings() {
+		var userId = $('#userId').val();
+		var sensorUuid = $('#sensorUuid').val();
 		
-		// 알람 설정을 DB에서 다시 읽어와서 UI를 갱신하는 함수
-		function reloadAlarmSettings() {
-			var userId = $('#userId').val();
-			var sensorUuid = $('#sensorUuid').val();
-			
-			console.log('알람설정 재조회 요청: userId=' + userId + ', sensorUuid=' + sensorUuid);
-			
-			$.ajax({
-				url: '/data/getSensorSettings',
-				type: 'POST',
-				async: true,
-				data: { sensorUuid: sensorUuid },
-				dataType: 'json',
-				success: function(result) {
-					if(result && result.resultCode === '200' && result.settings) {
-						var settings = result.settings;
-						console.log('알람설정 재조회 성공:', settings);
-						
-						// UI 갱신
-						updateAlarmUI(settings);
-						
-						// 성공 메시지
-						console.log('✅ 알람설정이 DB에서 다시 로드되어 UI가 갱신되었습니다.');
-						
-						// 사용자에게 알림 (선택적)
-						setTimeout(function() {
-							alert('알람설정 변경이 완료되었습니다.\n설정값이 정상적으로 저장되었습니다.');
-						}, 500);
-						
-					} else {
-						console.warn('알람설정 재조회 실패:', result);
-					}
-				},
-				error: function(xhr, status, error) {
-					console.error('알람설정 재조회 중 오류:', xhr, status, error);
+		console.log('알람설정 재조회 요청: userId=' + userId + ', sensorUuid=' + sensorUuid);
+		
+		$.ajax({
+			url: '/data/getSensorSettings',
+			type: 'POST',
+			async: true,
+			data: { sensorUuid: sensorUuid },
+			dataType: 'json',
+			success: function(result) {
+			if(result && result.resultCode === '200' && result.settings) {
+				var settings = result.settings;
+				console.log('알람설정 재조회 성공:', settings);
+				
+				// UI 갱신
+				window.updateAlarmUI(settings);
+					
+					// 성공 메시지
+					console.log('[OK] 알람설정이 DB에서 다시 로드되어 UI가 갱신되었습니다.');
+					
+					// 사용자에게 알림 (선택적)
+					setTimeout(function() {
+						alert('알람설정 변경이 완료되었습니다.\n설정값이 정상적으로 저장되었습니다.');
+					}, 500);
+					
+				} else {
+					console.warn('알람설정 재조회 실패:', result);
 				}
-			});
-		}
-		
-		// 알람 설정 UI를 업데이트하는 함수
-		function updateAlarmUI(settings) {
-			console.log('=== 알람 설정 UI 갱신 시작 ===');
-			
-			// 알람1 (고온알람)
-			if(settings.alarm_yn1) {
-				$('#alarmYn1').val(settings.alarm_yn1);
-				console.log('고온알람 사용여부: ' + settings.alarm_yn1);
+			},
+			error: function(xhr, status, error) {
+				console.error('알람설정 재조회 중 오류:', xhr, status, error);
 			}
-			if(settings.set_val1) {
-				// 소숫점 포맷팅: 정수인 경우 .0 추가
-				var setVal1 = formatTemperatureValue(settings.set_val1);
-				$('#setVal1').val(setVal1);
-				console.log('고온 설정값: ' + setVal1 + ' (원본: ' + settings.set_val1 + ')');
-			}
-			if(settings.delay_time1 !== undefined && settings.delay_time1 !== null) {
-				var delayTime1 = parseInt(settings.delay_time1);
-				var hour1 = Math.floor(delayTime1 / 60);
-				var min1 = delayTime1 % 60;
-				$('#delayHour1').val(hour1);
-				$('#delayMin1').val(min1);
-				console.log('고온알람 지연시간: ' + hour1 + '시간 ' + min1 + '분');
-			}
-			if(settings.re_delay_time1 !== undefined && settings.re_delay_time1 !== null) {
-				var reDelayTime1 = parseInt(settings.re_delay_time1);
-				var reHour1 = Math.floor(reDelayTime1 / 60);
-				var reMin1 = reDelayTime1 % 60;
-				$('#reDelayHour1').val(reHour1);
-				$('#reDelayMin1').val(reMin1);
-				console.log('고온알람 재전송지연시간: ' + reHour1 + '시간 ' + reMin1 + '분');
-			}
-			
-			// 알람2 (저온알람)
-			if(settings.alarm_yn2) {
-				$('#alarmYn2').val(settings.alarm_yn2);
-			}
-			if(settings.set_val2) {
-				// 소숫점 포맷팅: 정수인 경우 .0 추가
-				var setVal2 = formatTemperatureValue(settings.set_val2);
-				$('#setVal2').val(setVal2);
-				console.log('저온 설정값: ' + setVal2 + ' (원본: ' + settings.set_val2 + ')');
-			}
-			if(settings.delay_time2 !== undefined && settings.delay_time2 !== null) {
-				var delayTime2 = parseInt(settings.delay_time2);
-				$('#delayHour2').val(Math.floor(delayTime2 / 60));
-				$('#delayMin2').val(delayTime2 % 60);
-			}
-			if(settings.re_delay_time2 !== undefined && settings.re_delay_time2 !== null) {
-				var reDelayTime2 = parseInt(settings.re_delay_time2);
-				$('#reDelayHour2').val(Math.floor(reDelayTime2 / 60));
-				$('#reDelayMin2').val(reDelayTime2 % 60);
-			}
-			
-			// 알람3 (특정온도알람)
-			if(settings.alarm_yn3) {
-				$('#alarmYn3').val(settings.alarm_yn3);
-			}
-			if(settings.set_val3) {
-				// 소숫점 포맷팅: 정수인 경우 .0 추가
-				var setVal3 = formatTemperatureValue(settings.set_val3);
-				$('#setVal3').val(setVal3);
-				console.log('특정온도 설정값: ' + setVal3 + ' (원본: ' + settings.set_val3 + ')');
-			}
-			if(settings.delay_time3 !== undefined && settings.delay_time3 !== null) {
-				var delayTime3 = parseInt(settings.delay_time3);
-				$('#delayHour3').val(Math.floor(delayTime3 / 60));
-				$('#delayMin3').val(delayTime3 % 60);
-			}
-			if(settings.re_delay_time3 !== undefined && settings.re_delay_time3 !== null) {
-				var reDelayTime3 = parseInt(settings.re_delay_time3);
-				$('#reDelayHour3').val(Math.floor(reDelayTime3 / 60));
-				$('#reDelayMin3').val(reDelayTime3 % 60);
-			}
-			
-			// 알람4 (DI알람)
-			if(settings.alarm_yn4) {
-				$('#alarmYn4').val(settings.alarm_yn4);
-			}
-			if(settings.set_val4) {
-				$('#setVal4').val(settings.set_val4);
-			}
-			if(settings.delay_time4 !== undefined && settings.delay_time4 !== null) {
-				var delayTime4 = parseInt(settings.delay_time4);
-				$('#delayHour4').val(Math.floor(delayTime4 / 60));
-				$('#delayMin4').val(delayTime4 % 60);
-			}
-			if(settings.re_delay_time4 !== undefined && settings.re_delay_time4 !== null) {
-				var reDelayTime4 = parseInt(settings.re_delay_time4);
-				$('#reDelayHour4').val(Math.floor(reDelayTime4 / 60));
-				$('#reDelayMin4').val(reDelayTime4 % 60);
-			}
-			
-			// 알람5 (통신이상알람)
-			if(settings.alarm_yn5) {
-				$('#alarmYn5').val(settings.alarm_yn5);
-			}
-			if(settings.delay_time5 !== undefined && settings.delay_time5 !== null) {
-				var delayTime5 = parseInt(settings.delay_time5);
-				$('#delayHour5').val(Math.floor(delayTime5 / 60));
-				$('#delayMin5').val(delayTime5 % 60);
-			}
-			if(settings.re_delay_time5 !== undefined && settings.re_delay_time5 !== null) {
-				var reDelayTime5 = parseInt(settings.re_delay_time5);
-				$('#reDelayHour5').val(Math.floor(reDelayTime5 / 60));
-				$('#reDelayMin5').val(reDelayTime5 % 60);
-			}
-			
-			console.log('=== 알람 설정 UI 갱신 완료 ===');
-		}
+		});
+	}
 	});
 
 	function goMain() {
@@ -3149,8 +3291,7 @@ function updateSensorInfo(msg) {
 }
 </script>
 
-<!-- MQTT 스크립트 추가 -->
-<script src="/js/unified-mqtt-manager.js?v=20251007"></script>
+<!-- MQTT 스크립트는 head에서 이미 로드됨 - 중복 제거 -->
 <script>
 	// MQTT 연결 함수 정의 (메인 페이지와 동일)
 	function startConnect() {

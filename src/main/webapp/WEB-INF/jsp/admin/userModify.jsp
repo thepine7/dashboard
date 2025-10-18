@@ -4,6 +4,16 @@
 <%@ taglib prefix="fmt" uri="http://java.sun.com/jsp/jstl/fmt" %>
 <%@ taglib prefix="sql" uri="http://java.sun.com/jsp/jstl/sql" %>
 <%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
+<%
+    // 브라우저 캐시 무효화
+    response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    response.setHeader("Pragma", "no-cache");
+    response.setDateHeader("Expires", 0);
+%>
+
+<!-- 공통 세션 정보 -->
+<jsp:include page="/WEB-INF/jsp/common/session-info.jsp" />
+
 <html>
 <head>
     <meta charset="UTF-8">
@@ -63,7 +73,7 @@
         
         function logoutToLogin() {
             console.log('logoutToLogin() 호출됨');
-            window.location.href = '/login/logout';
+            window.location.href = '/login/login';
         }
     </script>
 </head>
@@ -133,11 +143,11 @@
                                     </tr>
                                     <tr>
                                         <td align="center" valign="middle" style="background-color: #ffffff;" width="30%"  height="25"><strong><span style="font-size:10pt;">전화번호</span></strong></td>
-                                        <td align="center" valign="middle" style="background-color: #ffffff;" width="70%" height="25"><input type="text" id="userTel" name="userTel" value="${userInfo.userTel}" style="font-size:10pt;"></td>
+                                        <td align="center" valign="middle" style="background-color: #ffffff;" width="70%" height="25"><input type="text" id="userTel" name="userTel" value="${userInfo.userTel}" autocomplete="off" style="font-size:10pt;"></td>
                                     </tr>
                                     <tr>
                                         <td align="center" valign="middle" style="background-color: #ffffff;" width="30%"  height="25"><strong><span style="font-size:10pt;">메일주소</span></strong></td>
-                                        <td align="center" valign="middle" style="background-color: #ffffff;" width="70%" height="25"><input type="text" id="userEmail" name="userEmail" value="${userInfo.userEmail}" style="font-size:10pt;"></td>
+                                        <td align="center" valign="middle" style="background-color: #ffffff;" width="70%" height="25"><input type="text" id="userEmail" name="userEmail" value="${userInfo.userEmail}" autocomplete="off" style="font-size:10pt;"></td>
                                     </tr>
                                     <tr>
                                         <td align="center" valign="middle" style="background-color: #ffffff;" width="30%"  height="25"><strong><span style="font-size:10pt;">등급</span></strong></td>
@@ -171,7 +181,7 @@
                     <h4 class="modal-title" id="myModalLabel">로그아웃 하시겠습니까?</h4>
                 </div>
                 <div class="modal-footer">
-                    <a href="/login/logout" class="btn btn-primary">Yes</a>
+                    <a href="/login/login" class="btn btn-primary">Yes</a>
                     <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
                 </div>
             </div>
@@ -232,12 +242,52 @@
 <script src="/js/templatemo_script.js"></script>
 <script src="/js/session-manager.js"></script>
 <script>
-    // 페이지 로딩 시 등급 선택
+    // 전역 변수에 입력값 저장
+    var formData = {
+        userTel: '${userInfo.userTel}',
+        userEmail: '${userInfo.userEmail}'
+    };
+
+    // 페이지 로딩 시 등급 선택 및 입력 필드 초기화
     $(document).ready(function() {
         console.log('=== userModify 페이지 초기화 ===');
+        
+        // 등급 선택
         var initialGrade = '${userInfo.userGrade}';
         $('#grade').val(initialGrade);
         console.log('등급 선택 완료:', $('#grade').val());
+        
+        // 초기 formData 확인
+        console.log('초기 formData - userTel:', formData.userTel, ', userEmail:', formData.userEmail);
+        
+        // 입력 필드 변경 시 전역 변수 업데이트 (input 이벤트)
+        $('#userTel').on('input', function() {
+            formData.userTel = $(this).val();
+            console.log('userTel input 이벤트:', formData.userTel);
+        });
+        
+        $('#userEmail').on('input', function() {
+            formData.userEmail = $(this).val();
+            console.log('userEmail input 이벤트:', formData.userEmail);
+        });
+        
+        // 입력 필드에 포커스 이벤트 추가 (디버깅용)
+        $('#userTel, #userEmail').on('focus', function() {
+            console.log($(this).attr('id') + ' 포커스:', $(this).val());
+        });
+        
+        // blur 이벤트로 최종 값 확인 및 전역 변수 업데이트 (중요!)
+        $('#userTel').on('blur', function() {
+            var currentValue = $(this).val();
+            formData.userTel = currentValue;
+            console.log('userTel blur (최종값 업데이트):', currentValue);
+        });
+        
+        $('#userEmail').on('blur', function() {
+            var currentValue = $(this).val();
+            formData.userEmail = currentValue;
+            console.log('userEmail blur (최종값 업데이트):', currentValue);
+        });
     });
 
     function goMain() {
@@ -246,52 +296,96 @@
     }
 
     function modify() {
+        // 먼저 모든 입력 필드의 포커스를 해제하여 blur 이벤트 발생시킴
+        $('#userTel, #userEmail').blur();
+        
+        // blur 이벤트 처리를 위한 짧은 지연 (10ms)
+        setTimeout(function() {
+            modifyProcess();
+        }, 10);
+    }
+    
+    function modifyProcess() {
         var userId = '${userInfo.userId}';
+        var userGrade = $('#grade').val();
         
-        // DOM 요소에서 직접 현재 값 읽기 (브라우저 캐시 우회)
-        var userTelElement = document.getElementById('userTel');
-        var userEmailElement = document.getElementById('userEmail');
-        var userGradeElement = document.getElementById('grade');
+        console.log('===================================');
+        console.log('=== 정보수정 전송 직전 디버깅 ===');
+        console.log('===================================');
         
-        var userTel = userTelElement ? userTelElement.value : '';
-        var userEmail = userEmailElement ? userEmailElement.value : '';
-        var userGrade = userGradeElement ? userGradeElement.value : '';
-
-        console.log('=== 입력값 확인 (DOM 직접 접근) ===');
-        console.log('userTel:', userTel);
-        console.log('userEmail:', userEmail);
-        console.log('userGrade:', userGrade);
-        console.log('userId:', userId);
+        // 0. 전송 직전 DOM 값으로 전역 변수 강제 동기화 (브라우저 자동완성 대응)
+        // 여러 방법으로 값을 읽어서 확인
+        var domUserTel = $('#userTel').val();
+        var domUserEmail = $('#userEmail').val();
+        var rawUserTel = document.getElementById('userTel').value;
+        var rawUserEmail = document.getElementById('userEmail').value;
         
-        console.log('=== 전송 데이터 ===');
-        console.log('sendData:', {
-            userId: userId,
-            userTel: userTel,
-            userEmail: userEmail,
-            userGrade: userGrade
-        });
+        console.log('🔍 DOM 값 다중 확인:');
+        console.log('   - jQuery userTel:', domUserTel);
+        console.log('   - raw userTel:', rawUserTel);
+        console.log('   - jQuery userEmail:', domUserEmail);
+        console.log('   - raw userEmail:', rawUserEmail);
+        
+        if (domUserTel !== formData.userTel) {
+            console.warn('⚠️ DOM과 전역 변수 불일치 감지 (userTel) - 강제 동기화');
+            console.log('   - 전역 변수:', formData.userTel, '→ DOM 값:', domUserTel);
+            formData.userTel = domUserTel;
+        }
+        
+        if (domUserEmail !== formData.userEmail) {
+            console.warn('⚠️ DOM과 전역 변수 불일치 감지 (userEmail) - 강제 동기화');
+            console.log('   - 전역 변수:', formData.userEmail, '→ DOM 값:', domUserEmail);
+            formData.userEmail = domUserEmail;
+        }
+        
+        // 1. 전역 변수 값 (동기화 후)
+        console.log('1. 전역 변수 formData (동기화 후):');
+        console.log('   - formData.userTel:', formData.userTel);
+        console.log('   - formData.userEmail:', formData.userEmail);
+        
+        // 2. DOM 요소의 실제 값
+        console.log('2. DOM 요소 직접 읽기:');
+        console.log('   - $("#userTel").val():', $('#userTel').val());
+        console.log('   - $("#userEmail").val():', $('#userEmail').val());
+        console.log('   - document.getElementById("userTel").value:', document.getElementById('userTel').value);
+        console.log('   - document.getElementById("userEmail").value:', document.getElementById('userEmail').value);
+        
+        // 3. 전송할 값 (동기화된 전역 변수에서)
+        var userTel = formData.userTel;
+        var userEmail = formData.userEmail;
+        
+        console.log('3. 최종 전송 예정 값:');
+        console.log('   - userTel:', userTel, '(타입:', typeof userTel, ', 길이:', userTel ? userTel.length : 'null', ')');
+        console.log('   - userEmail:', userEmail, '(타입:', typeof userEmail, ', 길이:', userEmail ? userEmail.length : 'null', ')');
+        console.log('   - userGrade:', userGrade, '(타입:', typeof userGrade, ')');
+        console.log('   - userId:', userId, '(타입:', typeof userId, ')');
 
         if(userTel) {
             if(userTel.length < 10) {
+                console.error('검증 실패: 핸드폰 번호 길이 부족 -', userTel.length, '글자');
                 alert("핸드폰 번호가 잘못되었습니다.");
                 return false;
             }
         } else {
+            console.error('검증 실패: 핸드폰 번호 없음');
             alert("핸드폰 번호가 없습니다.");
             return false;
         }
 
         if(userEmail) {
             if(userEmail.indexOf("@") < 0) {
+                console.error('검증 실패: 이메일 @ 기호 없음 -', userEmail);
                 alert("메일 주소가 잘못되었습니다.");
                 return false;
             }
         } else {
+            console.error('검증 실패: 이메일 주소 없음');
             alert("메일 주소가 없습니다.");
             return false;
         }
 
         if(!userGrade) {
+            console.error('검증 실패: 회원 등급 선택 안됨');
             alert("회원 등급을 선택해주세요.");
             return false;
         }
@@ -302,6 +396,10 @@
             , userTel: userTel
             , userGrade: userGrade
         }
+        
+        console.log('4. AJAX 전송 데이터 객체:');
+        console.log('   sendData:', JSON.stringify(sendData, null, 2));
+        console.log('===================================');
 
         $.ajax({
             url: '/admin/modifyUser',
@@ -314,8 +412,8 @@
                 console.log('=== 수정 응답 ===', result);
                 if(result.resultCode == "200") {
                     alert("정보 수정 완료");
-                    // POST 방식으로 userDetail 페이지 이동
-                    PageNavigation.goUserDetail('${userInfo.userId}');
+                    // POST 방식으로 userDetail 페이지 이동 (수정한 userId 사용)
+                    PageNavigation.goUserDetail(userId);
                 } else {
                     alert("정보 수정 실패: " + (result.resultMessage || "알 수 없는 오류"));
                 }

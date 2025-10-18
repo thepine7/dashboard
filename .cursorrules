@@ -1122,6 +1122,208 @@ if(isSubAccount) {
 - **센서 소유자**: `hnt_sensor_info.sensor_id` = 센서의 실제 소유자
 - **부계정 접근**: `user_id ≠ sensor_id`인 경우 부계정이 주계정의 센서 공유 사용
 
+## 부계정 권한 및 MQTT 토픽 구독 규칙 (2025-10-18 추가)
+
+### 부계정 판단 조건 (최종 확정)
+```javascript
+// 프론트엔드 (JSP)
+var userId = '${userId}';
+var parentUserId = '${parentUserId}';
+var isSubAccount = (parentUserId && parentUserId !== '' && parentUserId !== 'null' && parentUserId !== userId);
+```
+
+```java
+// 백엔드 (Java)
+String userId = (String) session.getAttribute("userId");
+String parentUserId = (String) session.getAttribute("parentUserId");
+boolean isSubAccount = (parentUserId != null && !parentUserId.isEmpty() && !parentUserId.equals(userId));
+```
+
+**판단 기준**:
+- `parentUserId`가 **null이면**: 주계정 (모든 기능 사용 가능)
+- `parentUserId`가 **null이 아니고** `userId`와 **다르면**: 부계정 (읽기 전용)
+- `parentUserId`가 **null이 아니고** `userId`와 **같으면**: 주계정 (모든 기능 사용 가능)
+
+### 부계정 권한 정책 (최종 확정)
+
+| 기능 | 주계정 | 부계정 | 비고 |
+|------|--------|--------|------|
+| **모든 페이지에서 설정값/상태값 조회** (GET&type=1, GET&type=2) | ✅ 가능 | ✅ **가능** | UI 갱신을 위해 필요 |
+| **MQTT 토픽 구독** | ✅ 가능 | ✅ **가능** | 센서 소유자 ID로 구독 |
+| **센서 설정 변경** (AdminController.setSensor - param) | ✅ 가능 | ❌ **불가** | 백엔드 차단 (403) |
+| **강제제상 시작/종료** (defrost, stopDefrost) | ✅ 가능 | ❌ **불가** | 백엔드 차단 (403) |
+| **출력 제어** (output) | ✅ 가능 | ❌ **불가** | 백엔드 차단 (403) |
+| **장치 삭제** (initdevice) | ✅ 가능 | ❌ **불가** | 백엔드 차단 (403) |
+| **알람 설정 변경** (saveAlarmSetting) | ✅ 가능 | ❌ **불가** | 백엔드 차단 (403) |
+| **UI 입력 필드** | ✅ 활성 | ❌ **비활성** | 프론트엔드 (센서설정 페이지) |
+| **저장/제어 버튼** | ✅ 활성 | ❌ **비활성** | 프론트엔드 (센서설정 페이지) |
+
+### AdminController.setSensor 메서드 권한 체크
+
+**setGu 값별 권한**:
+
+| setGu 값 | 동작 | 주계정 | 부계정 |
+|---------|------|--------|--------|
+| **readparam** | 설정값 조회 (GET&type=1) | ✅ 허용 | ✅ **허용** |
+| **readstatus** | 상태값 조회 (GET&type=2) | ✅ 허용 | ✅ **허용** |
+| **param** | 파라미터 설정 변경 (SET) | ✅ 허용 | ❌ **차단** (403) |
+| **defrost** | 강제제상 시작 | ✅ 허용 | ❌ **차단** (403) |
+| **stopDefrost** | 강제제상 종료 | ✅ 허용 | ❌ **차단** (403) |
+| **initdevice** | 장치 삭제 | ✅ 허용 | ❌ **차단** (403) |
+| **output** | 출력 제어 | ✅ 허용 | ❌ **차단** (403) |
+
+**백엔드 구현** (`AdminController.java:467-487`):
+```java
+// 부계정 권한 확인 - 설정 변경은 불가, 조회는 가능
+String sessionUserId = (String) session.getAttribute("userId");
+String parentUserId = (String) session.getAttribute("parentUserId");
+boolean isSubAccount = (parentUserId != null && !parentUserId.isEmpty() && !parentUserId.equals(sessionUserId));
+
+// setGu 값 확인 (조회 vs 설정 변경 구분)
+String setGu = sensorMap != null ? String.valueOf(sensorMap.get("setGu")) : "";
+
+// 부계정은 설정 변경 불가 (param, defrost, stopDefrost, initdevice, output 등)
+if(isSubAccount) {
+    boolean isReadOnlyRequest = "readparam".equals(setGu) || "readstatus".equals(setGu);
+    
+    if(!isReadOnlyRequest) {
+        // 403 에러 반환
+        return errorMap;
+    }
+}
+```
+
+### MQTT 토픽 구독 규칙 (부계정 지원)
+
+**핵심 원칙**: 부계정은 센서의 **실제 소유자 ID(`sensor_id`)**로 MQTT 토픽을 구독해야 실시간 데이터를 수신할 수 있습니다.
+
+#### 1. 메인 페이지 토픽 구독
+**구현 위치**: `unified-mqtt-manager.js` - `pageTopicHandlers.main`
+
+```javascript
+'main': function() {
+    // allowedSensorIds 배열의 모든 센서 소유자 ID로 토픽 구독
+    var sensorIds = window.allowedSensorIds || [];
+    
+    if (sensorIds.length > 0) {
+        // 각 센서 소유자 ID별로 토픽 구독 (중복 제거)
+        var uniqueSensorIds = Array.from(new Set(sensorIds));
+        uniqueSensorIds.forEach(function(sensorId) {
+            var topic = 'HBEE/' + sensorId + '/+/+/DEV';
+            subscribe(topic, handleSensorMessage);
+        });
+    }
+}
+```
+
+**예시**:
+- 부계정 `thepine7`이 주계정 `thepine`의 센서 4개 조회
+- `window.allowedSensorIds = ['thepine']`
+- 구독 토픽: `HBEE/thepine/+/+/DEV`
+
+#### 2. 차트 페이지 토픽 구독
+**구현 위치**: `unified-mqtt-manager.js` - `pageTopicHandlers.chart`
+
+```javascript
+'chart': function() {
+    // 센서의 실제 소유자 ID로 토픽 구독 (부계정 지원)
+    var sensorId = $('#sensorId').val(); // 센서 실제 소유자 ID
+    var currentUserId = getCurrentUserId();
+    
+    if (sensorId) {
+        // 센서 소유자 ID로 구독 (부계정이 주계정 센서를 조회하는 경우)
+        var topic = 'HBEE/' + sensorId + '/+/+/DEV';
+        subscribe(topic, handleSensorMessage);
+    } else if (currentUserId) {
+        // fallback: 현재 사용자 ID로 구독
+        var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
+        subscribe(topic, handleSensorMessage);
+    }
+}
+```
+
+**예시**:
+- 부계정 `thepine7`이 주계정 `thepine`의 센서 `0008DC755397` 조회
+- `$('#sensorId').val() = 'thepine'`
+- 구독 토픽: `HBEE/thepine/TC/0008DC755397/DEV` (와일드카드로 구독: `HBEE/thepine/+/+/DEV`)
+
+#### 3. 센서설정 페이지 토픽 구독
+**구현 위치**: `unified-mqtt-manager.js` - `pageTopicHandlers.sensorSetting`
+
+```javascript
+'sensorSetting': function() {
+    // 센서의 실제 소유자 ID로 토픽 구독 (부계정 지원)
+    var sensorId = $('#sensorId').val(); // 센서 실제 소유자 ID
+    var currentUserId = getCurrentUserId();
+    
+    if (sensorId) {
+        // 센서 소유자 ID로 구독 (부계정이 주계정 센서를 조회하는 경우)
+        var topic = 'HBEE/' + sensorId + '/+/+/DEV';
+        subscribe(topic, handleSensorMessage);
+    } else if (currentUserId) {
+        // fallback: 현재 사용자 ID로 구독
+        var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
+        subscribe(topic, handleSensorMessage);
+    }
+}
+```
+
+**예시**:
+- 부계정 `thepine7`이 주계정 `thepine`의 센서 `0008DC755397` 설정 조회
+- `$('#sensorId').val() = 'thepine'`
+- 구독 토픽: `HBEE/thepine/TC/0008DC755397/DEV`
+
+### MQTT 메시지 필터링 규칙 (부계정 지원)
+
+**구현 위치**: `unified-mqtt-manager.js` - `handleSensorMessage`
+
+```javascript
+// 1단계: 사용자 ID 필터링 (부계정 지원)
+var currentUserId = getCurrentUserId();
+var allowedSensorIds = window.allowedSensorIds || [];
+var isAllowedUser = (userId === currentUserId) || (allowedSensorIds.indexOf(userId) >= 0);
+
+if (!isAllowedUser) {
+    console.log('사용자 ID 불일치로 메시지 필터링됨');
+    return;
+}
+```
+
+**핵심**: 메시지의 `userId`가 현재 사용자 ID 또는 `allowedSensorIds`에 포함되어 있으면 허용
+
+### 센서설정 페이지 UI 비활성화 (부계정)
+
+**구현 위치**: `sensorSetting.jsp` - `initializeSensorSetting` 함수
+
+```javascript
+function initializeSensorSetting() {
+    // 부계정 판단: parentUserId가 null이 아니고 userId와 다르면 부계정
+    var userGrade = '${userGrade}';
+    var userId = '${userId}';
+    var parentUserId = '${parentUserId}';
+    var isSubAccount = (parentUserId && parentUserId !== '' && parentUserId !== 'null' && parentUserId !== userId);
+    
+    if(isSubAccount) {
+        // 입력 필드 비활성화
+        $('input[type="text"], select').prop('readonly', true).prop('disabled', true);
+        
+        // 저장 버튼 비활성화
+        $('#saveSensor, #saveAlarm').prop('disabled', true);
+        
+        // 출력 제어 버튼 비활성화 (강제제상, 출력제어 등)
+        $('#defrost, #stopDefrost, .out-btn').prop('disabled', true);
+    }
+}
+```
+
+### 페이지별 동작 요약
+
+| 페이지 | 부계정 MQTT 구독 | 부계정 UI 제한 | 부계정 API 제한 |
+|--------|------------------|----------------|----------------|
+| **메인 페이지** | ✅ `allowedSensorIds`로 센서 소유자 ID 구독 | ❌ 제한 없음 | ✅ 조회만 가능 |
+| **차트 페이지** | ✅ `$('#sensorId').val()`로 센서 소유자 ID 구독 | ❌ 제한 없음 | ✅ 조회만 가능 |
+| **센서설정 페이지** | ✅ `$('#sensorId').val()`로 센서 소유자 ID 구독 | ✅ 입력 필드/버튼 비활성화 | ✅ 조회만 가능, 변경 차단 |
+
 ## MQTT 연결 안정성 및 호환성 규칙
 
 ### Paho MQTT JavaScript Client 호환성
