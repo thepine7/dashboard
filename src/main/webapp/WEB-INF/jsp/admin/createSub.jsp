@@ -178,7 +178,7 @@
                     <h4 class="modal-title" id="myModalLabel">로그아웃 하시겠습니까?</h4>
                 </div>
                 <div class="modal-footer">
-                    <a href="/login/login" class="btn btn-primary">Yes</a>
+                    <a href="javascript:logoutToLogin();" class="btn btn-primary">Yes</a>
                     <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
                 </div>
             </div>
@@ -228,6 +228,25 @@
         window.PageNavigation.goMain();
     }
 
+    // 로그아웃 함수
+    function logoutToLogin() {
+        var currentUserId = $('#loginUserId').val() || $('#userId').val() || window.currentUserId || '';
+        
+        $.ajax({
+            url: '/login/logoutProcess',
+            type: 'POST',
+            async: true,
+            data: JSON.stringify({ userId: currentUserId }),
+            contentType: 'application/json',
+            success: function(response) {
+                window.location.href = '/login/login';
+            },
+            error: function(xhr, status, error) {
+                window.location.href = '/login/login';
+            }
+        });
+    }
+
     $(window).on({
         load: function() {
             var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent) ? true : false;
@@ -239,49 +258,76 @@
                 var subPass = $('#subPass').val();
                 var userTel = $('#subUserTel').val();  // 수정: subUserTel로 변경
                 var userEmail = $('#subUserEmail').val();  // 수정: subUserEmail로 변경
-                var userId = $('#userId').val();
                 
                 console.log('부계정 생성 데이터:', {
                     subNm: subNm,
                     subId: subId,
                     userTel: userTel,
-                    userEmail: userEmail,
-                    userId: userId
+                    userEmail: userEmail
                 });
 
-                if(subId !== '' && subPass !== '' && subNm !== '') {
-                    var sendData = {
-                        subNm: subNm,
-                        subId: subId,
-                        subPass: subPass,
-                        userTel: userTel,
-                        userEmail: userEmail,
-                        userId: userId
-                    }
-
-                    $.ajax({
-                        url: '/admin/createSubProc',
-                        async: true,
-                        type: 'POST',
-                        data: JSON.stringify(sendData),
-                        dataType: 'json',
-                        contentType: 'application/json',
-                        success: function(result) {
-                            if(result.resultCode == "200") {
-                                alert("부계정 생성 성공");
-                                if(isMobile) { saveUserInfo(userId);}
-                                PageNavigation.goMain();
-                            } else {
-                                alert("부계정 생성 실패");
-                            }
-                        },
-                        error: function(result) {
-                            alert("부계정 생성 실패");
-                        }
-                    });
-                } else {
+                // 필수 입력 확인
+                if(subId === '' || subPass === '' || subNm === '') {
                     alert("회원가입에 필요한 정보가 없습니다.");
+                    return;
                 }
+                
+		// 전화번호 형식 검증 및 통일 (10-11자리만 허용)
+		if(userTel && userTel !== '') {
+			// 하이픈 제거
+			var cleanPhone = userTel.replace(/-/g, '');
+			
+			// 숫자만 있는지 확인 및 길이 체크 (10-11자리만 허용)
+			if(!/^01[0-9]{8,9}$/.test(cleanPhone)) {
+				alert("올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)\n10자리 또는 11자리여야 합니다.");
+				return;
+			}
+			
+			// 맨 뒤 4자리를 기준으로 형식 통일
+			var len = cleanPhone.length;
+			var firstPart = cleanPhone.substring(0, 3);  // 010, 011 등
+			var lastPart = cleanPhone.substring(len - 4);  // 마지막 4자리
+			var middlePart = cleanPhone.substring(3, len - 4);  // 중간 부분 (3-4자리)
+			
+			userTel = firstPart + '-' + middlePart + '-' + lastPart;
+		}
+                
+                // 이메일 형식 검증
+                var emailPattern = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+                if(userEmail && userEmail !== '' && !emailPattern.test(userEmail)) {
+                    alert("올바른 이메일 형식이 아닙니다. (예: user@example.com)");
+                    return;
+                }
+
+                var sendData = {
+                    subNm: subNm,
+                    subId: subId,
+                    subPass: subPass,
+                    userTel: userTel,
+                    userEmail: userEmail
+                    // userId 제거 - 백엔드에서 세션 값 사용
+                }
+
+                $.ajax({
+                    url: '/admin/createSubProc',
+                    async: true,
+                    type: 'POST',
+                    data: JSON.stringify(sendData),
+                    dataType: 'json',
+                    contentType: 'application/json',
+                    success: function(result) {
+                        if(result.resultCode == "200") {
+                            alert("부계정 생성 성공");
+                            PageNavigation.goMain();
+                        } else {
+                            alert(result.resultMessage || "부계정 생성 실패: 알 수 없는 오류");
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("부계정 생성 에러:", xhr, status, error);
+                        alert("부계정 생성 중 서버 오류가 발생했습니다");
+                    }
+                });
             });
         }
     });

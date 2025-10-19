@@ -155,29 +155,38 @@ var HeartbeatManager = (function() {
   
   /**
    * 페이지 로드 시 자동 시작
+   * jQuery 로드 후 실행되도록 window.onload 사용
    */
-  $(document).ready(function() {
-    // 세션이 있는 경우에만 하트비트 시작
-    $.ajax({
-      url: '/api/checkSession',
-      type: 'POST',
-      data: JSON.stringify({}),
-      contentType: 'application/json',
-      dataType: 'json',
-      timeout: 3000,
-      success: function(result) {
-        if (result.resultCode === '200') {
-          console.log('세션 확인 완료 - 하트비트 자동 시작');
-          start();
-        } else {
-          console.log('세션 없음 - 하트비트 시작 안함');
-        }
-      },
-      error: function() {
-        console.log('세션 확인 실패 - 하트비트 시작 안함');
+  if (typeof window !== 'undefined') {
+    window.addEventListener('load', function() {
+      // jQuery 로드 확인
+      if (typeof $ === 'undefined' || typeof jQuery === 'undefined') {
+        console.log('jQuery가 로드되지 않아 하트비트를 시작할 수 없습니다');
+        return;
       }
+      
+      // 세션이 있는 경우에만 하트비트 시작
+      $.ajax({
+        url: '/api/checkSession',
+        type: 'POST',
+        data: JSON.stringify({}),
+        contentType: 'application/json',
+        dataType: 'json',
+        timeout: 3000,
+        success: function(result) {
+          if (result.resultCode === '200') {
+            console.log('세션 확인 완료 - 하트비트 자동 시작');
+            start();
+          } else {
+            console.log('세션 없음 - 하트비트 시작 안함');
+          }
+        },
+        error: function() {
+          console.log('세션 확인 실패 - 하트비트 시작 안함');
+        }
+      });
     });
-  });
+  }
   
   // Public API
   return {

@@ -72,8 +72,21 @@
         };
         
         function logoutToLogin() {
-            console.log('logoutToLogin() 호출됨');
-            window.location.href = '/login/login';
+            var currentUserId = $('#loginUserId').val() || $('#userId').val() || window.currentUserId || '';
+            
+            $.ajax({
+                url: '/login/logoutProcess',
+                type: 'POST',
+                async: true,
+                data: JSON.stringify({ userId: currentUserId }),
+                contentType: 'application/json',
+                success: function(response) {
+                    window.location.href = '/login/login';
+                },
+                error: function(xhr, status, error) {
+                    window.location.href = '/login/login';
+                }
+            });
         }
     </script>
 </head>
@@ -277,14 +290,36 @@
         console.log("userEmail:", userEmail);
         console.log("userGrade:", userGrade);
         
-        // 검증
-        if(!userTel || userTel.length < 10) {
-            alert("핸드폰 번호가 잘못되었습니다.");
+        // 전화번호 형식 검증 및 통일 (10-11자리만 허용)
+        if(userTel && userTel !== '') {
+            // 하이픈 제거
+            var cleanPhone = userTel.replace(/-/g, '');
+            
+            // 숫자만 있는지 확인 및 길이 체크 (10-11자리만 허용)
+            if(!/^01[0-9]{8,9}$/.test(cleanPhone)) {
+                alert("올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)\n10자리 또는 11자리여야 합니다.");
+                return false;
+            }
+            
+            // 맨 뒤 4자리를 기준으로 형식 통일
+            var len = cleanPhone.length;
+            var firstPart = cleanPhone.substring(0, 3);  // 010, 011 등
+            var lastPart = cleanPhone.substring(len - 4);  // 마지막 4자리
+            var middlePart = cleanPhone.substring(3, len - 4);  // 중간 부분 (3-4자리)
+            
+            userTel = firstPart + '-' + middlePart + '-' + lastPart;
+        } else {
+            alert("핸드폰 번호를 입력해주세요.");
             return false;
         }
         
-        if(!userEmail || userEmail.indexOf("@") < 0) {
-            alert("메일 주소가 잘못되었습니다.");
+        // 이메일 형식 검증
+        var emailPattern = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+        if(userEmail && userEmail !== '' && !emailPattern.test(userEmail)) {
+            alert("올바른 이메일 형식이 아닙니다. (예: user@example.com)");
+            return false;
+        } else if(!userEmail || userEmail === '') {
+            alert("이메일 주소를 입력해주세요.");
             return false;
         }
         

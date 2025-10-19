@@ -198,6 +198,25 @@ function formatTemperatureValue(value) {
 }
 
 console.log('formatTemperatureValue 함수 정의 완료');
+
+// 로그아웃 함수
+function logoutToLogin() {
+    var currentUserId = $('#loginUserId').val() || $('#userId').val() || window.currentUserId || '';
+    
+    $.ajax({
+        url: '/login/logoutProcess',
+        type: 'POST',
+        async: true,
+        data: JSON.stringify({ userId: currentUserId }),
+        contentType: 'application/json',
+        success: function(response) {
+            window.location.href = '/login/login';
+        },
+        error: function(xhr, status, error) {
+            window.location.href = '/login/login';
+        }
+    });
+}
 </script>
 <script src="/js/sensor-setting.js"></script>
 
@@ -1073,7 +1092,7 @@ console.log('formatTemperatureValue 함수 정의 완료');
                     <h4 class="modal-title" id="myModalLabel">로그아웃 하시겠습니까?</h4>
                 </div>
                 <div class="modal-footer">
-                    <a href="/login/login" class="btn btn-primary">Yes</a>
+                    <a href="javascript:logoutToLogin();" class="btn btn-primary">Yes</a>
                     <button type="button" class="btn btn-default" data-dismiss="modal">No</button>
                 </div>
             </div>

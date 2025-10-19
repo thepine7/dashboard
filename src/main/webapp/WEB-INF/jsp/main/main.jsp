@@ -331,7 +331,7 @@
           </ul>
         </c:if>
       </li>
-      <li><a href="" data-toggle="modal" data-target="#confirmModal"><i class="fa fa-sign-out"></i>로그아웃</a></li>
+      <li><a href="javascript:void(0);" onclick="prepareLogout();"><i class="fa fa-sign-out"></i>로그아웃</a></li>
     </ul>
   </div><!--/.navbar-collapse -->
 
@@ -1634,23 +1634,32 @@
           }
       }
 
-      // 사용자 클릭 로그아웃(모달 Yes) 시: 항상 로그인 페이지로 이동
+      // 로그아웃 준비 함수
+      function prepareLogout() {
+        $('#confirmModal').modal('show');
+      }
+      
+      // 사용자 클릭 로그아웃 시: 로그인 페이지로 이동
       function logoutToLogin() {
-        // MQTT 연결 해제 추가
+        // MQTT 연결 해제
         if (typeof UnifiedMQTTManager !== 'undefined' && 
             typeof UnifiedMQTTManager.disconnectOnLogout === 'function') {
-            console.log('수동 로그아웃으로 인한 MQTT 연결 해제');
             UnifiedMQTTManager.disconnectOnLogout();
         }
         
-        var currentUserId = $('#loginUserId').val() || $('#userId').val() || '';
+        var currentUserId = $('#loginUserId').val() || $('#userId').val() || window.currentUserId || '';
+        
         $.ajax({
           url: '/login/logoutProcess',
           type: 'POST',
-          async: false,
+          async: true,
           data: JSON.stringify({ userId: currentUserId }),
           contentType: 'application/json',
-          complete: function() {
+          success: function(response) {
+            window.location.href = '/login/login';
+          },
+          error: function(xhr, status, error) {
+            // 에러 발생 시에도 로그인 페이지로 이동
             window.location.href = '/login/login';
           }
         });

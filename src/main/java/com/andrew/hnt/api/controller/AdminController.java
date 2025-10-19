@@ -1749,34 +1749,45 @@ public class AdminController extends DefaultController {
 			, @RequestBody Map<String, Object> createMap
 		) {
     	Map<String, Object> resultMap = new HashMap<String, Object>();
+    	HttpSession session = req.getSession();
+    	
+    	// 세션에서 현재 로그인한 사용자 정보 조회
+    	String sessionUserId = (String) session.getAttribute("userId");
+    	String sessionUserGrade = (String) session.getAttribute("userGrade");
+    	
+    	logger.info("=== 부계정 생성 요청 ===");
+    	logger.info("sessionUserId: {}, sessionUserGrade: {}", sessionUserId, sessionUserGrade);
+    	logger.info("요청 데이터: {}", createMap);
+    	
+    	// B 등급(부계정)은 부계정 생성 불가
+    	if("B".equals(sessionUserGrade)) {
+    		resultMap.put("resultCode", "403");
+    		resultMap.put("resultMessage", "부계정은 하위 계정을 생성할 수 없습니다");
+    		logger.warn("부계정 생성 시도 차단 - userId: {}, userGrade: {}", sessionUserId, sessionUserGrade);
+    		return resultMap;
+    	}
 
     	if(null != createMap && 0 < createMap.size()) {
     		try {
-    			// 세션에서 userId 가져오기
-    			HttpSession session = req.getSession();
-    			String sessionUserId = (String) session.getAttribute("userId");
+    			// userId 강제로 세션 값으로 설정 (프론트엔드 값 무시)
+    			createMap.put("userId", sessionUserId);
+    			logger.info("parent_user_id 설정: {}", sessionUserId);
     			
-    			// createMap에 userId가 없으면 세션에서 설정
-    			if(!createMap.containsKey("userId") || createMap.get("userId") == null || 
-    			   "null".equalsIgnoreCase(String.valueOf(createMap.get("userId"))) ||
-    			   String.valueOf(createMap.get("userId")).isEmpty()) {
-    				logger.warn("createMap에 userId 없음, 세션에서 설정: {}", sessionUserId);
-    				createMap.put("userId", sessionUserId);
-    			}
-    			
-    			logger.info("부계정 생성 요청 - createMap: {}", createMap);
     			adminService.createSubProc(createMap);
 
     			resultMap.put("resultCode", "200");
     			resultMap.put("resultMessage", "부계정 생성 성공");
+    			logger.info("부계정 생성 성공 - parent_user_id: {}", sessionUserId);
 		} catch(Exception e) {
     			unifiedErrorHandler.logError("부계정 생성", e);
     			resultMap.put("resultCode", "500");
     			resultMap.put("resultMessage", "부계정 생성 실패: " + e.getMessage());
+    			logger.error("부계정 생성 실패 - parent_user_id: {}, error: {}", sessionUserId, e.getMessage());
 		}
 	} else {
 		resultMap.put("resultCode", "400");
 		resultMap.put("resultMessage", "요청 데이터가 없습니다");
+		logger.warn("부계정 생성 실패 - 요청 데이터 없음");
 	}
 
     	return resultMap;

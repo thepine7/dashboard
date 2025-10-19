@@ -61,8 +61,21 @@
         };
         
         function logoutToLogin() {
-            console.log('logoutToLogin() 호출됨');
-            window.location.href = '/login/login';
+            var currentUserId = $('#loginUserId').val() || $('#userId').val() || window.currentUserId || '';
+            
+            $.ajax({
+                url: '/login/logoutProcess',
+                type: 'POST',
+                async: true,
+                data: JSON.stringify({ userId: currentUserId }),
+                contentType: 'application/json',
+                success: function(response) {
+                    window.location.href = '/login/login';
+                },
+                error: function(xhr, status, error) {
+                    window.location.href = '/login/login';
+                }
+            });
         }
     </script>
     

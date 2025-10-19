@@ -80,25 +80,23 @@ public class LoginController {
     sessionUserId = (String) session.getAttribute(Constants.SESSION_USER_ID);
 
     if (sessionUserId != null && !sessionUserId.isEmpty()) {
-      // 세션 보안 서비스를 통한 세션 무효화
-      sessionSecurityService.invalidateSession(session);
+      // 1. 먼저 DB에 로그아웃 상태 업데이트
+      LoginVO loginVO = new LoginVO();
+      loginVO.setUserId(sessionUserId);
+      try {
+        loginService.updateLogoutDtm(loginVO);
+        logger.info("로그아웃 DB 업데이트 성공 - userId: {}", sessionUserId);
+      } catch(Exception e) {
+        logger.error("로그아웃 DB 업데이트 실패 - userId: {}", sessionUserId, e);
+        unifiedErrorHandler.logError("로그아웃 시간 업데이트", e);
+      }
       
+      // 2. 그 다음 세션 무효화
+      sessionSecurityService.invalidateSession(session);
       session.removeAttribute(Constants.SESSION_USER_ID);
       session.invalidate();
       result = "redirect:/login/login";
     }
-  }
-
-  // 로그아웃 시 로그아웃 일시 업데이트
-  LoginVO loginVO = new LoginVO();
-  if (sessionUserId != null && !sessionUserId.isEmpty()) {
-    loginVO.setUserId(sessionUserId);
-  }
-
-  try {
-    loginService.updateLogoutDtm(loginVO);
-  } catch(Exception e) {
-    unifiedErrorHandler.logError("로그아웃 시간 업데이트", e);
   }
 
   return result;
@@ -114,15 +112,7 @@ public class LoginController {
 
 		HttpSession session = req.getSession();
 
-		if(null != session) {
-			if(null != String.valueOf(session.getAttribute(Constants.SESSION_USER_ID)) && !"".equals(String.valueOf(session.getAttribute(Constants.SESSION_USER_ID)))) {
-				if(loginVO.getUserId().equals(String.valueOf(loginVO.getUserId()))) {
-					session.removeAttribute(Constants.SESSION_USER_ID);
-					session.invalidate();
-				}
-			}
-		}
-
+		// 1. 먼저 DB에 로그아웃 상태 업데이트
 		try {
 			loginService.updateLogoutDtm(loginVO);
 			resultMap.put("resultCode", "200");
@@ -130,6 +120,15 @@ public class LoginController {
 		} catch(Exception e) {
 			unifiedErrorHandler.logError("로그아웃 처리", e);
 			return unifiedErrorHandler.createInternalServerErrorResponse("로그아웃 처리 중 오류가 발생했습니다.");
+		}
+
+		// 2. 그 다음 세션 무효화
+		if(null != session) {
+			String sessionUserId = (String) session.getAttribute(Constants.SESSION_USER_ID);
+			if(null != sessionUserId && !"".equals(sessionUserId)) {
+				session.removeAttribute(Constants.SESSION_USER_ID);
+				session.invalidate();
+			}
 		}
 
 		return resultMap;

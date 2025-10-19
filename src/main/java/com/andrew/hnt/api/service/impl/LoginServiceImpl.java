@@ -605,17 +605,25 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 
 	@Override
 	public void updateLogoutDtm(LoginVO loginVO) throws Exception {
-
+		logger.info("=== updateLogoutDtm 호출됨 ===");
+		logger.info("loginVO null 여부: {}", (loginVO == null));
+		
 		if(null != loginVO) {
+			logger.info("loginVO.getUserId(): {}", loginVO.getUserId());
 			try {
-				logger.info("logout id 2 : " + loginVO.getUserId());
+				logger.info("DB 로그아웃 업데이트 시작 - userId: {}", loginVO.getUserId());
 				loginMapper.updateLogoutDtm(loginVO);
+				logger.info("DB 로그아웃 업데이트 성공 - userId: {}", loginVO.getUserId());
 
 				// 로그아웃 시 연결되어 있는 모든 알람 정보 삭제 처리
 				loginMapper.deleteAlarm(loginVO);
+				logger.info("알람 정보 삭제 완료 - userId: {}", loginVO.getUserId());
 			} catch(Exception e) {
-				logger.error("Error : " + e.toString());
+				logger.error("로그아웃 DB 업데이트 에러 - userId: {}, error: {}", loginVO.getUserId(), e.toString(), e);
+				throw e;
 			}
+		} else {
+			logger.error("loginVO가 null입니다!");
 		}
 	}
 

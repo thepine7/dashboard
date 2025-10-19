@@ -566,11 +566,13 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 	@Override
 	public void createSubProc(Map<String, Object> param) throws Exception {
 		if(null != param && 0 < param.size()) {
-			String subId = String.valueOf(param.get("subId"));
-			String subPass = String.valueOf(param.get("subPass"));
-			String subNm = String.valueOf(param.get("subNm"));
+		String subId = String.valueOf(param.get("subId"));
+		String subPass = String.valueOf(param.get("subPass"));
+		String subNm = String.valueOf(param.get("subNm"));
+		String userTel = String.valueOf(param.get("userTel"));
+		String userEmail = String.valueOf(param.get("userEmail"));
 
-			// 서브 사용자 정보 입력
+		// 서브 사용자 정보 입력
 			if(null != subId && !"".equals(subId) && 0 < subId.length()) {
 				if(subId.contains("@")) {
 					String[] userIdArr = subId.split("@");
@@ -591,15 +593,16 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 					param.put("subPass", subPass);
 				} catch(Exception e) {
 					logger.error("Error : 암호화 중 에러가 발생되었습니다. - " + e.toString(), e);
-					throw new Exception();
+					throw new Exception("비밀번호 암호화 중 오류가 발생했습니다");
 				}
 			}
 
-			// parent_user_id 유효성 검사
+			// parent_user_id 유효성 검사 강화
 			String parentUserId = String.valueOf(param.get("userId"));
-			if(parentUserId == null || parentUserId.isEmpty() || "null".equalsIgnoreCase(parentUserId)) {
-				logger.error("부계정 생성 실패 - parentUserId가 없음: {}", param);
-				throw new Exception("주계정 ID가 없습니다");
+			if(parentUserId == null || parentUserId.isEmpty() || 
+			   "null".equalsIgnoreCase(parentUserId) || "undefined".equalsIgnoreCase(parentUserId)) {
+				logger.error("부계정 생성 실패 - parentUserId가 유효하지 않음: {}", param);
+				throw new Exception("주계정 ID가 유효하지 않습니다");
 			}
 			logger.info("부계정 생성 시작 - subId: {}, parentUserId: {}", subId, parentUserId);
 
@@ -621,8 +624,16 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 				logger.info("부계정 생성 성공 - subId: {}, parentUserId: {}", subId, parentUserId);
 				logger.info("DB 저장 확인 - UserInfo.parentUserId: {}", userInfo.getParentUserId());
 			} catch(Exception e) {
+				String errorMsg = e.getMessage();
+				
+				// MySQL Duplicate entry 에러 감지
+				if(errorMsg != null && errorMsg.contains("Duplicate entry")) {
+					logger.error("중복 사용자 ID - subId: {}", subId);
+					throw new Exception("이미 존재하는 사용자 아이디입니다");
+				}
+				
 				logger.error("부계정 생성 실패 - subId: {}, parentUserId: {}, error: {}", subId, parentUserId, e.toString());
-				throw new Exception();
+				throw new Exception("부계정 생성 중 오류가 발생했습니다");
 			}
 
 			// 부계정은 장치를 직접 소유하지 않으며 parent_user_id 기반으로 장치를 조회한다.
