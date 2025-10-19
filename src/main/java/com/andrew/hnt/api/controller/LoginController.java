@@ -183,10 +183,25 @@ public class LoginController {
 								resultMap.put("userInfo", userInfo);
 								resultMap.put("redirectUrl", "/main/main");
 
-								// 로그인 성공 시 로그인 일시 업데이트 및 로그아웃 일시 삭제
-								loginService.updateLoginDtm(loginVO);
+							// 로그인 성공 시 로그인 일시 업데이트 및 로그아웃 일시 삭제
+							loginService.updateLoginDtm(loginVO);
+							
+							// User-Agent, Auto Login 저장
+							String userAgent = req.getHeader("User-Agent");
+							if (userAgent != null && !userAgent.isEmpty()) {
+								loginVO.setUserAgent(userAgent);
+							}
+							
+							// PC 웹의 saveId만 사용 (앱은 자동로그인 정보를 서버로 전달하지 않음)
+							loginService.updateUserPreferences(loginVO);
+							
+							String clientType = com.andrew.hnt.api.util.UserAgentUtil.getClientType(userAgent);
+							logger.info("사용자 설정 저장 - userId: {}, autoLogin: {}, 접속유형: {}", 
+								loginVO.getUserId(), 
+								loginVO.getSaveId(),
+								clientType);
 
-								if(null != userInfo) {
+							if(null != userInfo) {
 									logger.info(userInfo.getUserId());
 									// 센서가 없는 사용자의 경우 userId를 sensorId로 사용
 									String sensorId = (userInfo.getSensorId() != null && !"".equals(userInfo.getSensorId())) 

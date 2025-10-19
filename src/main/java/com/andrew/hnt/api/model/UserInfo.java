@@ -19,6 +19,8 @@ public class UserInfo {
     public String loginYn;
     public String mainId;
     public String parentUserId;
+    public String userAgent;    // User-Agent (PC/앱 구분)
+    public String autoLogin;    // 자동 로그인 여부 (PC/앱 공통)
     
     // Getters
     public int getNo() { return no; }
@@ -39,6 +41,8 @@ public class UserInfo {
     public String getLoginYn() { return loginYn; }
     public String getMainId() { return mainId; }
     public String getParentUserId() { return parentUserId; }
+    public String getUserAgent() { return userAgent; }
+    public String getAutoLogin() { return autoLogin; }
     
     // Setters
     public void setNo(int no) { this.no = no; }
@@ -59,4 +63,6 @@ public class UserInfo {
     public void setLoginYn(String loginYn) { this.loginYn = loginYn; }
     public void setMainId(String mainId) { this.mainId = mainId; }
     public void setParentUserId(String parentUserId) { this.parentUserId = parentUserId; }
+    public void setUserAgent(String userAgent) { this.userAgent = userAgent; }
+    public void setAutoLogin(String autoLogin) { this.autoLogin = autoLogin; }
 }

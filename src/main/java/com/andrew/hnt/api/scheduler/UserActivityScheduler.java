@@ -30,16 +30,20 @@ public class UserActivityScheduler {
   private static final Logger logger = LoggerFactory.getLogger(UserActivityScheduler.class);
   
   /**
-   * 3분마다 비활성 사용자 자동 로그아웃 처리
-   * - 마지막 활동(mdf_dtm)으로부터 3분 이상 지난 사용자를 비활성 처리
+   * 3분마다 비활성 웹 사용자 자동 로그아웃 처리 (앱 사용자 제외)
+   * - 마지막 활동(mdf_dtm)으로부터 3분 이상 지난 웹 사용자를 비활성 처리
+   * - 앱 사용자는 하트비트를 보내지 않으므로 타임아웃 체크에서 제외
+   * - 앱 사용자는 30분 세션 타임아웃만 적용
    * - 초기 지연: 1분 후 시작
    * - 실행 간격: 3분마다
    */
   @Scheduled(fixedDelay = 180000, initialDelay = 60000) // 3분마다, 초기 1분 후 시작
   public void checkInactiveUsers() {
     try {
-      logger.info("=== 비활성 사용자 체크 시작 ===");
-      loginService.checkAndUpdateSessionTimeout();
+      logger.info("=== 비활성 사용자 체크 시작 (웹 사용자만) ===");
+      // 앱 사용자는 하트비트를 보내지 않으므로 타임아웃 체크에서 제외
+      // 앱 사용자는 30분 세션 타임아웃만 적용
+      loginService.checkAndUpdateSessionTimeoutForWebOnly();
       logger.info("=== 비활성 사용자 체크 완료 ===");
     } catch (Exception e) {
       logger.error("비활성 사용자 체크 실패", e);

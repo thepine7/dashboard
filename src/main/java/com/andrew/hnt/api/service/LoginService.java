@@ -67,4 +67,14 @@ public interface LoginService {
 	
 	// 사용자 활동 시간 업데이트 (하트비트)
 	public void updateUserActivity(String userId) throws Exception;
+	
+	/**
+	 * 사용자 설정 업데이트 (User-Agent, Auto Login)
+	 */
+	void updateUserPreferences(LoginVO loginVO) throws Exception;
+	
+	/**
+	 * 웹 사용자만 타임아웃 체크 (앱 사용자 제외)
+	 */
+	void checkAndUpdateSessionTimeoutForWebOnly() throws Exception;
 }

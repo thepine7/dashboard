@@ -348,8 +348,8 @@ function handleMqttMessage(topic, message) {
     var topicUuid = topicParts[3];
     
     // 현재 사용자와 장치 확인
-    if (topicUserId !== SensorSettingPage.currentUserId || 
-        topicUuid !== SensorSettingPage.currentSensorUuid) {
+    if (topicUserId !== window.SensorSettingPage.currentUserId || 
+        topicUuid !== window.SensorSettingPage.currentSensorUuid) {
         console.debug('다른 사용자 또는 장치의 메시지 - 무시:', topicUserId, topicUuid);
         return;
     }
@@ -648,7 +648,7 @@ window.handleSetresMessage = function(msg) {
  */
 function handleDinStatus(messageObj) {
     var value = parseInt(messageObj.value);
-    var uuid = SensorSettingPage.currentSensorUuid;
+    var uuid = window.SensorSettingPage.currentSensorUuid;
     
     // 중복 처리 방지 - din 메시지 ID 생성
     var dinId = 'din|' + value + '|' + Date.now();

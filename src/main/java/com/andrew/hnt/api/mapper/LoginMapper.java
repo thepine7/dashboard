@@ -64,4 +64,14 @@ public interface LoginMapper {
     
     // 사용자 활동 시간 업데이트 (하트비트)
     public void updateUserActivity(Map<String, Object> param);
+    
+    /**
+     * User-Agent, Auto Login 업데이트
+     */
+    void updateUserPreferences(LoginVO loginVO);
+    
+    /**
+     * 비활성 웹 사용자 자동 로그아웃 (앱 사용자 제외)
+     */
+    int updateInactiveWebUsers();
 }

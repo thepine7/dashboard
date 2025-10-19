@@ -288,13 +288,14 @@ public class MainController extends BaseController {
 		}
 	}
 
-	@RequestMapping(value = "/insertSensorInfo", method = RequestMethod.POST)
+	@RequestMapping(value = "/data/insertSensorInfo", method = RequestMethod.POST)
 	public @ResponseBody Map<String, Object> insertSensorInfo(
 			HttpServletRequest req
 			, HttpServletResponse res
 			, @RequestBody Map<String, Object> insertData
 	) {
 		// 공통 장치 등록 서비스 사용 (중복 제거)
+		// 앱 호환성: 앱은 /data/insertSensorInfo 경로 사용
 		return deviceRegistrationService.processDeviceRegistration(req, insertData, true);
 	}
 

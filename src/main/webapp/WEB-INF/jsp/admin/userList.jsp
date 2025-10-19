@@ -26,6 +26,8 @@
         window.PageNavigation = {
             goMain: function() {
                 console.log('PageNavigation.goMain() 호출됨');
+                // Main 버튼 클릭 플래그 설정
+                sessionStorage.setItem('mainButtonClicked', 'true');
                 window.location.href = '/main/main';
             },
             goLogin: function() {

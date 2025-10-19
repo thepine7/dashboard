@@ -95,22 +95,22 @@
         box-shadow: 0 0 0 3px rgba(231,76,60,0.12); 
       }
 
-      /* 실행 상태 하이라이트 (명확한 구분) */
+      /* 실행 상태 하이라이트 (더 진한 색상) */
       .btn-on-soft.is-active {
-        background-color: #28a745 !important; /* 진한 녹색 */
-        border-color: #1e7e34 !important;
+        background-color: #1e7e34 !important; /* 더 진한 녹색 */
+        border-color: #155724 !important;
         color: white !important;
         font-weight: 900 !important;
-        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4) !important;
+        box-shadow: 0 4px 8px rgba(30, 126, 52, 0.6) !important;
         transform: scale(1.05) !important;
         border-width: 2px !important;
       }
       .btn-off-soft.is-active {
-        background-color: #dc3545 !important; /* 진한 빨간색 */
-        border-color: #bd2130 !important;
+        background-color: #bd2130 !important; /* 더 진한 빨간색 */
+        border-color: #a71e2a !important;
         color: white !important;
         font-weight: 900 !important;
-        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4) !important;
+        box-shadow: 0 4px 8px rgba(189, 33, 48, 0.6) !important;
         transform: scale(1.05) !important;
         border-width: 2px !important;
       }
@@ -137,6 +137,49 @@
             height: 30px;
             margin-right: 6px;
             border-radius: 4px;
+        }
+        
+        /* 강제제상 버튼 스타일 */
+        .defrost-btn {
+            transition: all 0.3s ease;
+        }
+        .defrost-btn.bright {
+            opacity: 1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transform: scale(1.05);
+        }
+        .defrost-btn.dark {
+            opacity: 0.5;
+            box-shadow: none;
+            transform: scale(1);
+        }
+        
+        /* 히터일 때 강제제상 버튼 비활성화 스타일 */
+        .defrost-btn.heater-disabled {
+            background-color: #e9ecef !important;
+            border-color: #dee2e6 !important;
+            color: #6c757d !important;
+            opacity: 0.6 !important;
+            cursor: not-allowed !important;
+            font-weight: normal !important;
+            box-shadow: none !important;
+        }
+        
+        /* 출력 제어 버튼 스타일 */
+        .device-output-btn {
+            transition: all 0.3s ease;
+        }
+        .device-output-btn.bright {
+            opacity: 1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transform: scale(1.05);
+            font-weight: bold;
+        }
+        .device-output-btn.dark {
+            opacity: 0.4;
+            box-shadow: none;
+            transform: scale(1);
+            font-weight: normal;
         }
     </style>
   <!-- 통일된 세션 관리 모듈 사용 -->
@@ -1979,9 +2022,10 @@ function rcvMsg(topic, message) {
                     if (jsonObj.name === 'ain') {
                         updateCurrentTemperature(sensorUuid, jsonObj.value);
 						} else if (jsonObj.name === 'output') {
-							// 출력 상태 변화 알림 → 버튼 하이라이트 반영
-							console.log('출력 상태 변화 수신:', jsonObj);
-							updateOutputButtonState(jsonObj);
+							// 출력 상태 변화 알림 → 상태표시등과 버튼 밝기 업데이트는 위의 rcvMsg 함수에서 처리됨
+							console.log('=== MQTT output 메시지 수신 ===');
+							console.log('Type:', jsonObj.type, 'Value:', jsonObj.value);
+							console.log('전체 메시지:', jsonObj);
                     }
                 } else if (jsonObj.actcode === 'setres') {
 						// 설정 응답 수신 시 센서 정보 업데이트
@@ -2712,20 +2756,36 @@ function updateSensorInfo(msg) {
 									if (msg.type == '1') {
 										// comp 이상
 										updateStatusIndicator('comp' + uuid, 'red', 'comp');
+										// 콤프 버튼 밝기 업데이트
+										updateOutputControlButtonState('1', '1');
 									} else if (msg.type == '2') {
 										// def 이상
 										updateStatusIndicator('defr' + uuid, 'red', 'defr');
+										// 제상 버튼 밝기 업데이트
+										updateOutputControlButtonState('2', '1');
+										// 강제제상 버튼 밝기 업데이트
+										updateDefrostButtonState('1');
 									} else if (msg.type == '3') {
 										// fan 이상
 										updateStatusIndicator('fan' + uuid, 'red', 'fan');
+										// 팬 버튼 밝기 업데이트
+										updateOutputControlButtonState('3', '1');
                                     }
 								} else if (msg.value == '0') {
 									if (msg.type == '1') {
 										updateStatusIndicator('comp' + uuid, 'gray', 'comp');
+										// 콤프 버튼 밝기 업데이트
+										updateOutputControlButtonState('1', '0');
 									} else if (msg.type == '2') {
 										updateStatusIndicator('defr' + uuid, 'gray', 'defr');
+										// 제상 버튼 밝기 업데이트
+										updateOutputControlButtonState('2', '0');
+										// 강제제상 버튼 밝기 업데이트
+										updateDefrostButtonState('0');
 									} else if (msg.type == '3') {
 										updateStatusIndicator('fan' + uuid, 'gray', 'fan');
+										// 팬 버튼 밝기 업데이트
+										updateOutputControlButtonState('3', '0');
                                     }
 								}
 							}
@@ -2930,6 +2990,12 @@ function updateSensorInfo(msg) {
 				updateStatusIndicator('fan' + sensorUuid, 'gray', 'fan');
 				updateStatusIndicator('error' + sensorUuid, 'red', 'error');
 				
+				// 에러 상태일 때 모든 버튼을 어둡게 설정
+				updateOutputControlButtonState('1', '0'); // 콤프 OFF
+				updateOutputControlButtonState('2', '0'); // 제상 OFF  
+				updateOutputControlButtonState('3', '0'); // 팬 OFF
+				updateDefrostButtonState('0'); // 강제제상 OFF
+				
 				// 현재온도 Error 표시
 				$('#curTemp').html('Error');
                 
@@ -3075,7 +3141,7 @@ function updateSensorInfo(msg) {
 			$('.device-output-btn').prop('disabled', true).css('opacity', '0.5');
 			$('#defrost').prop('disabled', true);
 			$('#stopDefrost').prop('disabled', true);
-			$('#defrost, #stopDefrost').removeClass('is-active');
+			$('#defrost, #stopDefrost').removeClass('is-active bright dark').addClass('heater-disabled');
 			
 		} else if(isCooler) {
 			console.log('쿨러 장치: 수동조작 상태에 따라 출력 제어 버튼 활성화/비활성화');
@@ -3092,6 +3158,8 @@ function updateSensorInfo(msg) {
 			var defrostDisabled = (manualStored === '1');
 			$('#defrost').prop('disabled', defrostDisabled);
 			$('#stopDefrost').prop('disabled', defrostDisabled);
+			// 쿨러일 때는 heater-disabled 클래스 제거
+			$('#defrost, #stopDefrost').removeClass('heater-disabled');
 		} else {
 			console.log('알 수 없는 장치종류:', deviceType);
 			// 기본적으로 모든 버튼 비활성화
@@ -3103,14 +3171,121 @@ function updateSensorInfo(msg) {
 		console.log('=== 디버깅 완료 ===');
 	}
 
+	// 강제제상 버튼 상태 업데이트 함수
+	function updateDefrostButtonState(outputState) {
+		console.log('=== 강제제상 버튼 상태 업데이트 ===');
+		console.log('제상 output 상태:', outputState);
+		
+		var defrostButton = $('#defrost');
+		var stopDefrostButton = $('#stopDefrost');
+		
+		console.log('강제제상 버튼 찾기 결과:', defrostButton.length, '개');
+		console.log('강제제상종료 버튼 찾기 결과:', stopDefrostButton.length, '개');
+		
+		// 장치 종류 확인 (히터인지 체크)
+		var deviceType = (window.originalValues && window.originalValues.p16) ? window.originalValues.p16 : '0';
+		var isHeater = (deviceType === '1');
+		
+		if (isHeater) {
+			console.log('히터 장치: 강제제상 버튼 비활성화 상태 유지');
+			// 히터인 경우: heater-disabled 클래스 유지
+			defrostButton.removeClass('bright dark').addClass('heater-disabled');
+			stopDefrostButton.removeClass('bright dark').addClass('heater-disabled');
+			return;
+		}
+		
+		// 제상 output 상태에 따른 버튼 밝기 조정
+		if (outputState === '1') {
+			// 제상이 ON인 경우: 강제제상 버튼 밝게, 강제제상종료 버튼 어둡게
+			console.log('제상 ON 상태 처리 시작');
+			defrostButton.removeClass('dark heater-disabled').addClass('bright');
+			stopDefrostButton.removeClass('bright heater-disabled').addClass('dark');
+			console.log('✅ 제상 ON: 강제제상 밝게, 강제제상종료 어둡게');
+			console.log('강제제상 버튼 클래스:', defrostButton.attr('class'));
+			console.log('강제제상종료 버튼 클래스:', stopDefrostButton.attr('class'));
+		} else if (outputState === '0') {
+			// 제상이 OFF인 경우: 강제제상 버튼 어둡게, 강제제상종료 버튼 밝게
+			console.log('제상 OFF 상태 처리 시작');
+			defrostButton.removeClass('bright heater-disabled').addClass('dark');
+			stopDefrostButton.removeClass('dark heater-disabled').addClass('bright');
+			console.log('✅ 제상 OFF: 강제제상 어둡게, 강제제상종료 밝게');
+			console.log('강제제상 버튼 클래스:', defrostButton.attr('class'));
+			console.log('강제제상종료 버튼 클래스:', stopDefrostButton.attr('class'));
+		} else {
+			console.warn('알 수 없는 제상 상태 값:', outputState);
+		}
+	}
+	
+	// 출력 제어 버튼 상태 업데이트 함수
+	function updateOutputControlButtonState(type, value) {
+		console.log('=== 출력 제어 버튼 상태 업데이트 ===');
+		console.log('Type:', type, 'Value:', value);
+		
+		// 해당 타입의 ON/OFF 버튼 찾기
+		var onButton = $('.device-output-btn[data-type="' + type + '"][data-val="1"]');
+		var offButton = $('.device-output-btn[data-type="' + type + '"][data-val="0"]');
+		
+		console.log('ON 버튼 찾기 결과:', onButton.length, '개');
+		console.log('OFF 버튼 찾기 결과:', offButton.length, '개');
+		console.log('ON 버튼 선택자:', '.device-output-btn[data-type="' + type + '"][data-val="1"]');
+		console.log('OFF 버튼 선택자:', '.device-output-btn[data-type="' + type + '"][data-val="0"]');
+		
+		if (value === '1') {
+			// output이 ON인 경우: ON 버튼 밝게, OFF 버튼 어둡게
+			console.log('ON 상태 처리 시작');
+			onButton.removeClass('dark').addClass('bright');
+			offButton.removeClass('bright').addClass('dark');
+			console.log('✅ Type ' + type + ' ON: ON 버튼 밝게, OFF 버튼 어둡게');
+			console.log('ON 버튼 클래스:', onButton.attr('class'));
+			console.log('OFF 버튼 클래스:', offButton.attr('class'));
+		} else if (value === '0') {
+			// output이 OFF인 경우: ON 버튼 어둡게, OFF 버튼 밝게
+			console.log('OFF 상태 처리 시작');
+			onButton.removeClass('bright').addClass('dark');
+			offButton.removeClass('dark').addClass('bright');
+			console.log('✅ Type ' + type + ' OFF: ON 버튼 어둡게, OFF 버튼 밝게');
+			console.log('ON 버튼 클래스:', onButton.attr('class'));
+			console.log('OFF 버튼 클래스:', offButton.attr('class'));
+		} else {
+			console.warn('알 수 없는 value 값:', value);
+		}
+	}
+	
+	// 초기 버튼 상태 설정 함수
+	function initializeButtonStates() {
+		console.log('=== 초기 버튼 상태 설정 ===');
+		
+		// 모든 강제제상 버튼을 어둡게 설정 (기본값)
+		$('#defrost, #stopDefrost').removeClass('bright').addClass('dark');
+		
+		// 모든 출력 제어 버튼을 어둡게 설정 (기본값)
+		$('.device-output-btn').removeClass('bright').addClass('dark');
+		
+		console.log('✅ 모든 버튼 초기 상태 설정 완료 (어둡게)');
+	}
+
 	// 출력 버튼 상태 업데이트 함수
 	function updateOutputButtonState(msg) {
 		var type = msg.type;
 		var value = msg.value;
 		
-		console.log('출력 버튼 상태 업데이트:', type, value);
+		console.log('=== updateOutputButtonState 함수 호출 ===');
+		console.log('Type:', type, 'Value:', value);
+		console.log('전체 메시지:', msg);
 		
-		// 타입에 따른 버튼 선택자 매핑
+		// 새로운 밝기 조정 함수 호출
+		console.log('updateOutputControlButtonState 호출 시작');
+		updateOutputControlButtonState(type, value);
+		console.log('updateOutputControlButtonState 호출 완료');
+		
+		// 제상(Type=2)인 경우 강제제상 버튼 상태도 업데이트
+		if (type === '2') {
+			console.log('제상(Type=2) 감지 - updateDefrostButtonState 호출');
+			updateDefrostButtonState(value);
+			console.log('updateDefrostButtonState 호출 완료');
+		}
+		
+		// 기존 is-active 클래스 로직도 유지 (호환성)
 		var buttonSelectors = {
 			'1': '.device-output-btn[data-type="1"]', // 콤프
 			'2': '.device-output-btn[data-type="2"]', // 제상
@@ -3147,6 +3322,9 @@ function updateSensorInfo(msg) {
 		var defrostDisabledInit = (manualStoredInit === '1');
 		$('#defrost').prop('disabled', defrostDisabledInit);
 		$('#stopDefrost').prop('disabled', defrostDisabledInit);
+		
+		// 초기 버튼 상태 설정 (기본값: 모든 버튼 어둡게)
+		initializeButtonStates();
 		
 		// p16(장치종류) 변경 이벤트 핸들러 추가
 		$('#p16').on('change', function() {

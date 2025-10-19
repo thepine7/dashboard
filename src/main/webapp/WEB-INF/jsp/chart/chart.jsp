@@ -133,6 +133,8 @@
         window.PageNavigation = {
             goMain: function() {
                 console.log('PageNavigation.goMain() 호출됨');
+                // Main 버튼 클릭 플래그 설정
+                sessionStorage.setItem('mainButtonClicked', 'true');
                 // 세션 기반 메인 페이지로 이동 (URL 파라미터 제거)
                 window.location.href = '/main/main';
             },

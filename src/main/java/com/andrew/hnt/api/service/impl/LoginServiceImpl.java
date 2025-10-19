@@ -848,6 +848,52 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 			throw e;
 		}
 	}
+	
+	/**
+	 * 사용자 설정 업데이트 (User-Agent, Auto Login)
+	 */
+	@Override
+	public void updateUserPreferences(LoginVO loginVO) throws Exception {
+		try {
+			if (loginVO != null && loginVO.getUserId() != null) {
+				loginMapper.updateUserPreferences(loginVO);
+				
+				String clientType = com.andrew.hnt.api.util.UserAgentUtil.getClientType(loginVO.getUserAgent());
+				logger.info("사용자 설정 업데이트 성공 - userId: {}, autoLogin: {}, 접속유형: {}", 
+					loginVO.getUserId(), 
+					loginVO.getSaveId(),
+					clientType);
+			}
+		} catch (Exception e) {
+			logger.error("사용자 설정 업데이트 실패", e);
+			// 설정 저장 실패는 로그인 자체를 막지 않음
+		}
+	}
+	
+	/**
+	 * 웹 사용자만 타임아웃 체크 (앱 사용자 제외)
+	 */
+	@Override
+	public void checkAndUpdateSessionTimeoutForWebOnly() throws Exception {
+		try {
+			logger.info("=== 웹 사용자 타임아웃 체크 시작 ===");
+			
+			// 3분(180초) 이상 활동이 없는 웹 사용자만 비활성 처리
+			// 앱 사용자는 제외 (앱 사용자는 user_agent 컬럼으로 구분)
+			int timeoutCount = loginMapper.updateInactiveWebUsers();
+			
+			if (timeoutCount > 0) {
+				logger.info("타임아웃 처리된 웹 사용자 수: {}", timeoutCount);
+			} else {
+				logger.debug("타임아웃 처리할 웹 사용자 없음");
+			}
+			
+			logger.info("=== 웹 사용자 타임아웃 체크 완료 ===");
+		} catch (Exception e) {
+			logger.error("웹 사용자 타임아웃 체크 실패", e);
+			throw e;
+		}
+	}
 
 	/**
 	 * 최적화된 사용자 목록 조회 (활동 상태 포함) - N+1 쿼리 문제 해결

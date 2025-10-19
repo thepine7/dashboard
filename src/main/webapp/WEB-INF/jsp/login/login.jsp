@@ -291,7 +291,7 @@
               <div class="col-sm-offset-2 col-sm-10">
                 <div class="checkbox">
                   <label>
-                    <input type="checkbox" id="saveId" name="saveId" value="Y"> Save ID
+                    <input type="checkbox" id="saveId" name="saveId" value="Y"> 자동로그인
                   </label>
                 </div>
               </div>

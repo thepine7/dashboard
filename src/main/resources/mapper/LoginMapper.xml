@@ -40,6 +40,8 @@
             , u.logout_dtm as logoutDtm
             , u.token
             , u.parent_user_id as mainId
+            , u.user_agent as userAgent
+            , u.auto_login as autoLogin
             , case 
                 when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then '활성'
                 else '비활성'
@@ -111,6 +113,8 @@
             , u.logout_dtm as logoutDtm
             , u.token
             , u.parent_user_id as mainId
+            , u.user_agent as userAgent
+            , u.auto_login as autoLogin
             , case 
                 when u.last_login_dtm = 'Y' and u.logout_dtm = 'N' then '활성'
                 else '비활성'
@@ -321,6 +325,30 @@
         WHERE user_id = #{userId}
         AND del_yn = 'N'
         AND last_login_dtm = 'Y'
+    </update>
+    
+    <!-- User-Agent, Auto Login 업데이트 -->
+    <update id="updateUserPreferences" parameterType="com.andrew.hnt.api.model.LoginVO">
+        UPDATE hnt_user
+        SET user_agent = #{userAgent}
+            <if test="saveId != null and saveId != ''">
+            , auto_login = #{saveId}
+            </if>
+        WHERE user_id = #{userId}
+          AND del_yn = 'N'
+    </update>
+    
+    <!-- 비활성 웹 사용자만 자동 로그아웃 (앱 사용자 제외) -->
+    <update id="updateInactiveWebUsers">
+        UPDATE hnt_user
+        SET last_login_dtm = 'N',
+            logout_dtm = 'Y',
+            mdf_dtm = NOW()
+        WHERE del_yn = 'N'
+          AND last_login_dtm = 'Y'
+          AND logout_dtm = 'N'
+          AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 180
+          AND (user_agent IS NULL OR (user_agent NOT LIKE '%okhttp%' AND user_agent NOT LIKE '%Dalvik%'))
     </update>
 
 </mapper>
