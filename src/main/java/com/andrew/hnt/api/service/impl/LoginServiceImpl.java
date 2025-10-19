@@ -52,33 +52,12 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 		try {
 			userList = loginMapper.getUserList();;
 
-			if(null != userList && 0 < userList.size()) {
-				for(int i=0; i < userList.size(); i++) {
-					String loginDtm = "";
-					String logoutDtm = "";
+		if(null != userList && 0 < userList.size()) {
+			for(int i=0; i < userList.size(); i++) {
+				// 중복 로직 제거: 최적화된 쿼리(getUserListWithActivityStatus)를 사용하세요
+				// 이 메서드는 레거시 호환성을 위해 유지되지만, loginYn은 쿼리에서 계산됩니다
 
-					loginDtm = String.valueOf(userList.get(i).getLoginDtm());
-					logoutDtm = String.valueOf(userList.get(i).getLogoutDtm());
-
-					// 새로운 활동 상태 확인 로직 적용
-					try {
-						// 현재 세션 정보는 AdminController에서 처리하므로 여기서는 DB 기반으로만 확인
-						if(null != loginDtm && !"".equals(loginDtm) && "Y".equals(loginDtm)) {
-							if(null != logoutDtm && !"".equals(logoutDtm) && "A".equals(logoutDtm)) {
-								// 활동 상태가 "Y"이고 포커스 상태가 "A"이면 활성
-								userList.get(i).setLoginYn("활성");
-							} else {
-								userList.get(i).setLoginYn("비활성");
-							}
-						} else {
-							userList.get(i).setLoginYn("비활성");
-						}
-					} catch(Exception e) {
-						logger.error("활동 상태 확인 실패 - userId: {}, error: {}", userList.get(i).getUserId(), e.getMessage());
-						userList.get(i).setLoginYn("비활성");
-					}
-
-					String user_id = String.valueOf(userList.get(i).getUserId());
+				String user_id = String.valueOf(userList.get(i).getUserId());
 					Map<String, Object> param = new HashMap<String, Object>();
 					param.put("userId", user_id);
 
@@ -186,35 +165,15 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 		List<UserInfo> userList = new ArrayList<UserInfo>();
 
 		try {
-			// U(일반사용자) 자신과 자신이 생성한 B계정 조회
-			userList = loginMapper.getUserAndSubUserList(userId);
+		// U(일반사용자) 자신과 자신이 생성한 B계정 조회
+		userList = loginMapper.getUserAndSubUserList(userId);
 
-			if(null != userList && 0 < userList.size()) {
-				for(int i=0; i < userList.size(); i++) {
-					String loginDtm = "";
-					String logoutDtm = "";
+		if(null != userList && 0 < userList.size()) {
+			for(int i=0; i < userList.size(); i++) {
+				// 중복 로직 제거: 최적화된 쿼리(getUserAndSubUserListWithActivityStatus)를 사용하세요
+				// 이 메서드는 레거시 호환성을 위해 유지되지만, loginYn은 쿼리에서 계산됩니다
 
-					loginDtm = String.valueOf(userList.get(i).getLoginDtm());
-					logoutDtm = String.valueOf(userList.get(i).getLogoutDtm());
-
-					// 새로운 활동 상태 확인 로직 적용
-					try {
-						if(null != loginDtm && !"".equals(loginDtm) && "Y".equals(loginDtm)) {
-							if(null != logoutDtm && !"".equals(logoutDtm) && "A".equals(logoutDtm)) {
-								// 활동 상태가 "Y"이고 포커스 상태가 "A"이면 활성
-								userList.get(i).setLoginYn("활성");
-							} else {
-								userList.get(i).setLoginYn("비활성");
-							}
-						} else {
-							userList.get(i).setLoginYn("비활성");
-						}
-					} catch(Exception e) {
-						logger.error("활동 상태 확인 실패 - userId: {}, error: {}", userList.get(i).getUserId(), e.getMessage());
-						userList.get(i).setLoginYn("비활성");
-					}
-
-					String user_id = String.valueOf(userList.get(i).getUserId());
+				String user_id = String.valueOf(userList.get(i).getUserId());
 					Map<String, Object> param = new HashMap<String, Object>();
 					param.put("userId", user_id);
 
@@ -860,6 +819,29 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 	}
 
 	/**
+	 * 사용자 활동 시간 업데이트 (하트비트)
+	 */
+	@Override
+	public void updateUserActivity(String userId) throws Exception {
+		try {
+			if (StringUtil.isEmpty(userId)) {
+				logger.warn("사용자 ID가 비어있어 활동 시간 업데이트 불가");
+				return;
+			}
+			
+			Map<String, Object> param = new HashMap<>();
+			param.put("userId", userId);
+			
+			loginMapper.updateUserActivity(param);
+			logger.debug("사용자 {} 활동 시간 업데이트 완료 (하트비트)", userId);
+			
+		} catch (Exception e) {
+			logger.error("사용자 {} 활동 시간 업데이트 실패: {}", userId, e.getMessage());
+			throw e;
+		}
+	}
+
+	/**
 	 * 최적화된 사용자 목록 조회 (활동 상태 포함) - N+1 쿼리 문제 해결
 	 */
 	@Override
@@ -873,26 +855,8 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 			
 			userList = loginMapper.getUserListWithActivityStatus(param);
 			
-			// 활동 상태를 loginYn 필드에 설정
-			if (userList != null && userList.size() > 0) {
-				for (UserInfo user : userList) {
-					// activityStatus 필드가 있는지 확인하고 loginYn에 설정
-					try {
-						java.lang.reflect.Field activityStatusField = user.getClass().getDeclaredField("activityStatus");
-						activityStatusField.setAccessible(true);
-						String activityStatus = (String) activityStatusField.get(user);
-						
-						if ("Y".equals(activityStatus)) {
-							user.setLoginYn("활성");
-						} else {
-							user.setLoginYn("비활성");
-						}
-					} catch (Exception e) {
-						// activityStatus 필드가 없거나 접근할 수 없는 경우 기본값 설정
-						user.setLoginYn("비활성");
-					}
-				}
-			}
+			// 최적화된 쿼리에서 이미 loginYn이 계산되어 있으므로 추가 처리 불필요
+			// 중복 로직 제거됨
 			
 			resultMap.put("resultCode", "200");
 			resultMap.put("resultMessage", "사용자 목록 조회 성공");
@@ -925,26 +889,8 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 			
 			userList = loginMapper.getUserAndSubUserListWithActivityStatus(param);
 			
-			// 활동 상태를 loginYn 필드에 설정
-			if (userList != null && userList.size() > 0) {
-				for (UserInfo user : userList) {
-					// activityStatus 필드가 있는지 확인하고 loginYn에 설정
-					try {
-						java.lang.reflect.Field activityStatusField = user.getClass().getDeclaredField("activityStatus");
-						activityStatusField.setAccessible(true);
-						String activityStatus = (String) activityStatusField.get(user);
-						
-						if ("Y".equals(activityStatus)) {
-							user.setLoginYn("활성");
-						} else {
-							user.setLoginYn("비활성");
-						}
-					} catch (Exception e) {
-						// activityStatus 필드가 없거나 접근할 수 없는 경우 기본값 설정
-						user.setLoginYn("비활성");
-					}
-				}
-			}
+			// 최적화된 쿼리에서 이미 loginYn이 계산되어 있으므로 추가 처리 불필요
+			// 중복 로직 제거됨
 			
 			resultMap.put("resultCode", "200");
 			resultMap.put("resultMessage", "사용자 및 부계정 목록 조회 성공");

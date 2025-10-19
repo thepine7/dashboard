@@ -303,6 +303,7 @@
 <script src="/js/bootstrap.min.js"></script>
 <script src="/js/templatemo_script.js"></script>
 <script src="/js/session-manager.js"></script>
+<script src="/js/heartbeat-manager.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/min/moment.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-streaming@1.9.0"></script>

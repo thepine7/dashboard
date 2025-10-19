@@ -540,4 +540,87 @@ public class LoginController {
 		
 		return resultMap;
 	}
+
+	/**
+	 * 세션 유효성 확인 엔드포인트
+	 * @param req
+	 * @param requestMap
+	 * @return
+	 */
+	@RequestMapping(value = "/api/checkSession", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> checkSession(
+			HttpServletRequest req,
+			@RequestBody Map<String, Object> requestMap
+	) {
+		Map<String, Object> resultMap = new HashMap<>();
+		HttpSession session = req.getSession(false);
+		
+		try {
+			if (session != null) {
+				String userId = (String) session.getAttribute("userId");
+				if (userId != null && !userId.isEmpty()) {
+					resultMap.put("resultCode", "200");
+					resultMap.put("resultMessage", "세션 유효");
+					logger.debug("세션 확인 성공 - userId: {}", userId);
+				} else {
+					resultMap.put("resultCode", "401");
+					resultMap.put("resultMessage", "세션에 사용자 정보 없음");
+					logger.debug("세션 확인 실패 - 사용자 정보 없음");
+				}
+			} else {
+				resultMap.put("resultCode", "401");
+				resultMap.put("resultMessage", "세션 없음");
+				logger.debug("세션 확인 실패 - 세션 없음");
+			}
+		} catch (Exception e) {
+			logger.error("세션 확인 실패", e);
+			resultMap.put("resultCode", "500");
+			resultMap.put("resultMessage", "세션 확인 실패");
+		}
+		
+		return resultMap;
+	}
+
+	/**
+	 * 하트비트 엔드포인트 - 사용자 활동 시간 업데이트
+	 * @param req
+	 * @param requestMap
+	 * @return
+	 */
+	@RequestMapping(value = "/api/heartbeat", method = RequestMethod.POST)
+	public @ResponseBody Map<String, Object> heartbeat(
+			HttpServletRequest req,
+			@RequestBody Map<String, Object> requestMap
+	) {
+		Map<String, Object> resultMap = new HashMap<>();
+		HttpSession session = req.getSession(false);
+		
+		try {
+			if (session != null) {
+				String userId = (String) session.getAttribute("userId");
+				if (userId != null && !userId.isEmpty()) {
+					// 활동 시간 업데이트 (mdf_dtm 갱신)
+					loginService.updateUserActivity(userId);
+					
+					resultMap.put("resultCode", "200");
+					resultMap.put("resultMessage", "하트비트 성공");
+					logger.debug("하트비트 성공 - userId: {}", userId);
+				} else {
+					resultMap.put("resultCode", "401");
+					resultMap.put("resultMessage", "세션에 사용자 정보 없음");
+					logger.warn("하트비트 실패 - 세션에 사용자 정보 없음");
+				}
+			} else {
+				resultMap.put("resultCode", "401");
+				resultMap.put("resultMessage", "세션 없음");
+				logger.warn("하트비트 실패 - 세션 없음");
+			}
+		} catch (Exception e) {
+			logger.error("하트비트 처리 실패", e);
+			resultMap.put("resultCode", "500");
+			resultMap.put("resultMessage", "하트비트 처리 실패");
+		}
+		
+		return resultMap;
+	}
 }

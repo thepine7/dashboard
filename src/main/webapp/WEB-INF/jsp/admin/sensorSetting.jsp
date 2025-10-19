@@ -141,7 +141,8 @@
     </style>
   <!-- 통일된 세션 관리 모듈 사용 -->
 <script src="/js/session-manager.js"></script>
-<!-- 부계정 권한 제한 모듈 사용 -->
+  <script src="/js/heartbeat-manager.js"></script>
+  <!-- 부계정 권한 제한 모듈 사용 -->
 <script src="/js/sub-account-permission.js"></script>
 <!-- 공통 파라미터 유틸리티 -->
 <script src="/js/common-parameter-utils.js"></script>

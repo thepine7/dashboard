@@ -64,4 +64,7 @@ public interface LoginService {
 	
 	// 부계정의 메인 사용자 ID 조회
 	public String getMainUserIdForSubUser(String subUserId) throws Exception;
+	
+	// 사용자 활동 시간 업데이트 (하트비트)
+	public void updateUserActivity(String userId) throws Exception;
 }

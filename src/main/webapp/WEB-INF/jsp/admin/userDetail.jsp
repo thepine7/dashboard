@@ -266,6 +266,7 @@
 <script src="/js/bootstrap.min.js"></script>
 <script src="/js/templatemo_script.js"></script>
 <script src="/js/session-manager.js"></script>
+<script src="/js/heartbeat-manager.js"></script>
 <script>
     function goMain() {
         // 공통 페이지 이동 함수 사용 (세션 기반)

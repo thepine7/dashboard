@@ -202,6 +202,7 @@
 <script src="/js/bootstrap.min.js"></script>
 <script src="/js/templatemo_script.js"></script>
 <script src="/js/session-manager.js"></script>
+<script src="/js/heartbeat-manager.js"></script>
 <script>
     // PageNavigation 객체 정의
     window.PageNavigation = {

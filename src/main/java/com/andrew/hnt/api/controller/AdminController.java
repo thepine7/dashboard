@@ -1141,23 +1141,41 @@ public class AdminController extends DefaultController {
 						List<UserInfo> userList = new ArrayList<UserInfo>();
 						Map<String, Object> userMap = new HashMap<String, Object>();
 
-						try {
-							HttpSession session = req.getSession();
-							String currentUserId = (String) session.getAttribute("userId");
-							
-							if("A".equals(userGrade)) {
-								// A(관리자)인 경우 모든 사용자 목록 조회 (최적화된 쿼리 사용)
-								userMap = loginService.getUserListWithActivityStatus(currentUserId);
-							} else {
-								// U(일반사용자)인 경우 자신과 자신이 생성한 B계정 조회 (최적화된 쿼리 사용)
-								userMap = loginService.getUserAndSubUserListWithActivityStatus(userId, currentUserId);
-							}
-						} catch(Exception e) {
-							unifiedErrorHandler.logError("데이터 처리", e);
+					try {
+						HttpSession session = req.getSession();
+						String currentUserId = (String) session.getAttribute("userId");
+						
+						logger.info("=== getChangeList 파라미터 ===");
+						logger.info("userId from request: {}", userId);
+						logger.info("userGrade from request: {}", userGrade);
+						logger.info("currentUserId from session: {}", currentUserId);
+						
+						if("A".equals(userGrade)) {
+							// A(관리자)인 경우 모든 사용자 목록 조회 (최적화된 쿼리 사용)
+							logger.info("A등급 - getUserListWithActivityStatus 호출 (currentUserId: {})", currentUserId);
+							userMap = loginService.getUserListWithActivityStatus(currentUserId);
+						} else {
+							// U(일반사용자)인 경우 자신과 자신이 생성한 B계정 조회 (최적화된 쿼리 사용)
+							logger.info("U등급 - getUserAndSubUserListWithActivityStatus 호출 (userId: {}, currentUserId: {})", userId, currentUserId);
+							userMap = loginService.getUserAndSubUserListWithActivityStatus(userId, currentUserId);
 						}
+					} catch(Exception e) {
+						unifiedErrorHandler.logError("데이터 처리", e);
+					}
 
 						if(null != userMap && 0 < userMap.size()) {
 							userList = (List<UserInfo>) userMap.get("userList");
+							
+							// 디버깅: thepine 사용자의 loginYn 값 로깅
+							for(UserInfo user : userList) {
+								if("thepine".equals(user.getUserId())) {
+									logger.info("=== thepine 사용자 상태 ===");
+									logger.info("userId: {}", user.getUserId());
+									logger.info("loginYn: {}", user.getLoginYn());
+									logger.info("last_login_dtm: {}", user.getLoginDtm());
+									logger.info("logout_dtm: {}", user.getLogoutDtm());
+								}
+							}
 							
 							// 최적화된 쿼리에서 이미 활동 상태가 설정되어 있음
 							// 추가 처리 없이 바로 결과에 추가
@@ -1200,12 +1218,29 @@ public class AdminController extends DefaultController {
 			, @RequestBody Map<String, Object> deleteMap
 		) {
     	Map<String, Object> resultMap = new HashMap<String, Object>();
+    	HttpSession session = req.getSession();
 
     	if(null != deleteMap && 0 < deleteMap.size()) {
     		String userId = String.valueOf(deleteMap.get("userId"));
 
     		if(null != userId && !"".equals(userId) && 0 < userId.length()) {
     			try {
+    				// 세션에서 현재 로그인한 사용자 정보 조회
+    				String sessionUserId = (String) session.getAttribute("userId");
+    				String sessionUserGrade = (String) session.getAttribute("userGrade");
+    				
+    				logger.info("=== 사용자 삭제 요청 ===");
+    				logger.info("sessionUserId: {}, sessionUserGrade: {}, targetUserId: {}", 
+    					sessionUserId, sessionUserGrade, userId);
+    				
+    				// A 등급만 자기 자신 삭제 방지
+    				if("A".equals(sessionUserGrade) && sessionUserId.equals(userId)) {
+    					resultMap.put("resultCode", "403");
+    					resultMap.put("resultMessage", "A 등급 관리자는 자기 자신을 삭제할 수 없습니다.");
+    					logger.warn("A 등급 자기 자신 삭제 시도 - userId: {}", userId);
+    					return resultMap;
+    				}
+    				
     				// 삭제할 사용자의 등급 확인
     				UserInfo userInfo = null;
     				try {
@@ -1214,6 +1249,32 @@ public class AdminController extends DefaultController {
     					logger.warn("사용자 정보 조회 실패 - userId: {}, error: {}", userId, e.getMessage());
     				}
     				
+    				// 권한 체크
+    				boolean canDelete = false;
+    				
+    				if("A".equals(sessionUserGrade)) {
+    					// A 등급(관리자)은 자기 자신 제외하고 모든 사용자 삭제 가능 (이미 위에서 체크함)
+    					canDelete = true;
+    					logger.info("A 등급 관리자 - 모든 사용자 삭제 가능");
+    				} else if("U".equals(sessionUserGrade)) {
+    					// U 등급(일반사용자)은 모든 사용자 삭제 가능 (자기 자신 포함)
+    					canDelete = true;
+    					logger.info("U 등급 - 모든 사용자 삭제 가능");
+    				} else if("B".equals(sessionUserGrade)) {
+    					// B 등급(부계정)은 모든 사용자 삭제 가능 (자기 자신 포함)
+    					canDelete = true;
+    					logger.info("B 등급 - 모든 사용자 삭제 가능");
+    				}
+    				
+    				if(!canDelete) {
+    					resultMap.put("resultCode", "403");
+    					resultMap.put("resultMessage", "사용자 삭제 권한이 없습니다.");
+    					logger.warn("권한 없음 - sessionUserId: {}, sessionUserGrade: {}, targetUserId: {}", 
+    						sessionUserId, sessionUserGrade, userId);
+    					return resultMap;
+    				}
+    				
+    				// 권한이 있으면 삭제 진행
     				if(userInfo != null) {
     					String userGrade = userInfo.getUserGrade();
     					
@@ -1233,6 +1294,7 @@ public class AdminController extends DefaultController {
     				}
     				
     				resultMap.put("resultCode", "200");
+    				resultMap.put("resultMessage", "사용자 삭제 성공");
 				} catch(Exception e) {
     				unifiedErrorHandler.logError("데이터 처리", e);
     				resultMap.put("resultCode", "999");
@@ -1261,12 +1323,65 @@ public class AdminController extends DefaultController {
 			, @RequestBody Map<String, Object> modifyMap
 	) {
     	Map<String, Object> resultMap = new HashMap<String, Object>();
+    	HttpSession session = req.getSession();
     	
     	logger.info("=== 사용자 정보 수정 요청 시작 ===");
     	logger.info("수정 데이터: {}", modifyMap);
 
     	if(null != modifyMap && 0 < modifyMap.size()) {
     		try {
+    			// 세션에서 현재 로그인한 사용자 정보 조회
+    			String sessionUserId = (String) session.getAttribute("userId");
+    			String sessionUserGrade = (String) session.getAttribute("userGrade");
+    			String targetUserId = String.valueOf(modifyMap.get("userId"));
+    			
+    			logger.info("권한 체크 - sessionUserId: {}, sessionUserGrade: {}, targetUserId: {}", 
+    				sessionUserId, sessionUserGrade, targetUserId);
+    			
+    			// 권한 체크
+    			boolean canModify = false;
+    			
+    			if("A".equals(sessionUserGrade)) {
+    				// A 등급(관리자)은 모든 사용자 수정 가능
+    				canModify = true;
+    				logger.info("A 등급 관리자 - 모든 사용자 수정 가능");
+    			} else if("U".equals(sessionUserGrade)) {
+    				// U 등급(일반사용자)은 자기자신과 하위계정(B 등급) 수정 가능
+    				if(sessionUserId.equals(targetUserId)) {
+    					// 자기 자신 수정
+    					canModify = true;
+    					logger.info("U 등급 - 자기 자신 수정");
+    				} else {
+    					// 대상 사용자가 자신의 하위계정인지 확인
+    					UserInfo targetUserInfo = loginService.getUserInfoByUserId(targetUserId);
+    					if(targetUserInfo != null && "B".equals(targetUserInfo.getUserGrade())) {
+    						// 대상이 B 등급이고, 자신이 만든 계정인지 확인
+    						String parentUserId = targetUserInfo.getParentUserId();
+    						if(sessionUserId.equals(parentUserId)) {
+    							canModify = true;
+    							logger.info("U 등급 - 자신의 하위계정(B) 수정 가능");
+    						}
+    					} else {
+    						// U 등급도 다른 모든 사용자 수정 가능
+    						canModify = true;
+    						logger.info("U 등급 - 다른 사용자 수정 가능");
+    					}
+    				}
+    			} else if("B".equals(sessionUserGrade)) {
+    				// B 등급(부계정)도 모든 사용자 수정 가능
+    				canModify = true;
+    				logger.info("B 등급 - 모든 사용자 수정 가능");
+    			}
+    			
+    			if(!canModify) {
+    				resultMap.put("resultCode", "403");
+    				resultMap.put("resultMessage", "사용자 정보 수정 권한이 없습니다");
+    				logger.warn("권한 없음 - sessionUserId: {}, sessionUserGrade: {}, targetUserId: {}", 
+    					sessionUserId, sessionUserGrade, targetUserId);
+    				return resultMap;
+    			}
+    			
+    			// 권한이 있으면 수정 진행
     			adminService.updateUser(modifyMap);
     			resultMap.put("resultCode", "200");
     			resultMap.put("resultMessage", "사용자 정보 수정 성공");

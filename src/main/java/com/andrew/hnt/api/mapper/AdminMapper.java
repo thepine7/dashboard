@@ -78,7 +78,7 @@ public interface AdminMapper {
 
 	public void deleteSubUser(String userId);
 
-	public void updateUser(Map<String, Object> param);
+	public int updateUser(Map<String, Object> param);
 
 	public void insertSubSensorInfo(Map<String, Object> param);
 

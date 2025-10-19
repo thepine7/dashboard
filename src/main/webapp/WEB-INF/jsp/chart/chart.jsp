@@ -435,6 +435,7 @@
 
 <!-- 세션 관리자 -->
 <script src="/js/session-manager.js"></script>
+<script src="/js/heartbeat-manager.js"></script>
 
 <!-- 공통 에러 차단 시스템 -->
 <script src="/js/error-blocking-system.js"></script>

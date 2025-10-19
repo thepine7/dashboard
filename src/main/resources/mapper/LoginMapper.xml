@@ -13,7 +13,18 @@
         <include refid="com.andrew.hnt.api.mapper.CommonSql.defaultLimit" />
     </select>
 
-    <!-- 최적화된 사용자 목록 조회 (활동 상태 포함) - N+1 쿼리 문제 해결 -->
+    <!-- 
+        최적화된 사용자 목록 조회 (활동 상태 포함) - N+1 쿼리 문제 해결
+        
+        활성/비활성 판단 로직:
+        - 현재 로그인한 사용자: 무조건 '활성'
+        - 다른 사용자: last_login_dtm='Y' AND logout_dtm='N' → '활성'
+        - 그 외: '비활성'
+        
+        의미:
+        - 활성: PC 또는 앱에서 로그인 상태
+        - 비활성: 로그아웃 상태 또는 세션 타임아웃
+    -->
     <select id="getUserListWithActivityStatus" parameterType="java.util.HashMap" resultType="com.andrew.hnt.api.model.UserInfo">
         select
             u.no
@@ -171,6 +182,12 @@
         where user_id = #{userId}
     </update>
 
+    <!-- 
+        로그인 상태 업데이트 (PC/앱 공통)
+        - last_login_dtm: 'Y' = 로그인 중, 'N' = 로그아웃
+        - logout_dtm: 'N' = 로그인 중, 'Y' = 로그아웃
+        - mdf_dtm: 마지막 활동 시간 (하트비트로 갱신)
+    -->
     <update id="updateLoginDtm" parameterType="com.andrew.hnt.api.model.LoginVO">
         update hnt_user set
             last_login_dtm = 'Y'
@@ -186,6 +203,11 @@
         where user_id = #{userId}
     </update>
 
+    <!-- 
+        로그아웃 상태 업데이트 (PC/앱 공통)
+        - last_login_dtm: 'N' = 로그아웃
+        - logout_dtm: 'Y' = 로그아웃
+    -->
     <update id="updateLogoutDtm" parameterType="com.andrew.hnt.api.model.LoginVO">
         update hnt_user set
             logout_dtm = 'Y'
@@ -235,6 +257,7 @@
     </update>
 
     <!-- 세션 타임아웃으로 인한 비활성 사용자 업데이트 -->
+    <!-- 하트비트 2분 + 여유 1분 = 3분 임계값 -->
     <update id="updateInactiveUsersByTimeout">
         UPDATE hnt_user 
         SET 
@@ -245,10 +268,11 @@
         AND del_yn = 'N'
         AND last_login_dtm = 'Y'
         AND logout_dtm = 'N'
-        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 120
+        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 180
     </update>
 
     <!-- 타임아웃 대상 사용자 조회 (로그용) -->
+    <!-- 하트비트 2분 + 여유 1분 = 3분 임계값 -->
     <select id="getTimeoutUsers" resultType="com.andrew.hnt.api.model.UserInfo">
         SELECT 
             user_id as userId,
@@ -259,10 +283,11 @@
         AND del_yn = 'N'
         AND last_login_dtm = 'Y'
         AND logout_dtm = 'N'
-        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 120
+        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 180
     </select>
 
     <!-- 특정 사용자 타임아웃 처리 -->
+    <!-- 하트비트 2분 + 여유 1분 = 3분 임계값 -->
     <update id="updateSpecificUserTimeout" parameterType="java.util.HashMap">
         UPDATE hnt_user 
         SET 
@@ -274,7 +299,7 @@
         AND del_yn = 'N'
         AND last_login_dtm = 'Y'
         AND logout_dtm = 'N'
-        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 120
+        AND TIMESTAMPDIFF(SECOND, mdf_dtm, NOW()) > 180
     </update>
 
     <delete id="deleteAlarm" parameterType="com.andrew.hnt.api.model.LoginVO">
@@ -290,5 +315,14 @@
         where user_id = #{subUserId}
         limit 1
     </select>
+
+    <!-- 사용자 활동 시간 업데이트 (하트비트) -->
+    <update id="updateUserActivity" parameterType="java.util.HashMap">
+        UPDATE hnt_user 
+        SET mdf_dtm = NOW()
+        WHERE user_id = #{userId}
+        AND del_yn = 'N'
+        AND last_login_dtm = 'Y'
+    </update>
 
 </mapper>

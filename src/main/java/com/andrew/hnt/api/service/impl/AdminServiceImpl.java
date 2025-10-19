@@ -547,9 +547,15 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 				logger.info("수정할 userEmail: {}", param.get("userEmail"));
 				logger.info("수정할 userGrade: {}", param.get("userGrade"));
 				
-				adminMapper.updateUser(param);
+				int updateCount = adminMapper.updateUser(param);
 				
 				logger.info("=== updateUser 실행 완료 ===");
+				logger.info("DB UPDATE 영향받은 행 수: {}", updateCount);
+				
+				if(updateCount == 0) {
+					logger.warn("⚠️ DB UPDATE 실패 - 영향받은 행이 0개입니다. userId가 존재하지 않거나 권한이 없습니다.");
+					throw new RuntimeException("사용자 정보 업데이트 실패 - 해당 사용자를 찾을 수 없습니다.");
+				}
 			} catch(Exception e) {
 				logger.error("updateUser 실패 - userId: {}, error: {}", param.get("userId"), e.toString());
 				throw new RuntimeException("사용자 정보 업데이트 실패", e);

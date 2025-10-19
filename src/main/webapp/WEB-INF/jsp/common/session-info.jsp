@@ -33,11 +33,11 @@
 
 <!-- 선택적 세션 정보 (있는 경우만) -->
 <c:if test="${not empty userEmail}">
-<input type="hidden" id="userEmail" name="userEmail" value="${userEmail}" />
+<input type="hidden" id="sessionUserEmail" name="sessionUserEmail" value="${userEmail}" />
 </c:if>
 
 <c:if test="${not empty userTel}">
-<input type="hidden" id="userTel" name="userTel" value="${userTel}" />
+<input type="hidden" id="sessionUserTel" name="sessionUserTel" value="${userTel}" />
 </c:if>
 
 <!-- 센서 관련 정보 (항상 생성) -->
@@ -70,8 +70,8 @@ function initializeSessionInfo() {
     console.log('  sensorId:', $('#sensorId').val());
     console.log('  loginUserId:', $('#loginUserId').val());
     console.log('  parentUserId:', $('#parentUserId').val());
-    console.log('  userEmail:', $('#userEmail').val());
-    console.log('  userTel:', $('#userTel').val());
+    console.log('  userEmail:', $('#sessionUserEmail').val());
+    console.log('  userTel:', $('#sessionUserTel').val());
     console.log('  token:', $('#token').val());
     
     // SessionManager 초기화 (이미 초기화되었다면 스킵)
@@ -119,8 +119,8 @@ function initializeSessionInfo() {
     window.currentSensorId = sensorId || userId;
     window.currentLoginUserId = loginUserId || userId;
     window.currentParentUserId = $('#parentUserId').val() || userId;
-    window.currentUserEmail = $('#userEmail').val() || '';
-    window.currentUserTel = $('#userTel').val() || '';
+    window.currentUserEmail = $('#sessionUserEmail').val() || '';
+    window.currentUserTel = $('#sessionUserTel').val() || '';
     window.currentToken = $('#token').val() || '';
     
     // SessionData 객체도 설정 (통일성)
@@ -131,8 +131,8 @@ function initializeSessionInfo() {
         sensorId: sensorId || userId,
         loginUserId: loginUserId || userId,
         parentUserId: $('#parentUserId').val() || userId,
-        userEmail: $('#userEmail').val() || '',
-        userTel: $('#userTel').val() || '',
+        userEmail: $('#sessionUserEmail').val() || '',
+        userTel: $('#sessionUserTel').val() || '',
         token: $('#token').val() || '',
         saveId: $('#saveId').val() || ''
     };

@@ -61,4 +61,7 @@ public interface LoginMapper {
     
     // 부계정의 메인 사용자 ID 조회
     public Map<String, Object> getMainUserIdForSubUser(Map<String, Object> param);
+    
+    // 사용자 활동 시간 업데이트 (하트비트)
+    public void updateUserActivity(Map<String, Object> param);
 }

@@ -348,6 +348,7 @@
 <script src="/js/bootstrap.min.js"></script>
 <script src="/js/templatemo_script.js"></script>
 <script src="/js/session-manager.js"></script>
+<script src="/js/heartbeat-manager.js"></script>
 <script>
     // 성공/에러 메시지 표시 함수
     function showSuccess(message) {
@@ -400,8 +401,8 @@
 
     function getChangeList() {
         var sendData = {
-            userId: $('#loginUserId').val(),
-            userGrade: $('#userGrade').val()
+            userId: window.currentUserId || $('#userId').val(),
+            userGrade: window.currentUserGrade || $('#userGrade').val()
         }
 
         $.ajax({
@@ -413,6 +414,18 @@
             contentType: 'application/json',
             success: function(result) {
                 if(result.resultCode == "200") {
+                    // 디버깅: thepine 사용자의 loginYn 값 콘솔 출력
+                    var thepineUser = result.userList.find(function(user) {
+                        return user.userId === 'thepine';
+                    });
+                    if(thepineUser) {
+                        console.log('=== getChangeList 응답에서 thepine 사용자 ===');
+                        console.log('userId:', thepineUser.userId);
+                        console.log('loginYn:', thepineUser.loginYn);
+                        console.log('loginDtm:', thepineUser.loginDtm);
+                        console.log('logoutDtm:', thepineUser.logoutDtm);
+                    }
+                    
                     var html = "";
                     for(var i=0; i < result.userList.length; i++) {
                         html += "<tr class='user-table-row'>";
