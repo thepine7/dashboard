@@ -139,55 +139,17 @@
 <input type="hidden" id="token" name="token" value="${not empty token ? token : ''}">
 <input type="hidden" id="saveId" name="saveId" value="${not empty saveId ? saveId : ''}">
 
-<!-- 세션 정보 디버깅 (개발 환경에서만 표시) -->
-<c:if test="${pageContext.request.serverName == 'localhost' || pageContext.request.serverName == '127.0.0.1' || pageContext.request.serverName == 'iot.hntsolution.co.kr'}">
-<div style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 9999; max-width: 300px;">
-  <strong>세션 정보 디버깅:</strong><br>
-  userId: ${userId}<br>
-  userGrade: ${userGrade}<br>
-  userNm: ${userNm}<br>
-  sensorId: ${sensorId}<br>
-  loginUserId: ${loginUserId}<br>
-  userEmail: ${userEmail}<br>
-  userTel: ${userTel}<br>
-  token: ${token}<br>
-  <button onclick="this.parentElement.style.display='none'" style="margin-top: 5px; padding: 2px 5px; font-size: 10px;">닫기</button>
-</div>
-</c:if>
 
 <script>
-  console.log('=== 세션 관리 모듈 초기화 ===');
-  
-  // 세션 정보 디버깅 로그 추가
-  console.log('=== JSP EL 표현식 값 확인 ===');
-  console.log('userId (EL):', '${userId}');
-  console.log('userGrade (EL):', '${userGrade}');
-  console.log('userNm (EL):', '${userNm}');
-  console.log('sensorId (EL):', '${sensorId}');
-  console.log('loginUserId (EL):', '${loginUserId}');
-  console.log('userEmail (EL):', '${userEmail}');
-  console.log('userTel (EL):', '${userTel}');
-  console.log('token (EL):', '${token}');
-  
-  // Hidden input 값 확인
-  console.log('=== Hidden Input 값 확인 ===');
-  console.log('userId (input):', document.getElementById('userId') ? document.getElementById('userId').value : 'null');
-  console.log('userGrade (input):', document.getElementById('userGrade') ? document.getElementById('userGrade').value : 'null');
-  console.log('userNm (input):', document.getElementById('userNm') ? document.getElementById('userNm').value : 'null');
-  console.log('sensorId (input):', document.getElementById('sensorId') ? document.getElementById('sensorId').value : 'null');
-  console.log('loginUserId (input):', document.getElementById('loginUserId') ? document.getElementById('loginUserId').value : 'null');
-  console.log('userEmail (input):', document.getElementById('userEmail') ? document.getElementById('userEmail').value : 'null');
-  console.log('userTel (input):', document.getElementById('userTel') ? document.getElementById('userTel').value : 'null');
-  console.log('token (input):', document.getElementById('token') ? document.getElementById('token').value : 'null');
   
   // SessionManager 초기화
   if (typeof SessionManager !== 'undefined') {
     if (!SessionManager.initialize()) {
-      console.error('세션 관리 모듈 초기화 실패');
+      console.error('세션 초기화 실패');
             window.location.href = '/login/login';
     }
             } else {
-    console.warn('SessionManager 모듈을 찾을 수 없습니다. 기본 세션 처리 사용');
+    console.warn('SessionManager 로드 안됨');
     
     // 기본 세션 정보 처리 (fallback)
     window.SessionData = {
@@ -203,37 +165,25 @@
     };
     
     if (!window.SessionData.userId) {
-      console.warn('세션 정보가 없습니다. 로그인 페이지로 이동합니다.');
+      console.warn('세션 정보 없음');
           window.location.href = '/login/login';
     }
   }
   
-  console.log('=== 세션 정보 설정 완료 ===');
-  console.log('window.SessionData:', window.SessionData);
-  
-  // MQTT 연결 함수 정의 (강화된 중복 방지 + 로드 대기)
+  // MQTT 연결 함수 정의
   function startConnect() {
-    console.log('=== startConnect 함수 호출됨 ===');
-    
     // UnifiedMQTTManager 로드 대기 (최대 5초)
-    var maxAttempts = 50; // 50 * 100ms = 5초
+    var maxAttempts = 50;
     var attempts = 0;
     
     function checkAndConnect() {
       attempts++;
       
       if (typeof UnifiedMQTTManager !== 'undefined') {
-        console.log('UnifiedMQTTManager 로드 완료 (시도 ' + attempts + '회)');
-        console.log('UnifiedMQTTManager를 사용하여 MQTT 연결 시작');
-        
-        // 중복 방지 상태 확인
-        var duplicateState = UnifiedMQTTManager.getDuplicatePreventionState();
-        console.log('중복 방지 상태:', duplicateState);
         
         // 중복 방지 체크
         var duplicateCheck = UnifiedMQTTManager.checkDuplicateInitialization();
         if (!duplicateCheck.allowed) {
-          console.log('중복 초기화 방지:', duplicateCheck.reason);
           return;
         }
         
@@ -241,90 +191,74 @@
         registerMQTTInitialization({
           pageName: 'Main',
           requestSettings: function() {
-            // 설정값 요청 (GET&type=1) - main.jsp는 다중 장치이므로 각 장치별로 요청
-            console.log('=== Main 페이지: 설정값 요청 시작 ===');
-            
-            // 센서 UUID 목록 확인
-            var sensorUuids = [];
-            $('input[id^="sensorUuid"]').each(function(){
-              var uuid = $(this).val();
-              if (uuid) {
-                sensorUuids.push(uuid);
-              }
-            });
-            console.log('발견된 센서 UUID 목록:', sensorUuids);
-            
-            // 각 센서별로 설정값 요청
+            // 설정값 요청 (GET&type=1)
             $('input[id^="sensorUuid"]').each(function(){
               var uuid = $(this).val();
               if (uuid && typeof window['setSensor_' + uuid] === 'function') {
-                console.log('✅ setSensor_' + uuid + ' 함수 호출');
                 try {
                   window['setSensor_' + uuid]();
                 } catch(e) {
-                  console.error('❌ setSensor_' + uuid + ' 함수 실행 실패:', e);
+                  console.error('setSensor 실패:', uuid, e);
                 }
-              } else {
-                console.warn('⚠️ setSensor_' + uuid + ' 함수가 정의되지 않음');
               }
             });
-            
-            console.log('=== Main 페이지: 설정값 요청 완료 ===');
           },
           requestStatus: function() {
-            // 상태값 요청 (GET&type=2) - main.jsp는 다중 장치이므로 각 장치별로 요청
-            console.log('=== Main 페이지: 상태값 요청 시작 ===');
-            
-            // 각 센서별로 상태값 요청 (2초 후 실행)
+            // 상태값 요청 (GET&type=2)
             setTimeout(function() {
-              console.log('=== 상태값 요청 실행 (2초 후) ===');
-              
-              // 센서 UUID 목록 확인
-              var sensorUuids = [];
-              $('input[id^="sensorUuid"]').each(function(){
-                var uuid = $(this).val();
-                if (uuid) {
-                  sensorUuids.push(uuid);
-                }
-              });
-              console.log('상태값 요청할 센서 UUID 목록:', sensorUuids);
-              
               $('input[id^="sensorUuid"]').each(function(){
                 var uuid = $(this).val();
                 if (uuid && typeof window['getStatus_' + uuid] === 'function') {
-                  console.log('✅ getStatus_' + uuid + ' 함수 호출');
                   try {
                     window['getStatus_' + uuid]();
                   } catch(e) {
-                    console.error('❌ getStatus_' + uuid + ' 함수 실행 실패:', e);
+                    console.error('getStatus 실패:', uuid, e);
                   }
-                } else {
-                  console.warn('⚠️ getStatus_' + uuid + ' 함수가 정의되지 않음');
                 }
               });
-              
-              console.log('=== Main 페이지: 상태값 요청 완료 ===');
             }, 2000);
           },
           startErrorCheck: function() {
             // 에러 체크 시작
-            console.log('Main 페이지: 에러 체크 시작');
-            // 기존 로직 유지
           },
           initializePageSpecific: function() {
             // Main 페이지별 추가 초기화
-            console.log('Main 페이지: 페이지별 초기화');
-            // 기존 로직 유지
           }
         });
         
+        // WebView에서 MQTT가 이미 연결된 경우 즉시 초기 동기화 실행
+        setTimeout(function() {
+          var isConnected = false;
+          try {
+            if (typeof client !== 'undefined' && client && typeof client.isConnected === 'function') {
+              isConnected = client.isConnected();
+            }
+          } catch(e) {
+            console.error('MQTT 상태 확인 오류:', e);
+          }
+          
+          if (isConnected) {
+            var event = new CustomEvent('mqtt:initialization-complete', {
+              detail: { 
+                client: client,
+                connectionState: { initializationCompleted: true }
+              }
+            });
+            document.dispatchEvent(event);
+          }
+        }, 1000);
+        
       } else if (attempts < maxAttempts) {
-        console.log('UnifiedMQTTManager 로드 대기 중... (' + attempts + '/' + maxAttempts + ')');
-        setTimeout(checkAndConnect, 100); // 100ms 후 재시도
+        setTimeout(checkAndConnect, 100);
       } else {
-        console.error('UnifiedMQTTManager 로드 타임아웃 (' + (maxAttempts * 100) + 'ms)');
-        console.error('MQTT 연결 실패 - 페이지를 새로고침해주세요.');
-        alert('MQTT 연결 실패\n페이지를 새로고침해주세요.');
+        console.error('MQTT 초기 연결 실패 - 백그라운드 재연결 시도');
+        // alert 제거 - 백그라운드에서 자동 재연결 시도
+        // 5초 후 재연결 시도
+        setTimeout(function() {
+          console.log('MQTT 자동 재연결 시도...');
+          attempts = 0; // 재시도 카운터 초기화
+          checkAndConnect();
+        }, 5000);
       }
     }
     
@@ -370,7 +304,7 @@
 <div class="template-page-wrapper">
   <div class="navbar-collapse collapse templatemo-sidebar">
     <ul class="templatemo-sidebar-menu">
-      <li class="active"><a href="#"><i class="fa fa-home"></i>Dashboard</a></li>
+      <li class="active"><a href="#"><i class="fa fa-home"></i>대시보드</a></li>
       <li class="sub open">
           <ul class="sidebar-bg" style="height: 40px; padding-top: 10px">
             <strong>${userNm}님 안녕하세요.</strong>
@@ -393,7 +327,7 @@
 
   <div class="templatemo-content-wrapper content-bg">
     <div class="templatemo-content content-bg">
-      <h1><span class="text-light">Main</span></h1>
+      <h1><span class="text-light">메인</span></h1>
       
       <div class="templatemo-charts">
         <div class="row">
@@ -461,7 +395,7 @@
                       <tr>
                         <td align="center"><div id="status${item.sensor_uuid}" class="status-indicator green"><i class="bi bi-play-circle-fill"></i></div></td>
                         <td align="center"><div id="comp${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-gear-fill"></i></div></td>
-                        <td align="center"><div id="defr${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-snow defrost-icon"></i><i class="bi bi-thermometer-half heater-icon" style="display:none;"></i></div></td>
+                        <td align="center"><div id="defr${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-snow defrost-icon"></i><i class="bi bi-fire heater-icon" style="display:none;"></i></div></td>
 
                         <td align="center"><div id="fan${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-fan"></i></div></td>
                         <td align="center"><div id="error${item.sensor_uuid}" class="status-indicator gray"><i class="bi bi-exclamation-triangle-fill"></i></div></td>
@@ -543,18 +477,32 @@
   // 페이지 로드 완료 후 MQTT 연결 시작
   // startConnect() 함수가 자체적으로 UnifiedMQTTManager 로드를 대기하므로
   // 추가 지연 없이 즉시 호출
+  // 페이지 로딩 시 장치 타입에 따라 아이콘 초기화
+  function initializeDeviceIcons() {
+    <c:forEach var="item" items="${list}">
+      var deviceType = '${item.deviceType}' || '0';
+      updateDefrostLabel('defrostLabel${item.sensor_uuid}', deviceType);
+      updateDefrostIndicator('defr${item.sensor_uuid}', 'gray', deviceType);
+    </c:forEach>
+  }
+  
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       console.log('DOMContentLoaded 이벤트 발생 - startConnect 호출');
+      initializeDeviceIcons(); // 아이콘 초기화
       startConnect(); // 로드 대기 로직이 내장되어 있음
     });
   } else {
     console.log('문서 이미 로드됨 - startConnect 즉시 호출');
+    initializeDeviceIcons(); // 아이콘 초기화
     startConnect(); // 로드 대기 로직이 내장되어 있음
   }
   // 페이지 로드 완료 상태 관리
   var __pageReady = false;
-  window.addEventListener('load', function(){ __pageReady = true; });
+  window.addEventListener('load', function(){ 
+    __pageReady = true; 
+    window.pageLoadTime = Date.now(); // 페이지 로딩 시간 기록
+  });
 
   // 페이지/연결 안정화 대기 후 동기화 (앱 복귀용)
   function waitForReadyThenSync(maxWaitMs) {
@@ -588,6 +536,53 @@
       return (typeof client !== 'undefined' && client && typeof client.isConnected === 'function' && client.isConnected());
     } catch(e) { return false; }
   }
+  
+  // 에러 체크 타이머 시작 함수 (전역 스코프)
+  function startErrorCheckTimers() {
+    if (typeof startInterval === 'function') {
+      // 기존 타이머 정리 (중복 방지)
+      if (window.__errorTimers && window.__errorTimers.length > 0) {
+        console.log('기존 에러 체크 타이머 정리:', window.__errorTimers.length, '개');
+        window.__errorTimers.forEach(function(handle) {
+          try {
+            if (typeof clearInterval === 'function') {
+              clearInterval(handle);
+            }
+          } catch(e) {
+            console.warn('타이머 정리 실패:', e);
+          }
+        });
+        window.__errorTimers = [];
+      }
+      
+      // 에러 타이머 배열 초기화
+      if (!window.__errorTimers) {
+        window.__errorTimers = [];
+      }
+      
+      // 센서 리스트가 있을 때만 에러 체크 시작
+      $('input[id^="sensorUuid"]').each(function(){
+        var uuid = $(this).val();
+        if (uuid && typeof window['chkError_' + uuid] === 'function') {
+          try {
+            // 초기 데이터 수신 대기 시간 부여 (15초)
+            // deviceLastDataTime은 실제 데이터 수신 시에만 업데이트되도록 초기화하지 않음
+            if (!window['deviceLastDataTime_' + uuid] || window['deviceLastDataTime_' + uuid] === 0) {
+              console.log('초기 데이터 수신 대기 중:', uuid, '(15초 유예)');
+              pauseError(uuid, 15000);
+            }
+            
+            var handle = startInterval(5, function() { window['chkError_' + uuid](); });
+            window.__errorTimers.push(handle);
+            console.log('에러 체크 타이머 시작 (5초):', uuid);
+          } catch(e) {
+            console.error('에러 체크 타이머 시작 실패:', uuid, e);
+          }
+        }
+      });
+    }
+  }
+  
   // 아이들(가시성 숨김) 시 에러 체크 일시 정지 / 복귀 시 재개 및 초기 동기화
   document.addEventListener('visibilitychange', function() {
       if (document.hidden) {
@@ -624,47 +619,9 @@
         if (typeof startConnect === 'function') { startConnect(); }
         // 복귀 직후 페이지/연결 안정화 대기 후 동기화
         waitForReadyThenSync(6000);
-      // 에러 체크 타이머 시작 함수
-      function startErrorCheckTimers() {
-        if (typeof startInterval === 'function') {
-          // 기존 타이머 정리 (중복 방지)
-          if (window.__errorTimers && window.__errorTimers.length > 0) {
-            console.log('기존 에러 체크 타이머 정리:', window.__errorTimers.length, '개');
-            window.__errorTimers.forEach(function(handle) {
-              try {
-                if (typeof clearInterval === 'function') {
-                  clearInterval(handle);
-                }
-              } catch(e) {
-                console.warn('타이머 정리 실패:', e);
-              }
-            });
-            window.__errorTimers = [];
-          }
-          
-          // 에러 타이머 배열 초기화
-          if (!window.__errorTimers) {
-            window.__errorTimers = [];
-          }
-          
-          // 센서 리스트가 있을 때만 에러 체크 시작
-          $('input[id^="sensorUuid"]').each(function(){
-            var uuid = $(this).val();
-            if (uuid && typeof window['chkError_' + uuid] === 'function') {
-              try {
-                var handle = startInterval(5, function() { window['chkError_' + uuid](); });
-                window.__errorTimers.push(handle);
-                console.log('에러 체크 타이머 시작 (5초):', uuid);
-              } catch(e) {
-                console.error('에러 체크 타이머 시작 실패:', uuid, e);
-              }
-            }
-          });
-        }
-      }
-      
-      // 메인은 각 장치별 chkError_uuuu가 있으므로 5초 주기로 재개 (존재 시)
-      startErrorCheckTimers();
+        
+        // 메인은 각 장치별 chkError_uuuu가 있으므로 5초 주기로 재개 (존재 시)
+        startErrorCheckTimers();
       // 2초/4초 1회 초기 동기화는 센서설정/차트에 한정, 메인은 생략
     }
   });
@@ -686,11 +643,20 @@
     var resumeGate = {}; // 복귀 후 첫 ain 수신 전까지 에러 무시
     function pauseError(uuid, ms) {
       try {
-        errorPauseUntil[uuid] = Date.now() + (ms || 15000);
+        var pauseDuration = ms || 15000;
+        errorPauseUntil[uuid] = Date.now() + pauseDuration;
         // 카운터/상태 리셋
         window['deviceErrorCounters_' + uuid] = 0;
         window['deviceErrorStates_' + uuid] = false;
         resumeGate[uuid] = true; // 복귀 게이트 활성화
+        
+        // 5초 후 resumeGate 자동 해제 (에러 체크 시작 허용)
+        setTimeout(function() {
+          if (resumeGate[uuid] === true) {
+            console.log('[' + uuid + '] resumeGate 자동 해제 (5초 후)');
+            resumeGate[uuid] = false;
+          }
+        }, 5000);
       } catch(e) {}
     }
     function applyToAllUuids(callback) {
@@ -739,94 +705,31 @@
       }
   
       function setSensor_${item.sensor_uuid}() {
-        // 토픽 유효성 검사: 와일드카드(+,#) 포함 시 호출 보류 후 재시도
-        var currentTopic_${item.sensor_uuid} = $('#topicStr${item.sensor_uuid}').val();
-        if (!currentTopic_${item.sensor_uuid} || currentTopic_${item.sensor_uuid}.indexOf('+') >= 0 || currentTopic_${item.sensor_uuid}.indexOf('#') >= 0) {
-          window['topicRetry_${item.sensor_uuid}'] = (window['topicRetry_${item.sensor_uuid}'] || 0) + 1;
-          if (window['topicRetry_${item.sensor_uuid}'] <= 5) {
-            setTimeout(function(){ setSensor_${item.sensor_uuid}(); }, 1000);
-          } else {
-            console.warn('setSensor - 잘못된 topicStr 감지, 재시도 중단:', currentTopic_${item.sensor_uuid});
-          }
+        var currentTopic = $('#topicStr${item.sensor_uuid}').val();
+        if (!currentTopic || currentTopic.indexOf('+') >= 0 || currentTopic.indexOf('#') >= 0) {
           return;
         }
-
-        var sendData2 = {
-          userId: $('#userId').val(),
-          topicStr: currentTopic_${item.sensor_uuid},
-          setGu: "readparam",
-          type: "1"  // type=1: parameter 요청
+        
+        var message = 'GET&type=1';
+        if (typeof UnifiedMQTTManager !== 'undefined' && typeof UnifiedMQTTManager.publish === 'function') {
+          UnifiedMQTTManager.publish(currentTopic, message, 0);
+        } else {
+          console.error('MQTT Manager 없음');
         }
-
-        $.ajax({
-          url: '/admin/setSensor',
-          async: true,
-          type: 'POST',
-          data: JSON.stringify(sendData2),
-          dataType: 'json',
-          contentType: 'application/json',
-          success: function (result) {
-            if (result.resultCode == "200") {
-
-              if(result.resultMsg) {
-                if(IsJsonString(result.resultMsg)) {
-                  var jsonObj = JSON.parse(result.resultMsg);
-                  var rcvTopic = result.rcvTopic;
-                  ////console.log(rcvTopic);
-                  var rcvTopicArr = Array();
-
-                  if(rcvTopic) {
-                    rcvTopicArr = rcvTopic.split("/");
-                    if(rcvTopicArr[3] == '${item.sensor_uuid}') {
-                      setp01_${item.sensor_uuid} = jsonObj.p01;
-                    }
-                  }
-                }
-              }
-
-            }
-          },
-          error: function (reuslt) {
-
-          }
-        });
       }
 
       function getStatus_${item.sensor_uuid}() {
-        // 토픽 유효성 검사: 와일드카드(+,#) 포함 시 호출 보류 후 재시도
-        var currentTopic_${item.sensor_uuid} = $('#topicStr${item.sensor_uuid}').val();
-        if (!currentTopic_${item.sensor_uuid} || currentTopic_${item.sensor_uuid}.indexOf('+') >= 0 || currentTopic_${item.sensor_uuid}.indexOf('#') >= 0) {
-          window['topicRetry_${item.sensor_uuid}'] = (window['topicRetry_${item.sensor_uuid}'] || 0) + 1;
-          if (window['topicRetry_${item.sensor_uuid}'] <= 5) {
-            setTimeout(function(){ getStatus_${item.sensor_uuid}(); }, 1000);
-          } else {
-            console.warn('getStatus - 잘못된 topicStr 감지, 재시도 중단:', currentTopic_${item.sensor_uuid});
-          }
-              return;
-          }
-          
-        var sendData2 = {
-          userId: $('#userId').val(),
-          topicStr: currentTopic_${item.sensor_uuid},
-          setGu: "readstatus",
-          type: "2"  // type=2: status 요청
+        var currentTopic = $('#topicStr${item.sensor_uuid}').val();
+        if (!currentTopic || currentTopic.indexOf('+') >= 0 || currentTopic.indexOf('#') >= 0) {
+          return;
         }
-
-        $.ajax({
-          url: '/admin/setSensor',
-          async: true,
-          type: 'POST',
-          data: JSON.stringify(sendData2),
-          dataType: 'json',
-          contentType: 'application/json',
-          success: function (result) {
-            if (result.resultCode == "200") {
-            }
-          },
-          error: function (result) {
-
-          }
-        });
+        
+        var message = 'GET&type=2';
+        if (typeof UnifiedMQTTManager !== 'undefined' && typeof UnifiedMQTTManager.publish === 'function') {
+          UnifiedMQTTManager.publish(currentTopic, message, 0);
+        } else {
+          console.error('MQTT Manager 없음');
+        }
       }
 
       function onRefresh_${item.sensor_uuid}(chart) {
@@ -1034,10 +937,12 @@
           success: function (result) {
             if (result.resultCode == "200") {
               console.log('알림 전송 성공');
+            } else {
+              console.log('알림 전송 실패 - resultCode: ' + result.resultCode + ', message: ' + result.resultMessage);
             }
           },
-          error: function (result) {
-            console.log('알림 전송 실패');
+          error: function (xhr, status, error) {
+            console.log('알림 전송 AJAX 에러 - status: ' + status + ', error: ' + error + ', responseText: ' + xhr.responseText);
           }
         });
       }
@@ -1118,16 +1023,20 @@
         var currentTime = Date.now();
         var timeDiff = currentTime - deviceLastDataTime;
         
-        // 9초 동안 온도 데이터 미수신 시 에러 체크 (3초 × 3회 = 9초)
-        if (timeDiff > 9000 && !deviceErrorStates) {
+        // 10초 동안 온도 데이터 미수신 시 에러 체크 (deviceLastDataTime이 0이거나 10초 이상)
+        if ((deviceLastDataTime === 0 || timeDiff >= 10000) && !deviceErrorStates) {
           deviceErrorCounters++;
+          
+          console.log('[' + sensor_uuid + '] 에러 체크: deviceLastDataTime=' + deviceLastDataTime + ', timeDiff=' + timeDiff + 'ms, counter=' + deviceErrorCounters + ', errorStates=' + deviceErrorStates);
           
           // 3번 연속 미수신 시 에러 상태로 변경
           if (deviceErrorCounters >= 3) {
             deviceErrorStates = true;
             window['deviceErrorStates_' + sensor_uuid] = true;
             
-            // 상태표시등 업데이트 (Bootstrap Icons 사용)
+            console.log('[' + sensor_uuid + '] 통신 에러 발생 - 에러 상태로 전환');
+            
+            // 상태표시등 업데이트
             updateStatusIndicator('status'+sensor_uuid, 'gray', 'status');
             $('#sensorVal'+sensor_uuid).html('<font size="50px">Error</font>');
             
@@ -1137,7 +1046,7 @@
             }
             
             sendNoti("0", "error", sensor_uuid, "0");
-
+            
             // 상태 표시등 업데이트
             updateStatusIndicator('error'+sensor_uuid, 'red', 'error');
             updateStatusIndicator('comp'+sensor_uuid, 'gray', 'comp');
@@ -1145,7 +1054,6 @@
             updateStatusIndicator('fan'+sensor_uuid, 'gray', 'fan');
             
             // 상태 변수 업데이트
-            window['deviceErrorStates_' + sensor_uuid] = true;
             window['deviceErrorCounters_' + sensor_uuid] = deviceErrorCounters;
           } else {
             // 카운터만 업데이트
@@ -1163,7 +1071,8 @@
             <c:otherwise>
                 <c:forEach var="item" items="${sensorList}">
                     // 장치별 에러 체크 변수 초기화
-                    window['deviceLastDataTime_${item.sensor_uuid}'] = Date.now();
+                    // deviceLastDataTime은 0으로 초기화 (실제 데이터 수신 시에만 업데이트)
+                    window['deviceLastDataTime_${item.sensor_uuid}'] = 0;
                     window['deviceErrorCounters_${item.sensor_uuid}'] = 0;
                     window['deviceErrorStates_${item.sensor_uuid}'] = false;
                     window['deviceStatusStates_${item.sensor_uuid}'] = 'gray';
@@ -1196,8 +1105,86 @@
       allowedSensorIds = [...new Set(tempSensorIds)];
       allowedSensorUuids = [...new Set(tempSensorUuids)];
       
-      console.log('센서 ID 목록 (중복 제거):', allowedSensorIds);
-      console.log('센서 UUID 목록 (중복 제거):', allowedSensorUuids);
+      // ========================================
+      // 장치 등록/삭제 알림 구독 (PC 대시보드 자동 갱신)
+      // ========================================
+      
+      // MQTT 연결 완료 후 장치 등록/삭제 알림 토픽 구독
+      document.addEventListener('mqtt:connected', function() {
+        var currentUserId = $('#userId').val();
+        if (currentUserId && typeof UnifiedMQTTManager !== 'undefined') {
+          
+          // 1. 장치 등록 알림 구독
+          var deviceRegisteredTopic = 'HBEE/' + currentUserId + '/DEVICE_REGISTERED';
+          
+          console.log('=== 장치 등록 알림 토픽 구독 시작 ===');
+          console.log('Topic: ' + deviceRegisteredTopic);
+          
+          try {
+            UnifiedMQTTManager.subscribe(deviceRegisteredTopic, function(topic, message) {
+              console.log('=== 장치 등록 알림 수신 ===');
+              console.log('Topic: ' + topic);
+              console.log('Message: ' + message);
+              
+              try {
+                var notification = JSON.parse(message);
+                if (notification.actcode === 'device_registered') {
+                  console.log('새 장치 등록 감지 - 자동 갱신 시작');
+                  console.log('MAC: ' + notification.mac);
+                  console.log('Model: ' + notification.model);
+                  
+                  // 페이지 자동 갱신 (부드러운 전환)
+                  setTimeout(function() {
+                    console.log('페이지 새로고침 실행...');
+                    window.location.reload();
+                  }, 1000); // 1초 후 새로고침 (알림 처리 완료 대기)
+                }
+              } catch(e) {
+                console.error('장치 등록 알림 파싱 오류:', e);
+              }
+            });
+            
+            console.log('✅ 장치 등록 알림 토픽 구독 완료');
+          } catch(e) {
+            console.error('❌ 장치 등록 알림 토픽 구독 실패:', e);
+          }
+          
+          // 2. 장치 삭제 알림 구독
+          var deviceDeletedTopic = 'HBEE/' + currentUserId + '/DEVICE_DELETED';
+          
+          console.log('=== 장치 삭제 알림 토픽 구독 시작 ===');
+          console.log('Topic: ' + deviceDeletedTopic);
+          
+          try {
+            UnifiedMQTTManager.subscribe(deviceDeletedTopic, function(topic, message) {
+              console.log('=== 장치 삭제 알림 수신 ===');
+              console.log('Topic: ' + topic);
+              console.log('Message: ' + message);
+              
+              try {
+                var notification = JSON.parse(message);
+                if (notification.actcode === 'device_deleted') {
+                  console.log('장치 삭제 감지 - 자동 갱신 시작');
+                  console.log('UUID: ' + notification.uuid);
+                  
+                  // 페이지 자동 갱신 (부드러운 전환)
+                  setTimeout(function() {
+                    console.log('페이지 새로고침 실행...');
+                    window.location.reload();
+                  }, 1000); // 1초 후 새로고침 (알림 처리 완료 대기)
+                }
+              } catch(e) {
+                console.error('장치 삭제 알림 파싱 오류:', e);
+              }
+            });
+            
+            console.log('✅ 장치 삭제 알림 토픽 구독 완료');
+          } catch(e) {
+            console.error('❌ 장치 삭제 알림 토픽 구독 실패:', e);
+          }
+        }
+      });
+      
 
       function rcvMsg(topic, message) {
         if(topic) {
@@ -1325,56 +1312,38 @@
                     }
                   }
                 } else if(msg.name == 'output') {
-                  console.log('=== output 메시지 수신 (상태표시등) ===');
-                  console.log('UUID:', topicArr[3]);
-                  console.log('Type:', msg.type, '(1:comp, 2:def, 3:fan)');
-                  console.log('Value:', msg.value, '(1:ON, 0:OFF)');
+                  // 장치 타입 가져오기 (전역 변수에서)
+                  var currentDeviceType = window['deviceType_' + topicArr[3]] || '0';
                   
-                  // output 상태 변화 알림
                   if(msg.value == '1') {
                     if(msg.type == '1') {
-                      // comp 이상
-                      console.log('✅ comp 상태표시등 ON (빨간색)');
                       updateStatusIndicator('comp'+topicArr[3], 'red', 'comp');
                     } else if(msg.type == '2') {
-                      // def 이상
-                      console.log('✅ defr 상태표시등 ON (빨간색)');
-                      updateStatusIndicator('defr'+topicArr[3], 'red', 'defr');
+                      // 제상/히터: 아이콘도 함께 업데이트
+                      updateDefrostIndicator('defr'+topicArr[3], 'red', currentDeviceType);
                     } else if(msg.type == '3') {
-                      // fan 이상
-                      console.log('✅ fan 상태표시등 ON (빨간색)');
                       updateStatusIndicator('fan'+topicArr[3], 'red', 'fan');
                     }
                   } else if(msg.value == '0') {
                     if(msg.type == '1') {
-                      console.log('✅ comp 상태표시등 OFF (회색)');
                       updateStatusIndicator('comp'+topicArr[3], 'gray', 'comp');
                     } else if(msg.type == '2') {
-                      console.log('✅ defr 상태표시등 OFF (회색)');
-                      updateStatusIndicator('defr'+topicArr[3], 'gray', 'defr');
+                      // 제상/히터: 아이콘도 함께 업데이트
+                      updateDefrostIndicator('defr'+topicArr[3], 'gray', currentDeviceType);
                     } else if(msg.type == '3') {
-                      console.log('✅ fan 상태표시등 OFF (회색)');
                       updateStatusIndicator('fan'+topicArr[3], 'gray', 'fan');
                     }
                   }
                 }
               } else if(msg.actcode == "setres") {
-                console.log('=== setres 메시지 수신 (설정온도) ===');
-                console.log('UUID:', topicArr[3]);
-                console.log('p01 (원본):', msg.p01);
-                
-                // 파라미터 디코딩 (음수 처리 지원)
+                // 파라미터 디코딩
                 if(msg.p01 && msg.p01.length > 0) {
                   msg.p01 = decodeTemperature(msg.p01);
-                  console.log('p01 (디코딩 후):', msg.p01);
                 }
                 
                 var setTmpElement = $('#setTmp'+topicArr[3]);
                 if (setTmpElement.length > 0) {
                   setTmpElement.html(msg.p01 + '°C');
-                  console.log('✅ 설정온도 업데이트 완료:', msg.p01 + '°C');
-                } else {
-                  console.error('❌ setTmp'+topicArr[3]+' 요소를 찾을 수 없음');
                 }
                 
                 // 장치종류 업데이트
@@ -1429,15 +1398,9 @@
                   sessionStorage.setItem('mainPageFirstVisit', 'false');
               }
               
-              console.log('=== 히스토리 관리 디버깅 ===');
-              console.log('isFirstLogin:', isFirstLogin);
-              console.log('firstVisit:', firstVisit);
-              console.log('history.length:', history.length);
-              console.log('현재 URL:', window.location.href);
               
               // 히스토리 정리 (history.go() 제거하고 replaceState만 사용)
               if (!isFirstLogin) {
-                  console.log('히스토리 정리 실행 - replaceState 사용');
                   // 히스토리를 메인 페이지만 남기고 정리
                   history.replaceState({page: 'main'}, '메인', '/main/main');
                   
@@ -1445,11 +1408,14 @@
                   setTimeout(function() {
                       forceCleanHistory();
                   }, 50);
-              } else {
-                  console.log('히스토리 정리 건너뛰기 - 첫 진입');
               }
-              console.log('히스토리 상태 설정 완료');
           }, 200); // 200ms 지연으로 페이지 로딩 우선 (시간 증가)
+          
+          // 메인 페이지 히스토리 초기화 (페이지 로드 후)
+          if (window.history && window.history.pushState) {
+              // 현재 메인 페이지를 히스토리에 추가
+              window.history.pushState({page: 'main', timestamp: Date.now()}, '', window.location.href);
+          }
           
           // 뒤로가기 시도 시 처리
           window.addEventListener('popstate', function(event) {
@@ -1463,12 +1429,14 @@
                       window.webkit.messageHandlers.closeApp.postMessage('close');
                   }
               } else {
-                  // 일반 브라우저에서는 페이지 새로고침으로 실시간 데이터 초기화
-                  window.location.reload(true);
+                  // 일반 브라우저에서는 메인 페이지 유지 (히스토리 다시 추가)
+                  if (window.history && window.history.pushState) {
+                      window.history.pushState({page: 'main', timestamp: Date.now()}, '', window.location.href);
+                  }
               }
           });
           
-          // 키보드 뒤로가기 단축키 처리
+          // 키보드 뒤로가기 단축키 처리 (Alt + Left Arrow)
           document.addEventListener('keydown', function(event) {
               if (event.altKey && event.keyCode === 37) { // Alt + Left Arrow
                   event.preventDefault();
@@ -1481,7 +1449,10 @@
                           window.webkit.messageHandlers.closeApp.postMessage('close');
                       }
             } else {
-                      window.location.reload(true);
+                      // 일반 브라우저에서는 메인 페이지 유지
+                      if (window.history && window.history.pushState) {
+                          window.history.pushState({page: 'main', timestamp: Date.now()}, '', window.location.href);
+                      }
                   }
                   return false;
               }
@@ -1500,7 +1471,10 @@
                           window.webkit.messageHandlers.closeApp.postMessage('close');
                       }
           } else {
-                      window.location.reload(true);
+                      // 일반 브라우저에서는 메인 페이지 유지
+                      if (window.history && window.history.pushState) {
+                          window.history.pushState({page: 'main', timestamp: Date.now()}, '', window.location.href);
+                      }
                   }
                   return false;
               }
@@ -1509,7 +1483,6 @@
       
       // 메인 페이지 뒤로가기 처리 설정 실행 (모든 리소스 로드 완료 후)
       window.addEventListener('load', function() {
-          console.log('=== 페이지 완전 로드 완료 ===');
           setupMainPageBackNavigation();
           
           // 페이지 로드 시 에러 체크 타이머 시작 (새로고침이나 다른 페이지에서 돌아올 때)
@@ -1518,14 +1491,12 @@
       
       // 페이지 이동 시에는 MQTT 연결 유지 (로그아웃 시에만 해제)
       window.addEventListener('beforeunload', function() {
-          console.log('=== 페이지 이동 - MQTT 연결 유지 ===');
           // 페이지 이동 시에는 MQTT 연결을 끊지 않음
           // 로그아웃 시에만 disconnectOnLogout() 호출
       });
       
       // 페이지 표시 시 에러 체크 타이머 시작 (HBEE 배너 클릭, 뒤로가기 등)
       window.addEventListener('pageshow', function(event) {
-          console.log('=== 페이지 표시 이벤트 ===', event.persisted ? '(캐시에서 복원)' : '(새로 로드)');
           // 페이지가 표시될 때마다 에러 체크 타이머 시작
           startErrorCheckTimers();
       });
@@ -1534,8 +1505,7 @@
       window.addEventListener('DOMContentLoaded', function() {
           // Main 버튼 클릭으로 이동한 경우 플래그 확인
           if (sessionStorage.getItem('mainButtonClicked') === 'true') {
-              console.log('=== Main 버튼 클릭으로 이동 감지 ===');
-              sessionStorage.removeItem('mainButtonClicked'); // 플래그 제거
+              sessionStorage.removeItem('mainButtonClicked');
               // 약간의 지연 후 에러 체크 시작 (페이지 로딩 완료 대기)
               setTimeout(function() {
                   startErrorCheckTimers();
@@ -1553,8 +1523,6 @@
       
       // 강력한 히스토리 정리 함수
       function forceCleanHistory() {
-          console.log('=== 강제 히스토리 정리 시작 ===');
-          console.log('현재 히스토리 길이:', history.length);
           
           // 히스토리를 메인 페이지만 남기고 완전히 정리
           if (history.length > 1) {
@@ -1562,7 +1530,6 @@
               for (var i = 0; i < history.length; i++) {
                   history.replaceState({page: 'main'}, '메인', '/main/main');
               }
-              console.log('히스토리 강제 정리 완료');
           }
       }
       
@@ -1661,8 +1628,6 @@
       
       // 로그아웃 처리 함수
       function performLogout() {
-          console.log('=== 로그아웃 처리 시작 ===');
-          console.log('로그아웃 시간: ' + new Date().toLocaleString());
           
           // MQTT 연결 해제 추가
           if (typeof UnifiedMQTTManager !== 'undefined' && 
@@ -1730,43 +1695,28 @@
       
       // MQTT 초기 동기화 강제 실행 함수 (강화된 중복 방지)
       function forceInitialSync() {
-        console.log('=== MQTT 초기 동기화 강제 실행 ===');
         
         // 통합된 초기 동기화 사용
         if (typeof UnifiedMQTTManager !== 'undefined' && typeof UnifiedMQTTManager.executeInitialSync === 'function') {
           console.log('통합 초기 동기화 실행');
           
-          // 중복 방지 상태 확인
-          var duplicateState = UnifiedMQTTManager.getDuplicatePreventionState();
-          console.log('강제 실행 전 중복 방지 상태:', duplicateState);
-          
           // 강제 실행이므로 중복 방지 상태 리셋
           UnifiedMQTTManager.resetDuplicatePreventionState();
-          console.log('강제 실행을 위해 중복 방지 상태 리셋');
-          
           UnifiedMQTTManager.executeInitialSync();
         } else {
           console.warn('UnifiedMQTTManager를 찾을 수 없음 - 기존 방식으로 실행');
           
           // 기존 방식 (fallback)
           applyToAllUuids(function(uuid) {
-            console.log('장치 ' + uuid + ' 초기 동기화 시작');
-            
             // 1. 설정값 요청 (GET&type=1)
             if (typeof window['setSensor_' + uuid] === 'function') {
-              console.log('setSensor_' + uuid + ' 함수 호출');
               window['setSensor_' + uuid]();
-            } else {
-              console.warn('setSensor_' + uuid + ' 함수가 정의되지 않음');
             }
             
             // 2. 상태정보 요청 (GET&type=2) - 2초 후 실행
             setTimeout(function() {
               if (typeof window['getStatus_' + uuid] === 'function') {
-                console.log('getStatus_' + uuid + ' 함수 호출');
                 window['getStatus_' + uuid]();
-              } else {
-                console.warn('getStatus_' + uuid + ' 함수가 정의되지 않음');
               }
             }, 2000);
           });
@@ -1832,7 +1782,6 @@
 
       // MQTT 상태 확인 함수
       function checkMqttStatus() {
-        console.log('=== MQTT 상태 확인 ===');
         
         // MQTT 클라이언트 상태 확인
         if (typeof client !== 'undefined') {
@@ -1890,6 +1839,739 @@
       // 전역 함수로 등록
       window.updateDefrostLabel = updateDefrostLabel;
       window.updateDefrostIndicator = updateDefrostIndicator;
+
+      // ========================================
+      // 하이브리드 액티브웹 JavaScript Bridge
+      // ========================================
+      
+      /**
+       * 하이브리드 액티브웹 지원을 위한 hntApp 객체
+       * WebView와 네이티브 API 간의 브리지 역할
+       */
+      window.hntApp = {
+        
+        /**
+         * 장치 리스트 조회 (하이브리드 방식)
+         * @param {Function} callback 콜백 함수
+         */
+        getDeviceList: function(callback) {
+          console.log('hntApp.getDeviceList 호출됨');
+          
+          try {
+            // WebView 환경 확인
+            if (window.hntInterface && typeof window.hntInterface.getDeviceList === 'function') {
+              console.log('WebView 환경 - 네이티브 API 호출');
+              window.hntInterface.getDeviceList(callback);
+            } else {
+              console.log('웹 환경 - 서버 API 직접 호출');
+              // format=json 대신 /data/getSensorList API 사용 (앱 호환)
+              var userId = $('#userId').val() || '${userId}';
+              this.callServerAPI('/data/getSensorList', 'POST', { userId: userId }, callback);
+            }
+          } catch (error) {
+            console.error('getDeviceList 에러:', error);
+            this.handleError('javascript', 'getDeviceList', error, { callback: callback });
+          }
+        },
+        
+        /**
+         * 센서 정보 등록 (하이브리드 방식)
+         * @param {Object} sensorInfo 센서 정보
+         * @param {Function} callback 콜백 함수
+         */
+        insertSensorInfo: function(sensorInfo, callback) {
+          console.log('hntApp.insertSensorInfo 호출됨', sensorInfo);
+          
+          if (window.hntInterface && typeof window.hntInterface.insertSensorInfo === 'function') {
+            console.log('WebView 환경 - 네이티브 API 호출');
+            window.hntInterface.insertSensorInfo(JSON.stringify(sensorInfo), callback);
+          } else {
+            console.log('웹 환경 - 서버 API 직접 호출');
+            this.callServerAPI('/data/insertSensorInfo', 'POST', sensorInfo, callback);
+          }
+        },
+        
+        /**
+         * FCM 토큰 업데이트 (하이브리드 방식)
+         * @param {String} token FCM 토큰
+         * @param {Function} callback 콜백 함수
+         */
+        updateFcmToken: function(token, callback) {
+          console.log('hntApp.updateFcmToken 호출됨', token);
+          
+          var requestData = {
+            userId: '${userId}',
+            userToken: token
+          };
+          
+          if (window.hntInterface && typeof window.hntInterface.updateFcmToken === 'function') {
+            console.log('WebView 환경 - 네이티브 API 호출');
+            window.hntInterface.updateFcmToken(token, callback);
+          } else {
+            console.log('웹 환경 - 서버 API 직접 호출');
+            this.callServerAPI('/main/updateFcmToken', 'POST', requestData, callback);
+          }
+        },
+        
+        /**
+         * FCM 토큰 삭제 (하이브리드 방식)
+         * @param {Function} callback 콜백 함수
+         */
+        deleteFcmToken: function(callback) {
+          console.log('hntApp.deleteFcmToken 호출됨');
+          
+          var requestData = {
+            userId: '${userId}'
+          };
+          
+          if (window.hntInterface && typeof window.hntInterface.deleteFcmToken === 'function') {
+            console.log('WebView 환경 - 네이티브 API 호출');
+            window.hntInterface.deleteFcmToken(callback);
+          } else {
+            console.log('웹 환경 - 서버 API 직접 호출');
+            this.callServerAPI('/main/deleteFcmToken', 'POST', requestData, callback);
+          }
+        },
+        
+        /**
+         * 즉시 알람 체크 (하이브리드 방식)
+         * @param {Function} callback 콜백 함수
+         */
+        checkAlarmImmediately: function(callback) {
+          console.log('hntApp.checkAlarmImmediately 호출됨');
+          
+          var requestData = {
+            userId: '${userId}'
+          };
+          
+          if (window.hntInterface && typeof window.hntInterface.checkAlarmImmediately === 'function') {
+            console.log('WebView 환경 - 네이티브 API 호출');
+            window.hntInterface.checkAlarmImmediately(callback);
+          } else {
+            console.log('웹 환경 - 서버 API 직접 호출');
+            this.callServerAPI('/main/checkAlarmImmediately', 'POST', requestData, callback);
+          }
+        },
+        
+        /**
+         * 서버 API 직접 호출 (웹 환경용)
+         * @param {String} url API URL
+         * @param {String} method HTTP 메서드
+         * @param {Object} data 요청 데이터
+         * @param {Function} callback 콜백 함수
+         */
+        callServerAPI: function(url, method, data, callback) {
+          console.log('서버 API 호출:', method, url, data);
+          
+          var options = {
+            method: method,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin' // 세션 쿠키 포함
+          };
+          
+          if (data && (method === 'POST' || method === 'PUT')) {
+            options.body = JSON.stringify(data);
+          }
+          
+          fetch(url, options)
+            .then(function(response) {
+              if (!response.ok) {
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+              }
+              return response.json();
+            })
+            .then(function(result) {
+              console.log('API 응답 성공:', result);
+              if (typeof callback === 'function') {
+                callback(result);
+              }
+            })
+            .catch(function(error) {
+              console.error('API 호출 실패:', error);
+              if (typeof callback === 'function') {
+                callback({
+                  resultCode: '500',
+                  resultMessage: 'API 호출 실패: ' + error.message
+                });
+              }
+            });
+        },
+        
+        /**
+         * 환경 감지
+         * @returns {String} 'webview' | 'web' | 'unknown'
+         */
+        getEnvironment: function() {
+          if (window.hntInterface) {
+            return 'webview';
+          } else if (typeof window !== 'undefined') {
+            return 'web';
+          } else {
+            return 'unknown';
+          }
+        },
+
+        /**
+         * 환경 설정 (하이브리드 액티브웹용)
+         * @param {string} environment 'webview' 또는 'web'
+         */
+        setEnvironment: function(environment) {
+          console.log('hntApp.setEnvironment 호출됨:', environment);
+          this._environment = environment;
+          
+          if (environment === 'webview') {
+            console.log('하이브리드 액티브웹 환경으로 설정됨');
+            // WebView 환경에서 추가 초기화 작업 수행
+            this.initializeWebViewEnvironment();
+          } else {
+            console.log('웹 환경으로 설정됨');
+          }
+        },
+
+        /**
+         * WebView 환경 초기화
+         */
+        initializeWebViewEnvironment: function() {
+          console.log('WebView 환경 초기화 시작');
+          
+          try {
+            // 1. 네이티브 API 사용 가능 여부 확인
+            if (window.hntInterface) {
+              console.log('네이티브 API 사용 가능');
+              
+              // 2. 장치 리스트 초기 동기화
+              this.getDeviceList(function(result) {
+                console.log('WebView 환경에서 장치 리스트 초기 동기화 완료:', result);
+              });
+              
+              // 3. FCM 토큰 업데이트 (필요한 경우)
+              // this.updateFcmToken('current_token', function(result) {
+              //   console.log('FCM 토큰 업데이트 완료:', result);
+              // });
+              
+            } else {
+              console.warn('네이티브 API를 사용할 수 없음');
+            }
+            
+            console.log('WebView 환경 초기화 완료');
+            
+          } catch (error) {
+            console.error('WebView 환경 초기화 중 오류:', error);
+          }
+        },
+
+        /**
+         * 네트워크 상태 설정 (하이브리드 액티브웹용)
+         * @param {boolean} isConnected 네트워크 연결 상태
+         * @param {boolean} isOffline 오프라인 모드 상태
+         */
+        setNetworkStatus: function(isConnected, isOffline) {
+          console.log('hntApp.setNetworkStatus 호출됨:', { isConnected: isConnected, isOffline: isOffline });
+          
+          this._isNetworkConnected = isConnected;
+          this._isOfflineMode = isOffline;
+          
+          if (isOffline) {
+            console.log('오프라인 모드 활성화됨');
+            this.onOfflineMode();
+          } else {
+            console.log('온라인 모드 활성화됨');
+            this.onOnlineMode();
+          }
+        },
+
+        /**
+         * 오프라인 모드 처리
+         */
+        onOfflineMode: function() {
+          console.log('오프라인 모드 처리 시작');
+          
+          try {
+            // 1. UI에 오프라인 상태 표시
+            this.showOfflineIndicator();
+            
+            // 2. 실시간 데이터 동기화 중지
+            this.stopRealtimeSync();
+            
+            // 3. 캐시된 데이터 사용 안내
+            this.showOfflineMessage();
+            
+            console.log('오프라인 모드 처리 완료');
+            
+          } catch (error) {
+            console.error('오프라인 모드 처리 중 오류:', error);
+          }
+        },
+
+        /**
+         * 온라인 모드 처리
+         */
+        onOnlineMode: function() {
+          console.log('온라인 모드 처리 시작');
+          
+          try {
+            // 1. 오프라인 상태 표시 제거
+            this.hideOfflineIndicator();
+            
+            // 2. 실시간 데이터 동기화 재시작
+            this.startRealtimeSync();
+            
+            // 3. 온라인 모드 알림
+            this.showOnlineMessage();
+            
+            console.log('온라인 모드 처리 완료');
+            
+          } catch (error) {
+            console.error('온라인 모드 처리 중 오류:', error);
+          }
+        },
+
+        /**
+         * 오프라인 상태 표시기 표시
+         */
+        showOfflineIndicator: function() {
+          try {
+            // 기존 오프라인 표시기가 있으면 제거
+            var existingIndicator = document.getElementById('offline-indicator');
+            if (existingIndicator) {
+              existingIndicator.remove();
+            }
+            
+            // 오프라인 표시기 생성
+            var indicator = document.createElement('div');
+            indicator.id = 'offline-indicator';
+            indicator.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; background: #ff4444; color: white; text-align: center; padding: 10px; z-index: 9999; font-weight: bold;';
+            indicator.innerHTML = '🔴 오프라인 모드 - 네트워크 연결을 확인해주세요';
+            
+            document.body.appendChild(indicator);
+            console.log('오프라인 상태 표시기 표시됨');
+            
+          } catch (error) {
+            console.error('오프라인 상태 표시기 표시 중 오류:', error);
+          }
+        },
+
+        /**
+         * 오프라인 상태 표시기 숨김
+         */
+        hideOfflineIndicator: function() {
+          try {
+            var indicator = document.getElementById('offline-indicator');
+            if (indicator) {
+              indicator.remove();
+              console.log('오프라인 상태 표시기 숨김됨');
+            }
+          } catch (error) {
+            console.error('오프라인 상태 표시기 숨김 중 오류:', error);
+          }
+        },
+
+        /**
+         * 오프라인 메시지 표시
+         */
+        showOfflineMessage: function() {
+          try {
+            // 토스트 메시지 또는 알림 표시
+            if (typeof showToast === 'function') {
+              showToast('네트워크 연결이 끊어졌습니다. 오프라인 모드로 전환됩니다.');
+            } else {
+              console.warn('오프라인 모드: 네트워크 연결이 끊어졌습니다.');
+            }
+          } catch (error) {
+            console.error('오프라인 메시지 표시 중 오류:', error);
+          }
+        },
+
+        /**
+         * 온라인 메시지 표시
+         */
+        showOnlineMessage: function() {
+          try {
+            // 토스트 메시지 또는 알림 표시
+            if (typeof showToast === 'function') {
+              showToast('네트워크 연결이 복구되었습니다. 온라인 모드로 전환됩니다.');
+            } else {
+              console.log('온라인 모드: 네트워크 연결이 복구되었습니다.');
+            }
+          } catch (error) {
+            console.error('온라인 메시지 표시 중 오류:', error);
+          }
+        },
+
+        /**
+         * 실시간 동기화 중지
+         */
+        stopRealtimeSync: function() {
+          console.log('실시간 동기화 중지');
+          
+          try {
+            // 기존 타이머나 인터벌 정리
+            if (this._syncInterval) {
+              clearInterval(this._syncInterval);
+              this._syncInterval = null;
+            }
+            
+            if (this._syncTimeout) {
+              clearTimeout(this._syncTimeout);
+              this._syncTimeout = null;
+            }
+            
+            console.log('실시간 동기화 중지 완료');
+            
+          } catch (error) {
+            console.error('실시간 동기화 중지 중 오류:', error);
+          }
+        },
+
+        /**
+         * 실시간 동기화 시작
+         */
+        startRealtimeSync: function() {
+          console.log('실시간 동기화 시작');
+          
+          try {
+            // 기존 동기화 중지
+            this.stopRealtimeSync();
+            
+            // 새로운 동기화 시작 (5분마다)
+            this._syncInterval = setInterval(function() {
+              console.log('주기적 동기화 실행');
+              // 장치 리스트 동기화
+              if (window.hntApp && typeof window.hntApp.getDeviceList === 'function') {
+                window.hntApp.getDeviceList(function(result) {
+                  console.log('주기적 동기화 완료:', result);
+                });
+              }
+            }, 5 * 60 * 1000); // 5분
+            
+            console.log('실시간 동기화 시작 완료 (5분 간격)');
+            
+          } catch (error) {
+            console.error('실시간 동기화 시작 중 오류:', error);
+          }
+        },
+        
+        /**
+         * 통합 에러 처리
+         * @param {string} source 에러 발생 소스 ('webview', 'api', 'network', 'javascript')
+         * @param {string} operation 수행 중인 작업
+         * @param {Error|Object} error 에러 객체 또는 에러 정보
+         * @param {Object} context 추가 컨텍스트 정보
+         */
+        handleError: function(source, operation, error, context) {
+          console.error('=== hntApp 통합 에러 처리 ===');
+          console.error('에러 소스:', source);
+          console.error('작업:', operation);
+          console.error('에러:', error);
+          console.error('컨텍스트:', context);
+          
+          try {
+            // 1. 에러 정보 수집
+            var errorInfo = this.collectErrorInfo(source, operation, error, context);
+            
+            // 2. 에러 분류 및 처리
+            var errorType = this.classifyError(error);
+            var errorLevel = this.getErrorLevel(errorType);
+            
+            // 3. 에러 로깅
+            this.logError(errorInfo, errorType, errorLevel);
+            
+            // 4. 사용자에게 에러 알림
+            this.notifyUserError(errorType, errorLevel, errorInfo);
+            
+            // 5. 에러 복구 시도
+            this.attemptErrorRecovery(source, operation, errorType);
+            
+            console.error('통합 에러 처리 완료');
+            
+          } catch (e) {
+            console.error('에러 처리 중 오류 발생:', e);
+          }
+        },
+
+        /**
+         * 에러 정보 수집
+         */
+        collectErrorInfo: function(source, operation, error, context) {
+          return {
+            timestamp: new Date().toISOString(),
+            source: source,
+            operation: operation,
+            errorMessage: error.message || error.toString(),
+            errorStack: error.stack || '',
+            context: context || {},
+            userAgent: navigator.userAgent,
+            url: window.location.href,
+            environment: this.getEnvironment(),
+            networkStatus: this._isNetworkConnected,
+            offlineMode: this._isOfflineMode
+          };
+        },
+
+        /**
+         * 에러 분류
+         */
+        classifyError: function(error) {
+          var message = error.message || error.toString();
+          
+          if (message.includes('Network') || message.includes('fetch') || message.includes('XMLHttpRequest')) {
+            return 'NETWORK_ERROR';
+          } else if (message.includes('JSON') || message.includes('parse')) {
+            return 'PARSE_ERROR';
+          } else if (message.includes('timeout')) {
+            return 'TIMEOUT_ERROR';
+          } else if (message.includes('permission') || message.includes('403')) {
+            return 'PERMISSION_ERROR';
+          } else if (message.includes('not found') || message.includes('404')) {
+            return 'NOT_FOUND_ERROR';
+          } else if (message.includes('server') || message.includes('500')) {
+            return 'SERVER_ERROR';
+          } else {
+            return 'UNKNOWN_ERROR';
+          }
+        },
+
+        /**
+         * 에러 레벨 결정
+         */
+        getErrorLevel: function(errorType) {
+          var criticalErrors = ['SERVER_ERROR', 'PERMISSION_ERROR'];
+          var warningErrors = ['NETWORK_ERROR', 'TIMEOUT_ERROR'];
+          var infoErrors = ['NOT_FOUND_ERROR', 'PARSE_ERROR'];
+          
+          if (criticalErrors.includes(errorType)) {
+            return 'CRITICAL';
+          } else if (warningErrors.includes(errorType)) {
+            return 'WARNING';
+          } else if (infoErrors.includes(errorType)) {
+            return 'INFO';
+          } else {
+            return 'UNKNOWN';
+          }
+        },
+
+        /**
+         * 에러 로깅
+         */
+        logError: function(errorInfo, errorType, errorLevel) {
+          console.error('에러 로깅:', {
+            level: errorLevel,
+            type: errorType,
+            info: errorInfo
+          });
+          
+          // 서버에 에러 로그 전송 (선택적)
+          if (errorLevel === 'CRITICAL' || errorLevel === 'WARNING') {
+            this.sendErrorToServer(errorInfo, errorType, errorLevel);
+          }
+        },
+
+        /**
+         * 서버에 에러 전송
+         */
+        sendErrorToServer: function(errorInfo, errorType, errorLevel) {
+          try {
+            // 에러 정보를 서버에 전송하는 로직
+            console.log('서버에 에러 전송:', { type: errorType, level: errorLevel });
+            
+            // 실제 구현에서는 API 호출
+            // this.callServerAPI('/api/error', 'POST', errorInfo, function(result) {
+            //   console.log('에러 서버 전송 완료:', result);
+            // });
+            
+          } catch (e) {
+            console.error('에러 서버 전송 실패:', e);
+          }
+        },
+
+        /**
+         * 사용자에게 에러 알림
+         */
+        notifyUserError: function(errorType, errorLevel, errorInfo) {
+          try {
+            var message = this.getUserFriendlyMessage(errorType, errorLevel);
+            
+            if (errorLevel === 'CRITICAL') {
+              // 중요한 에러는 모달로 표시
+              this.showErrorModal(message, errorInfo);
+            } else if (errorLevel === 'WARNING') {
+              // 경고는 토스트로 표시
+              this.showErrorToast(message);
+            } else {
+              // 정보성 에러는 콘솔에만 기록
+              console.info('에러 알림:', message);
+            }
+            
+          } catch (e) {
+            console.error('사용자 에러 알림 실패:', e);
+          }
+        },
+
+        /**
+         * 사용자 친화적 에러 메시지 생성
+         */
+        getUserFriendlyMessage: function(errorType, errorLevel) {
+          var messages = {
+            'NETWORK_ERROR': '네트워크 연결을 확인해주세요.',
+            'SERVER_ERROR': '서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.',
+            'PERMISSION_ERROR': '권한이 없습니다. 관리자에게 문의해주세요.',
+            'TIMEOUT_ERROR': '요청 시간이 초과되었습니다. 다시 시도해주세요.',
+            'NOT_FOUND_ERROR': '요청한 데이터를 찾을 수 없습니다.',
+            'PARSE_ERROR': '데이터 처리 중 오류가 발생했습니다.',
+            'UNKNOWN_ERROR': '알 수 없는 오류가 발생했습니다.'
+          };
+          
+          return messages[errorType] || '오류가 발생했습니다.';
+        },
+
+        /**
+         * 에러 모달 표시
+         */
+        showErrorModal: function(message, errorInfo) {
+          try {
+            // 기존 에러 모달이 있으면 제거
+            var existingModal = document.getElementById('error-modal');
+            if (existingModal) {
+              existingModal.remove();
+            }
+            
+            // 에러 모달 생성
+            var modal = document.createElement('div');
+            modal.id = 'error-modal';
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+            
+            var modalContent = document.createElement('div');
+            modalContent.style.cssText = 'background: white; padding: 20px; border-radius: 8px; max-width: 400px; text-align: center;';
+            modalContent.innerHTML = 
+              '<h3 style="color: #ff4444; margin-bottom: 15px;">⚠️ 오류 발생</h3>' +
+              '<p style="margin-bottom: 20px;">' + message + '</p>' +
+              '<button onclick="document.getElementById(\'error-modal\').remove()" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">확인</button>';
+            
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+            console.log('에러 모달 표시됨:', message);
+            
+          } catch (e) {
+            console.error('에러 모달 표시 실패:', e);
+          }
+        },
+
+        /**
+         * 에러 토스트 표시
+         */
+        showErrorToast: function(message) {
+          try {
+            // 기존 토스트가 있으면 제거
+            var existingToast = document.getElementById('error-toast');
+            if (existingToast) {
+              existingToast.remove();
+            }
+            
+            // 에러 토스트 생성
+            var toast = document.createElement('div');
+            toast.id = 'error-toast';
+            toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #ff4444; color: white; padding: 15px 20px; border-radius: 4px; z-index: 9999; max-width: 300px;';
+            toast.innerHTML = '⚠️ ' + message;
+            
+            document.body.appendChild(toast);
+            
+            // 3초 후 자동 제거
+            setTimeout(function() {
+              if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+              }
+            }, 3000);
+            
+            console.log('에러 토스트 표시됨:', message);
+            
+          } catch (e) {
+            console.error('에러 토스트 표시 실패:', e);
+          }
+        },
+
+        /**
+         * 에러 복구 시도
+         */
+        attemptErrorRecovery: function(source, operation, errorType) {
+          try {
+            console.log('에러 복구 시도:', { source: source, operation: operation, type: errorType });
+            
+            if (errorType === 'NETWORK_ERROR') {
+              // 네트워크 에러 시 재시도
+              this.retryOperation(operation);
+            } else if (errorType === 'SERVER_ERROR') {
+              // 서버 에러 시 잠시 후 재시도
+              setTimeout(function() {
+                window.hntApp.retryOperation(operation);
+              }, 5000);
+            } else if (errorType === 'PERMISSION_ERROR') {
+              // 권한 에러 시 로그인 페이지로 이동
+              this.redirectToLogin();
+            }
+            
+          } catch (e) {
+            console.error('에러 복구 시도 실패:', e);
+          }
+        },
+
+        /**
+         * 작업 재시도
+         */
+        retryOperation: function(operation) {
+          console.log('작업 재시도:', operation);
+          
+          try {
+            if (operation === 'getDeviceList') {
+              this.getDeviceList(function(result) {
+                console.log('장치 리스트 재시도 완료:', result);
+              });
+            } else if (operation === 'insertSensorInfo') {
+              // 센서 정보 등록 재시도 로직
+              console.log('센서 정보 등록 재시도');
+            }
+            // 다른 작업들에 대한 재시도 로직 추가
+            
+          } catch (e) {
+            console.error('작업 재시도 실패:', e);
+          }
+        },
+
+        /**
+         * 로그인 페이지로 리다이렉트
+         */
+        redirectToLogin: function() {
+          try {
+            console.log('로그인 페이지로 리다이렉트');
+            window.location.href = '/login/login';
+          } catch (e) {
+            console.error('로그인 페이지 리다이렉트 실패:', e);
+          }
+        },
+
+        /**
+         * 디버그 정보 출력
+         */
+        debug: function() {
+          console.log('환경:', this.getEnvironment());
+          console.log('hntInterface 존재:', !!window.hntInterface);
+          console.log('현재 사용자 ID:', '${userId}');
+          console.log('사용 가능한 메서드:', Object.keys(this));
+          console.log('네트워크 상태:', this._isNetworkConnected);
+          console.log('오프라인 모드:', this._isOfflineMode);
+        }
+      };
+      
+      // hntApp 객체를 전역으로 등록
+      window.hntApp = window.hntApp;
+      
+      // 초기화 완료 로그
+      console.log('하이브리드 액티브웹 JavaScript Bridge 초기화 완료');
+      console.log('환경:', window.hntApp.getEnvironment());
+      
     </script>
       </body>
   </html>

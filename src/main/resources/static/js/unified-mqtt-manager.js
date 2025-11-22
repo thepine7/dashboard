@@ -77,6 +77,16 @@ var UnifiedMQTTManager = (function() {
     var subscribedTopics = new Set();
     var topicCallbacks = new Map();
     
+    // 응답 데이터 버퍼 (MQTT 연결 후 페이지 로딩 전 데이터 저장)
+    var responseBuffer = {
+        enabled: true,
+        settings: {},      // GET&type=1 응답 (setres) - { uuid: { p01: '100', p02: '10', ... } }
+        status: {},        // GET&type=2 응답 (live - output, din) - { uuid: [{ name: 'output', type: '1', ch: '1', value: '1' }, ...] }
+        temperature: {},   // 실시간 온도 (live - ain) - { uuid: { value: '23.5', timestamp: 1234567890 } }
+        buffering: true,   // 버퍼링 모드 (페이지 로딩 전)
+        applied: false     // 버퍼 데이터 적용 완료 여부
+    };
+    
     // 파싱 오류 통계 및 로깅
     var parsingErrorStats = {
         totalErrors: 0,
@@ -198,11 +208,20 @@ var UnifiedMQTTManager = (function() {
                 // 각 센서 소유자 ID별로 토픽 구독 (중복 제거)
                 var uniqueSensorIds = Array.from(new Set(sensorIds));
                 uniqueSensorIds.forEach(function(sensorId) {
+                    // 센서 데이터 토픽 구독
                     var topic = 'HBEE/' + sensorId + '/+/+/DEV';
                     console.log('메인 페이지 토픽 구독:', topic);
                     subscribe(topic, function(message) {
                         console.log('메인 페이지 메시지 수신:', message.destinationName, message.payloadString);
                         handleSensorMessage(message);
+                    });
+                    
+                    // ALARM 토픽 구독
+                    var alarmTopic = 'HBEE/' + sensorId + '/ALARM';
+                    console.log('메인 페이지 ALARM 토픽 구독:', alarmTopic);
+                    subscribe(alarmTopic, function(message) {
+                        console.log('메인 페이지 ALARM 메시지 수신:', message.destinationName, message.payloadString);
+                        handleAlarmMessage(message);
                     });
                 });
             } else {
@@ -210,11 +229,20 @@ var UnifiedMQTTManager = (function() {
                 var currentUserId = getCurrentUserId();
                 console.log('allowedSensorIds가 없어 currentUserId로 구독:', currentUserId);
                 if (currentUserId) {
+                    // 센서 데이터 토픽 구독
                     var topic = 'HBEE/' + currentUserId + '/+/+/DEV';
                     console.log('메인 페이지 토픽 구독 (fallback):', topic);
                     subscribe(topic, function(message) {
                         console.log('메인 페이지 메시지 수신:', message.destinationName, message.payloadString);
                         handleSensorMessage(message);
+                    });
+                    
+                    // ALARM 토픽 구독
+                    var alarmTopic = 'HBEE/' + currentUserId + '/ALARM';
+                    console.log('메인 페이지 ALARM 토픽 구독 (fallback):', alarmTopic);
+                    subscribe(alarmTopic, function(message) {
+                        console.log('메인 페이지 ALARM 메시지 수신:', message.destinationName, message.payloadString);
+                        handleAlarmMessage(message);
                     });
                 } else {
                     console.error('사용자 ID가 없어 토픽 구독 불가');
@@ -233,12 +261,20 @@ var UnifiedMQTTManager = (function() {
             });
             
             if (sensorId) {
-                // 센서 소유자 ID로 구독 (부계정이 주계정 센서를 조회하는 경우)
+                // 센서 데이터 토픽 구독
                 var topic = 'HBEE/' + sensorId + '/+/+/DEV';
                 console.log('센서설정 페이지 토픽 구독 (센서 소유자 ID):', topic);
                 subscribe(topic, function(message) {
                     console.log('센서설정 페이지 메시지 수신:', message.destinationName, message.payloadString);
                     handleSensorMessage(message);
+                });
+                
+                // ALARM 토픽 구독
+                var alarmTopic = 'HBEE/' + sensorId + '/ALARM';
+                console.log('센서설정 페이지 ALARM 토픽 구독:', alarmTopic);
+                subscribe(alarmTopic, function(message) {
+                    console.log('센서설정 페이지 ALARM 메시지 수신:', message.destinationName, message.payloadString);
+                    handleAlarmMessage(message);
                 });
             } else if (currentUserId) {
                 // fallback: 현재 사용자 ID로 구독
@@ -247,6 +283,14 @@ var UnifiedMQTTManager = (function() {
                 subscribe(topic, function(message) {
                     console.log('센서설정 페이지 메시지 수신:', message.destinationName, message.payloadString);
                     handleSensorMessage(message);
+                });
+                
+                // ALARM 토픽 구독
+                var alarmTopic = 'HBEE/' + currentUserId + '/ALARM';
+                console.log('센서설정 페이지 ALARM 토픽 구독 (fallback):', alarmTopic);
+                subscribe(alarmTopic, function(message) {
+                    console.log('센서설정 페이지 ALARM 메시지 수신:', message.destinationName, message.payloadString);
+                    handleAlarmMessage(message);
                 });
             } else {
                 console.error('센서설정 페이지: 센서 소유자 ID 및 사용자 ID가 없어 토픽 구독 불가');
@@ -264,12 +308,20 @@ var UnifiedMQTTManager = (function() {
             });
             
             if (sensorId) {
-                // 센서 소유자 ID로 구독 (부계정이 주계정 센서를 조회하는 경우)
+                // 센서 데이터 토픽 구독
                 var topic = 'HBEE/' + sensorId + '/+/+/DEV';
                 console.log('차트 페이지 토픽 구독 (센서 소유자 ID):', topic);
                 subscribe(topic, function(message) {
                     console.log('차트 페이지 메시지 수신:', message.destinationName, message.payloadString);
                     handleSensorMessage(message);
+                });
+                
+                // ALARM 토픽 구독
+                var alarmTopic = 'HBEE/' + sensorId + '/ALARM';
+                console.log('차트 페이지 ALARM 토픽 구독:', alarmTopic);
+                subscribe(alarmTopic, function(message) {
+                    console.log('차트 페이지 ALARM 메시지 수신:', message.destinationName, message.payloadString);
+                    handleAlarmMessage(message);
                 });
             } else if (currentUserId) {
                 // fallback: 현재 사용자 ID로 구독
@@ -278,6 +330,14 @@ var UnifiedMQTTManager = (function() {
                 subscribe(topic, function(message) {
                     console.log('차트 페이지 메시지 수신:', message.destinationName, message.payloadString);
                     handleSensorMessage(message);
+                });
+                
+                // ALARM 토픽 구독
+                var alarmTopic = 'HBEE/' + currentUserId + '/ALARM';
+                console.log('차트 페이지 ALARM 토픽 구독 (fallback):', alarmTopic);
+                subscribe(alarmTopic, function(message) {
+                    console.log('차트 페이지 ALARM 메시지 수신:', message.destinationName, message.payloadString);
+                    handleAlarmMessage(message);
                 });
             } else {
                 console.error('차트 페이지: 센서 소유자 ID 및 사용자 ID가 없어 토픽 구독 불가');
@@ -1694,6 +1754,159 @@ var UnifiedMQTTManager = (function() {
     }
     
     /**
+     * ALARM 토픽 메시지 처리
+     */
+    function handleAlarmMessage(message) {
+        try {
+            var topic = message.destinationName;
+            var payload = message.payloadString;
+            
+            console.log('=== ALARM 메시지 수신 ===');
+            console.log('토픽:', topic);
+            console.log('페이로드:', payload);
+            
+            // 토픽 파싱 (HBEE/userId/ALARM)
+            var topicParts = topic.split('/');
+            if (topicParts.length < 3 || topicParts[2] !== 'ALARM') {
+                console.log('ALARM 토픽이 아님 - 무시');
+                return;
+            }
+            
+            var userId = topicParts[1];
+            
+            // 현재 사용자 ID 확인
+            var currentUserId = getCurrentUserId();
+            if (!currentUserId) {
+                console.log('현재 사용자 ID 없음 - ALARM 메시지 무시');
+                return;
+            }
+            
+            // 사용자 ID 필터링 (부계정 지원)
+            var allowedSensorIds = window.allowedSensorIds || [];
+            var isAllowedUser = (userId === currentUserId) || (allowedSensorIds.indexOf(userId) >= 0);
+            
+            if (!isAllowedUser) {
+                console.log('사용자 ID 불일치로 ALARM 메시지 필터링됨 - 토픽 userId:', userId, '현재 userId:', currentUserId);
+                return;
+            }
+            
+            // JSON 파싱 시도
+            var alarmData = null;
+            try {
+                alarmData = JSON.parse(payload);
+            } catch (e) {
+                // JSON이 아닌 경우 텍스트 메시지로 처리
+                alarmData = { message: payload };
+            }
+            
+            // 알람 메시지 표시
+            var alarmMessage = alarmData.message || payload;
+            
+            console.log('알람 메시지 표시:', alarmMessage);
+            
+            // 상단 알람 토스트 표시
+            showAlarmToast(alarmMessage);
+            
+        } catch (error) {
+            console.error('ALARM 메시지 처리 중 오류:', error);
+        }
+    }
+    
+    /**
+     * 알람 토스트 메시지 표시
+     */
+    function showAlarmToast(message) {
+        try {
+            // 기존 알람 토스트가 있으면 제거
+            var existingToast = document.getElementById('alarm-toast');
+            if (existingToast) {
+                existingToast.remove();
+            }
+            
+            // 알람 토스트 생성
+            var toast = document.createElement('div');
+            toast.id = 'alarm-toast';
+            toast.style.cssText = [
+                'position: fixed',
+                'top: 20px',
+                'left: 50%',
+                'transform: translateX(-50%)',
+                'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                'color: white',
+                'padding: 15px 25px',
+                'border-radius: 8px',
+                'box-shadow: 0 4px 12px rgba(0,0,0,0.3)',
+                'z-index: 10000',
+                'max-width: 90%',
+                'min-width: 300px',
+                'text-align: center',
+                'font-size: 14px',
+                'font-weight: 500',
+                'animation: slideDown 0.3s ease-out'
+            ].join(';');
+            
+            // 알람 아이콘 추가
+            var icon = document.createElement('span');
+            icon.style.cssText = 'font-size: 18px; margin-right: 8px;';
+            icon.innerHTML = '🔔';
+            
+            // 메시지 텍스트
+            var messageText = document.createTextNode(message);
+            
+            toast.appendChild(icon);
+            toast.appendChild(messageText);
+            
+            // 애니메이션 정의
+            var styleSheet = document.createElement('style');
+            styleSheet.textContent = `
+                @keyframes slideDown {
+                    from {
+                        transform: translate(-50%, -100%);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translate(-50%, 0);
+                        opacity: 1;
+                    }
+                }
+                @keyframes slideUp {
+                    from {
+                        transform: translate(-50%, 0);
+                        opacity: 1;
+                    }
+                    to {
+                        transform: translate(-50%, -100%);
+                        opacity: 0;
+                    }
+                }
+            `;
+            if (!document.getElementById('alarm-toast-style')) {
+                styleSheet.id = 'alarm-toast-style';
+                document.head.appendChild(styleSheet);
+            }
+            
+            document.body.appendChild(toast);
+            
+            // 5초 후 자동 제거 (애니메이션 포함)
+            setTimeout(function() {
+                if (toast.parentNode) {
+                    toast.style.animation = 'slideUp 0.3s ease-out';
+                    setTimeout(function() {
+                        if (toast.parentNode) {
+                            toast.parentNode.removeChild(toast);
+                        }
+                    }, 300);
+                }
+            }, 5000);
+            
+            console.log('알람 토스트 표시 완료');
+            
+        } catch (error) {
+            console.error('알람 토스트 표시 중 오류:', error);
+        }
+    }
+    
+    /**
      * 센서 메시지 처리
      */
     function handleSensorMessage(message) {
@@ -1817,6 +2030,34 @@ var UnifiedMQTTManager = (function() {
                     actcode: data.actcode,
                     name: data.name
                 });
+                
+                // 버퍼링 모드일 때 응답 데이터를 버퍼에 저장
+                if (responseBuffer.enabled && responseBuffer.buffering) {
+                    if (data.actcode === 'setres') {
+                        // GET&type=1 응답 (설정값)
+                        console.log('[버퍼] 설정값 저장:', sensorUuid, data);
+                        responseBuffer.settings[sensorUuid] = data;
+                    } else if (data.actcode === 'live' && data.name === 'ain') {
+                        // 실시간 온도
+                        console.log('[버퍼] 온도값 저장:', sensorUuid, data.value);
+                        responseBuffer.temperature[sensorUuid] = {
+                            value: data.value,
+                            timestamp: Date.now()
+                        };
+                    } else if (data.actcode === 'live' && (data.name === 'output' || data.name === 'din')) {
+                        // GET&type=2 응답 (상태값)
+                        console.log('[버퍼] 상태값 저장:', sensorUuid, data.name, data.value);
+                        if (!responseBuffer.status[sensorUuid]) {
+                            responseBuffer.status[sensorUuid] = [];
+                        }
+                        responseBuffer.status[sensorUuid].push({
+                            name: data.name,
+                            type: data.type,
+                            ch: data.ch,
+                            value: data.value
+                        });
+                    }
+                }
                 
                 // 센서 데이터 처리
                 if (data.actcode === 'live' && data.name === 'ain') {
@@ -3131,23 +3372,126 @@ var UnifiedMQTTManager = (function() {
         // 중복 방지 상태 업데이트
         updateDuplicatePreventionState();
         
+        // 버퍼링 모드 활성화
+        responseBuffer.buffering = true;
+        responseBuffer.applied = false;
+        console.log('[버퍼] 버퍼링 모드 활성화');
+        
         console.log('초기 동기화 시작 - setSensor:', connectionState.initialSyncTiming.setSensorDelay + 'ms, getStatus:', connectionState.initialSyncTiming.getStatusDelay + 'ms');
         
         // 1. setSensor 요청 (0.5초 후)
         setTimeout(function() {
-            console.log('=== setSensor 요청 실행 (0.5초 후) ===');
+            console.log('=== setSensor 요청 실행 (MQTT 연결 후 0.5초) ===');
             executeSetSensorRequests();
         }, connectionState.initialSyncTiming.setSensorDelay);
         
-        // 2. getStatus 요청 (2초 후)
+        // 2. getStatus 요청 (2.5초 후)
         setTimeout(function() {
-            console.log('=== getStatus 요청 실행 (2초 후) ===');
+            console.log('=== getStatus 요청 실행 (MQTT 연결 후 2.5초) ===');
             executeGetStatusRequests();
             
             // 초기 동기화 완료 처리
             connectionState.initialSyncCompleted = true;
             console.log('초기 동기화 완료');
-        }, connectionState.initialSyncTiming.getStatusDelay);
+        }, 2500);  // 2.5초로 변경 (getStatusDelay)
+    }
+    
+    /**
+     * 버퍼 데이터를 UI에 적용
+     */
+    function applyBufferedData() {
+        if (!responseBuffer.enabled || responseBuffer.applied) {
+            console.log('[버퍼] 이미 적용되었거나 비활성화됨');
+            return;
+        }
+        
+        console.log('=== 버퍼 데이터 UI 적용 시작 ===');
+        console.log('[버퍼] 설정값:', Object.keys(responseBuffer.settings).length + '개');
+        console.log('[버퍼] 상태값:', Object.keys(responseBuffer.status).length + '개');
+        console.log('[버퍼] 온도값:', Object.keys(responseBuffer.temperature).length + '개');
+        
+        var appliedCount = 0;
+        
+        // 1. 설정값 적용 (setres)
+        Object.keys(responseBuffer.settings).forEach(function(uuid) {
+            var data = responseBuffer.settings[uuid];
+            console.log('[버퍼] 설정값 적용:', uuid, data);
+            
+            // updateSensorSettings 함수 호출
+            if (typeof updateSensorSettings === 'function') {
+                updateSensorSettings(uuid, data);
+                appliedCount++;
+            }
+            
+            // rcvMsg 함수도 호출 (상태표시등 업데이트용)
+            if (typeof window.rcvMsg === 'function') {
+                var topic = 'HBEE/' + getCurrentUserId() + '/TC/' + uuid + '/DEV';
+                var payload = JSON.stringify(data);
+                window.rcvMsg(topic, payload);
+            }
+        });
+        
+        // 2. 상태값 적용 (output, din)
+        Object.keys(responseBuffer.status).forEach(function(uuid) {
+            var statusArray = responseBuffer.status[uuid];
+            console.log('[버퍼] 상태값 적용:', uuid, statusArray.length + '개');
+            
+            statusArray.forEach(function(statusData) {
+                if (statusData.name === 'output') {
+                    if (typeof updateOutputStatus === 'function') {
+                        updateOutputStatus(uuid, statusData.value);
+                        appliedCount++;
+                    }
+                } else if (statusData.name === 'din') {
+                    if (typeof updateDinStatus === 'function') {
+                        updateDinStatus(uuid, statusData.value);
+                        appliedCount++;
+                    }
+                }
+                
+                // rcvMsg 함수도 호출 (상태표시등 업데이트용)
+                if (typeof window.rcvMsg === 'function') {
+                    var topic = 'HBEE/' + getCurrentUserId() + '/TC/' + uuid + '/DEV';
+                    var payload = JSON.stringify({
+                        actcode: 'live',
+                        name: statusData.name,
+                        type: statusData.type,
+                        ch: statusData.ch,
+                        value: statusData.value
+                    });
+                    window.rcvMsg(topic, payload);
+                }
+            });
+        });
+        
+        // 3. 온도값 적용 (ain)
+        Object.keys(responseBuffer.temperature).forEach(function(uuid) {
+            var tempData = responseBuffer.temperature[uuid];
+            console.log('[버퍼] 온도값 적용:', uuid, tempData.value);
+            
+            // updateTemperature 함수 호출
+            if (typeof updateTemperature === 'function') {
+                updateTemperature(uuid, tempData.value);
+                appliedCount++;
+            }
+            
+            // rcvMsg 함수도 호출 (온도 표시 업데이트용)
+            if (typeof window.rcvMsg === 'function') {
+                var topic = 'HBEE/' + getCurrentUserId() + '/TC/' + uuid + '/DEV';
+                var payload = JSON.stringify({
+                    actcode: 'live',
+                    name: 'ain',
+                    value: tempData.value
+                });
+                window.rcvMsg(topic, payload);
+            }
+        });
+        
+        // 버퍼링 모드 종료
+        responseBuffer.buffering = false;
+        responseBuffer.applied = true;
+        
+        console.log('=== 버퍼 데이터 UI 적용 완료 (' + appliedCount + '개 적용) ===');
     }
     
     /**
@@ -3471,6 +3815,7 @@ var UnifiedMQTTManager = (function() {
         stopHealthCheck: stopHealthCheck,
         showConnectionError: showConnectionError,
         executeInitialSync: executeInitialSync,
+        applyBufferedData: applyBufferedData,
         getInitialSyncTiming: function() { return connectionState.initialSyncTiming; },
         // 중복 방지 관련 API
         resetDuplicatePreventionState: resetDuplicatePreventionState,

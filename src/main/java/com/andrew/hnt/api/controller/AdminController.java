@@ -55,6 +55,8 @@ public class AdminController extends DefaultController {
 	@Autowired
 	private AdminService adminService;
 
+	@Autowired
+	private com.andrew.hnt.api.mapper.AdminMapper adminMapper;
 
 	@Autowired
 	private LoginService loginService;
@@ -178,14 +180,33 @@ public class AdminController extends DefaultController {
         // topicStr은 센서 정보 조회 후에 설정됨
         String topicStr = "";
         
-        // 센서 정보 조회 (센서의 실제 소유자 ID 확인용)
+        // 센서 정보 조회 (UUID로 직접 조회 - 간단한 방식)
         String actualSensorOwnerId = sessionUserId; // 기본값
         try {
-            Map<String, Object> sensorInfo = adminService.getSensorInfoByUuid(sensorUuid);
+            // UUID로 직접 센서 정보 조회
+            Map<String, Object> param = new HashMap<>();
+            param.put("sensorUuid", sensorUuid);
+            param.put("userId", sessionUserId);
+            
+            Map<String, Object> sensorInfo = adminMapper.getSensorInfoByUuid(param);
+            String sensorName = sensorUuid; // 기본값: UUID
+            
+            logger.info("센서 정보 조회 (UUID 직접 조회) - sensorUuid: {}, 조회 결과: {}", sensorUuid, sensorInfo);
+            
             if (sensorInfo != null && !sensorInfo.isEmpty()) {
                 model.addAttribute("sensorInfo", sensorInfo);
-                model.addAttribute("sensor_name", sensorInfo.get("sensor_name"));
+                
+                // DB에서 센서 이름 조회
+                String dbSensorName = (String) sensorInfo.get("sensor_name");
+                logger.info("DB에서 조회한 sensor_name: {}", dbSensorName);
+                
+                if (dbSensorName != null && !dbSensorName.isEmpty()) {
+                    sensorName = dbSensorName; // DB에서 가져온 이름 그대로 사용
+                }
+                
+                model.addAttribute("sensor_name", sensorName);
                 model.addAttribute("sensorUuid", sensorUuid);
+                logger.info("모델에 설정된 sensor_name: {}", sensorName);
                 
                 // 센서의 실제 소유자 ID 추출 (부계정 지원)
                 if (sensorInfo.get("sensor_id") != null) {
@@ -620,6 +641,19 @@ public class AdminController extends DefaultController {
         client.publish(payload, 0, sendTopic); // 요청은 SER로 발행
     		String resultMsg = client.getMsg();
     		String rcvTopic = client.getRcvTopic();
+    		
+    		// MQTT 전송 후 p16 값을 DB에 저장 (param 설정인 경우)
+    		if ("param".equals(setGu) && sensorMap.containsKey("p16") && sensorMap.containsKey("sensorUuid")) {
+    			try {
+    				Map<String, Object> updateParam = new HashMap<>();
+    				updateParam.put("sensorUuid", String.valueOf(sensorMap.get("sensorUuid")));
+    				updateParam.put("p16", p16);
+    				adminMapper.updateConfigP16(updateParam);
+    				logger.info("p16 값 DB 저장 완료: sensorUuid={}, p16={}", sensorMap.get("sensorUuid"), p16);
+    			} catch (Exception e) {
+    				logger.error("p16 값 DB 저장 실패: sensorUuid={}, p16={}, error={}", sensorMap.get("sensorUuid"), p16, e.getMessage());
+    			}
+    		}
     		
     		// JSON 유효성 검사 및 배열 형태 메시지 처리 적용
     		if (resultMsg != null && !resultMsg.trim().isEmpty()) {

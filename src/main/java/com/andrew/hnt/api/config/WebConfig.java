@@ -1,7 +1,7 @@
 package com.andrew.hnt.api.config;
 
 import com.andrew.hnt.api.interceptor.PerformanceInterceptor;
-import com.andrew.hnt.api.interceptor.SessionTrackingInterceptor;
+// import com.andrew.hnt.api.interceptor.SessionTrackingInterceptor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -22,10 +22,10 @@ public class WebConfig implements WebMvcConfigurer {
         return new PerformanceInterceptor();
     }
     
-    @Bean
-    public SessionTrackingInterceptor sessionTrackingInterceptor() {
-        return new SessionTrackingInterceptor();
-    }
+    // @Bean
+    // public SessionTrackingInterceptor sessionTrackingInterceptor() {
+    //     return new SessionTrackingInterceptor();
+    // }
 
     /**
      * JSP 뷰 리졸버 설정
@@ -74,13 +74,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 세션 추적 인터셉터 등록 (로그인/메인 페이지 추적)
-        registry.addInterceptor(sessionTrackingInterceptor())
-                .addPathPatterns(
-                    "/login/loginProcess",
-                    "/main/main",
-                    "/api/auth/me"
-                );
+        // 세션 추적 인터셉터 등록 (로그인/메인 페이지 추적) - 임시 비활성화
+        // registry.addInterceptor(sessionTrackingInterceptor())
+        //         .addPathPatterns(
+        //             "/login/loginProcess",
+        //             "/main/main",
+        //             "/api/auth/me"
+        //         );
         
         // 성능 모니터링 인터셉터 등록
         registry.addInterceptor(performanceInterceptor())
@@ -116,7 +116,11 @@ public class WebConfig implements WebMvcConfigurer {
                     "http://localhost:8080",
                     "http://localhost:8888",
                     "http://127.0.0.1:8080",
-                    "http://127.0.0.1:8888"
+                    "http://127.0.0.1:8888",
+                    // 안드로이드 앱 WebView 지원
+                    "file://",
+                    "content://",
+                    "android-app://com.hnt.hnt_android"
                 )
                 // 허용된 HTTP 메서드 (RESTful API 지원)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH")

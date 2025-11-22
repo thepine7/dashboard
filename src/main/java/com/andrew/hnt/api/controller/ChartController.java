@@ -38,6 +38,9 @@ public class ChartController extends DefaultController {
     @Autowired
     private AdminService adminService;
     
+    @Autowired
+    private com.andrew.hnt.api.mapper.AdminMapper adminMapper;
+    
     private static final Logger logger = LoggerFactory.getLogger(ChartController.class);
 
     /**
@@ -80,18 +83,22 @@ public class ChartController extends DefaultController {
             model.addAttribute("sensorUuid", sensorUuid);
             logger.info("차트 페이지 sensorUuid 설정: {}", sensorUuid);
             
-            // 센서 정보 조회하여 이름과 장치종류 설정
+            // 센서 정보 조회 (UUID로 직접 조회 - 간단한 방식)
             try {
-                Map<String, Object> sensorInfo = adminService.getSensorInfoByUuid(sensorUuid);
-                String sensorName = "장치 " + sensorUuid.substring(0, Math.min(8, sensorUuid.length()));
-                String deviceType = "0"; // 기본값: 쿨러
+                // UUID로 직접 센서 정보 조회
+                Map<String, Object> sensorParam = new HashMap<>();
+                sensorParam.put("sensorUuid", sensorUuid);
+                sensorParam.put("userId", sessionUserId);
+                
+                Map<String, Object> sensorInfo = adminMapper.getSensorInfoByUuid(sensorParam);
+                String sensorName = sensorUuid; // 기본값: UUID
                 
                 if (sensorInfo != null && !sensorInfo.isEmpty()) {
+                    // DB에서 센서 이름 조회
                     String dbSensorName = (String) sensorInfo.get("sensor_name");
                     if (dbSensorName != null && !dbSensorName.isEmpty()) {
-                        sensorName = dbSensorName;
+                        sensorName = dbSensorName; // DB에서 가져온 이름 그대로 사용
                     }
-                    deviceType = String.valueOf(sensorInfo.get("p16") != null ? sensorInfo.get("p16") : "0");
                     
                     // 센서의 실제 소유자 ID(sensor_id)로 MQTT 토픽 설정 (부계정 지원)
                     String sensorOwnerId = (String) sensorInfo.get("sensor_id");
@@ -103,21 +110,19 @@ public class ChartController extends DefaultController {
                     }
                 }
                 
-                // 장치종류에 따른 표시명 생성
-                String deviceTypeText = "0".equals(deviceType) ? "쿨러" : "히터";
-                String displayName = sensorName + "(" + deviceTypeText + ")";
-                
+                // 초기 표시명은 "장치이름(장치종류)" 형태 (device_type은 MQTT로 실시간 수신 후 정확한 값으로 업데이트)
+                String displayName = sensorName + "(장치종류)";
                 model.addAttribute("sensorName", displayName);
                 model.addAttribute("sensor_name", sensorName);
-                model.addAttribute("deviceType", deviceType);
-                logger.info("차트 페이지 센서 정보 설정: sensorName={}, deviceType={}, displayName={}", 
-                           sensorName, deviceType, displayName);
+                model.addAttribute("deviceType", ""); // 빈 문자열로 초기화 (MQTT로 실시간 수신 대기)
+                logger.info("차트 페이지 센서 정보 설정: sensorName={} (device_type은 MQTT로 실시간 수신 대기)", displayName);
             } catch (Exception e) {
                 logger.error("차트 페이지 센서 정보 조회 중 오류 발생", e);
-                String sensorName = "장치 " + sensorUuid.substring(0, Math.min(8, sensorUuid.length()));
-                model.addAttribute("sensorName", sensorName);
+                String sensorName = sensorUuid; // 기본값: 전체 UUID 사용
+                String displayName = sensorName + "(장치종류)";
+                model.addAttribute("sensorName", displayName);
                 model.addAttribute("sensor_name", sensorName);
-                model.addAttribute("deviceType", "0");
+                model.addAttribute("deviceType", ""); // 빈 문자열로 초기화
             }
             
             // 차트 데이터 조회 (최적화된 쿼리 사용)
@@ -176,35 +181,38 @@ public class ChartController extends DefaultController {
                     if (defaultSensorUuid != null && !defaultSensorUuid.isEmpty()) {
                         model.addAttribute("sensorUuid", defaultSensorUuid);
                         
-                        // 기본 센서의 상세 정보 조회
+                        // 기본 센서의 상세 정보 조회 (UUID로 직접 조회 - 간단한 방식)
                         try {
-                            Map<String, Object> sensorInfo = adminService.getSensorInfoByUuid(defaultSensorUuid);
-                            String sensorName = defaultSensorName != null ? defaultSensorName : "장치 " + defaultSensorUuid.substring(0, Math.min(8, defaultSensorUuid.length()));
-                            String deviceType = "0"; // 기본값: 쿨러
+                            // UUID로 직접 센서 정보 조회
+                            Map<String, Object> defaultSensorParam = new HashMap<>();
+                            defaultSensorParam.put("sensorUuid", defaultSensorUuid);
+                            defaultSensorParam.put("userId", sessionUserId);
+                            
+                            Map<String, Object> sensorInfo = adminMapper.getSensorInfoByUuid(defaultSensorParam);
+                            String sensorName = defaultSensorName != null ? defaultSensorName : defaultSensorUuid; // 기본값
                             
                             if (sensorInfo != null && !sensorInfo.isEmpty()) {
+                                // DB에서 센서 이름 조회
                                 String dbSensorName = (String) sensorInfo.get("sensor_name");
                                 if (dbSensorName != null && !dbSensorName.isEmpty()) {
-                                    sensorName = dbSensorName;
+                                    sensorName = dbSensorName; // DB에서 가져온 이름 그대로 사용
                                 }
-                                deviceType = String.valueOf(sensorInfo.get("p16") != null ? sensorInfo.get("p16") : "0");
                             }
                             
-                            // 장치종류에 따른 표시명 생성
-                            String deviceTypeText = "0".equals(deviceType) ? "쿨러" : "히터";
-                            String displayName = sensorName + "(" + deviceTypeText + ")";
-                            
+                            // 초기 표시명은 "장치이름(장치종류)" 형태 (device_type은 MQTT로 실시간 수신 후 정확한 값으로 업데이트)
+                            String displayName = sensorName + "(장치종류)";
                             model.addAttribute("sensorName", displayName);
                             model.addAttribute("sensor_name", sensorName);
-                            model.addAttribute("deviceType", deviceType);
-                            logger.info("차트 페이지 기본 센서 설정: sensorUuid={}, sensorName={}, deviceType={}, displayName={}", 
-                                       defaultSensorUuid, sensorName, deviceType, displayName);
+                            model.addAttribute("deviceType", ""); // 빈 문자열로 초기화 (MQTT로 실시간 수신 대기)
+                            logger.info("차트 페이지 기본 센서 설정: sensorUuid={}, sensorName={} (device_type은 MQTT로 실시간 수신 대기)", 
+                                       defaultSensorUuid, displayName);
                         } catch (Exception e) {
                             logger.error("기본 센서 정보 조회 중 오류 발생", e);
-                            String sensorName = defaultSensorName != null ? defaultSensorName : "장치 " + defaultSensorUuid.substring(0, Math.min(8, defaultSensorUuid.length()));
-                            model.addAttribute("sensorName", sensorName);
+                            String sensorName = defaultSensorName != null ? defaultSensorName : defaultSensorUuid; // 기본값: 전체 UUID 사용
+                            String displayName = sensorName + "(장치종류)";
+                            model.addAttribute("sensorName", displayName);
                             model.addAttribute("sensor_name", sensorName);
-                            model.addAttribute("deviceType", "0");
+                            model.addAttribute("deviceType", ""); // 빈 문자열로 초기화
                         }
                         
                         // 기본 센서의 차트 데이터 조회

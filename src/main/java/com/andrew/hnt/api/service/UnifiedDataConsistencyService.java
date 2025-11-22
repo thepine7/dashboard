@@ -38,6 +38,9 @@ public class UnifiedDataConsistencyService {
     // 비동기 처리를 위한 Executor
     private final Executor asyncExecutor = Executors.newFixedThreadPool(5);
     
+    // 마지막 저장 시간을 추적하기 위한 맵 (UUID -> Timestamp)
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> lastSaveTimeMap = new java.util.concurrent.ConcurrentHashMap<>();
+    
     /**
      * MQTT 메시지를 일관성 있게 처리
      * @param messageId 메시지 고유 ID
@@ -64,17 +67,37 @@ public class UnifiedDataConsistencyService {
                 return result;
             }
             
-            // 2. 데이터베이스 저장
-            Map<String, Object> saveResult = transactionManagementService.saveSensorData(sensorData);
+            // 2. 데이터베이스 저장 (1분 주기 체크)
+            String uuid = sensorData.getUuid();
+            long currentTime = System.currentTimeMillis();
+            long lastSaveTime = lastSaveTimeMap.getOrDefault(uuid, 0L);
             
-            if (!"200".equals(saveResult.get("resultCode"))) {
-                logger.error("데이터베이스 저장 실패 - messageId: {}, error: {}", messageId, saveResult.get("resultMessage"));
-                result.put("resultCode", "500");
-                result.put("resultMessage", "데이터베이스 저장 실패: " + saveResult.get("resultMessage"));
-                return result;
+            // 1분(60초) 경과 여부 확인
+            boolean shouldSaveToDb = (currentTime - lastSaveTime) >= 60000;
+            
+            Map<String, Object> saveResult = new HashMap<>();
+            
+            if (shouldSaveToDb) {
+                saveResult = transactionManagementService.saveSensorData(sensorData);
+                
+                if (!"200".equals(saveResult.get("resultCode"))) {
+                    logger.error("데이터베이스 저장 실패 - messageId: {}, error: {}", messageId, saveResult.get("resultMessage"));
+                    result.put("resultCode", "500");
+                    result.put("resultMessage", "데이터베이스 저장 실패: " + saveResult.get("resultMessage"));
+                    return result;
+                }
+                
+                // 저장 성공 시 마지막 저장 시간 업데이트
+                lastSaveTimeMap.put(uuid, currentTime);
+                logger.debug("DB 저장 완료 (1분 주기) - uuid: {}", uuid);
+            } else {
+                // DB 저장 생략 시 성공으로 간주 (실시간 업데이트는 진행)
+                saveResult.put("resultCode", "200");
+                saveResult.put("resultMessage", "DB 저장 생략 (1분 주기 미달)");
+                // logger.debug("DB 저장 생략 (1분 주기 미달) - uuid: {}", uuid);
             }
             
-            // 3. 실시간 동기화 (비동기)
+            // 3. 실시간 동기화 (비동기) - DB 저장 여부와 관계없이 항상 실행
             CompletableFuture.runAsync(() -> {
                 try {
                     sendRealtimeUpdate(sensorData);

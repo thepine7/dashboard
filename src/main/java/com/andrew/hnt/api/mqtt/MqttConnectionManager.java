@@ -2,9 +2,11 @@ package com.andrew.hnt.api.mqtt;
 
 import com.andrew.hnt.api.config.MqttConfig;
 import com.andrew.hnt.api.mqtt.common.MQTT;
+import com.andrew.hnt.api.service.MqttService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PreDestroy;
@@ -27,6 +29,10 @@ public class MqttConnectionManager {
     
     @Autowired
     private MqttConfig mqttConfig;
+    
+    @Autowired
+    @Lazy // 순환 참조 방지
+    private MqttService mqttService;
     
     private MQTT mqttClient;
     private ScheduledExecutorService scheduler;
@@ -159,9 +165,13 @@ public class MqttConnectionManager {
                 mqttConfig.getPassword()
             );
             
+            // MqttService 설정 (메시지 처리용)
+            mqttClient.setMqttService(mqttService);
+            logger.info("MQTT 클라이언트에 MqttService 설정 완료");
+            
             logger.info("MQTT 클라이언트 생성 완료 - init() 호출 시작");
             // 실제 MQTT 연결 수행
-            mqttClient.init("#", "d"); // 모든 토픽 구독, 일간 데이터
+            mqttClient.init("#", "Y"); // 모든 토픽 구독 활성화
             logger.info("MQTT init() 호출 완료");
             
             // 연결 상태 확인 및 업데이트
@@ -424,7 +434,7 @@ public class MqttConnectionManager {
             }
             
             // 새 연결 시도
-            mqttClient.init("", "");
+            mqttClient.init("#", "Y"); // 모든 토픽 구독 활성화
             boolean connected = mqttClient.isConnected();
             
             if (connected) {

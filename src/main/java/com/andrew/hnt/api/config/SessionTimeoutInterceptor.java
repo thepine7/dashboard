@@ -26,10 +26,10 @@ public class SessionTimeoutInterceptor implements HandlerInterceptor {
     
     // 세션 타임아웃 체크를 제외할 경로들
     private static final String[] EXCLUDE_PATHS = {
-        "/login",
-        "/join",
-        "/loginProcess",
-        "/joinProcess",
+        "/login/login",          // 로그인 페이지
+        "/login/join",           // 회원가입 페이지
+        "/login/loginProcess",   // 로그인 처리
+        "/login/joinProcess",    // 회원가입 처리
         "/static/",
         "/css/",
         "/js/",
@@ -37,7 +37,11 @@ public class SessionTimeoutInterceptor implements HandlerInterceptor {
         "/fonts/",
         "/api/realtime/connect",
         "/api/mqtt/status",
-        "/api/health"
+        "/api/health",
+        "/api/heartbeat",        // 앱 하트비트 (세션 없이 userId로 검증)
+        "/data/getSensorList",   // 앱 장치 목록 조회 (세션 없이 userId로 검증)
+        "/admin/setSensor",      // 앱 MQTT 메시지 발행 (세션 없이 userId로 검증)
+        "/test/"                 // 테스트 엔드포인트 (세션 없이 접근 가능)
     };
     
     @Override
@@ -51,6 +55,15 @@ public class SessionTimeoutInterceptor implements HandlerInterceptor {
             if (requestURI.startsWith(excludePath)) {
                 return true;
             }
+        }
+        
+        // 앱 요청 감지 (User-Agent 확인)
+        String userAgent = request.getHeader("User-Agent");
+        boolean isAppRequest = userAgent != null && (userAgent.contains("hnt_android") || userAgent.contains("okhttp"));
+        
+        if (isAppRequest) {
+            logger.debug("앱 요청 감지 - 세션 검증 건너뜀: {}", requestURI);
+            return true; // 앱 요청은 세션 검증 건너뜀
         }
         
         HttpSession session = request.getSession(false);

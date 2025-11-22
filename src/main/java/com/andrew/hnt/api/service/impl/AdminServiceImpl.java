@@ -88,22 +88,42 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 	
 	@Override
 	@Transactional(readOnly = true)
-	public Map<String, Object> getSensorInfoByUuid(String sensorUuid) {
-		Map<String, Object> resultMap = new HashMap<String, Object>();
-		
-		try {
-			Map<String, Object> param = new HashMap<String, Object>();
+	public Map<String, Object> getSensorInfoByUuid(String sensorUuid, String userId) {
+		Map<String, Object> param = new HashMap<>();
 			param.put("sensorUuid", sensorUuid);
-			// userId는 현재 세션에서 가져와야 하지만, 메서드 시그니처가 String sensorUuid만 받음
-			// 임시로 null로 설정하고 쿼리에서 userId 조건을 제거
-			param.put("userId", null);
-			resultMap = adminMapper.getSensorInfoByUuid(param);
-			logger.info("AdminServiceImpl.getSensorInfoByUuid - 센서 정보 조회 결과: {}", resultMap);
-		} catch(Exception e) {
-			logger.error("AdminServiceImpl.getSensorInfoByUuid - 오류 발생: {}", e.getMessage());
+		param.put("userId", userId); // userId를 제대로 전달
+		
+		logger.info("=== getSensorInfoByUuid 호출 ===");
+		logger.info("입력 파라미터 - sensorUuid: {}, userId: {}", sensorUuid, userId);
+		
+		Map<String, Object> result = adminMapper.getSensorInfoByUuid(param);
+		
+		logger.info("쿼리 결과: {}", result);
+		if (result != null) {
+			logger.info("sensor_name 값: {}", result.get("sensor_name"));
+			logger.info("sensor_uuid 값: {}", result.get("sensor_uuid"));
+			logger.info("user_id 값: {}", result.get("user_id"));
+			logger.info("sensor_id 값: {}", result.get("sensor_id"));
+		} else {
+			logger.warn("쿼리 결과가 null입니다!");
 		}
 		
-		return resultMap;
+		return result;
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public String getUserToken(String userId) {
+		Map<String, Object> param = new HashMap<>();
+		param.put("userId", userId);
+		
+		Map<String, Object> result = adminMapper.getUserToken(param);
+		
+		if (result != null && result.get("token") != null) {
+			return String.valueOf(result.get("token"));
+		}
+		
+		return null;
 	}
 
 	@Override
@@ -839,6 +859,26 @@ public class AdminServiceImpl extends BaseService implements AdminService {
 		} catch (Exception e) {
 			logger.error("센서 설정값 조회 실패 - sensorUuid: {}, 오류: {}", sensorUuid, e.getMessage(), e);
 			return new HashMap<>();
+		}
+	}
+	
+	@Override
+	public int updateSensorTokenByUserId(Map<String, Object> param) {
+		try {
+			String userId = String.valueOf(param.get("userId"));
+			String token = String.valueOf(param.get("token"));
+			
+			logger.info("FCM 토큰 업데이트 - userId: {}, token: {}...", userId, token.substring(0, Math.min(20, token.length())));
+			
+			// hnt_sensor_info 테이블의 모든 센서에 대해 token 업데이트
+			int updateCount = adminMapper.updateSensorTokenByUserId(param);
+			
+			logger.info("FCM 토큰 업데이트 완료 - userId: {}, updateCount: {}", userId, updateCount);
+			
+			return updateCount;
+		} catch (Exception e) {
+			logger.error("FCM 토큰 업데이트 실패", e);
+			return 0;
 		}
 	}
 }

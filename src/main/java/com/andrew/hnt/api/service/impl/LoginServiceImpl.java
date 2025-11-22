@@ -38,6 +38,9 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 	
 	private static final Logger logger = LoggerFactory.getLogger(LoginServiceImpl.class);
 	
+	// 비동기 처리를 위한 Executor (5개 스레드)
+	private final java.util.concurrent.Executor asyncExecutor = java.util.concurrent.Executors.newFixedThreadPool(5);
+	
 	@Override
 	protected Logger getLogger() {
 		return logger;
@@ -381,191 +384,145 @@ public class LoginServiceImpl extends BaseService implements LoginService {
 				String currentUserId = String.valueOf(param.get("userId"));
 				String sensorUuid = String.valueOf(param.get("sensorUuid"));
 				
-				// 요청 타입 구분: 장치 이름 변경 vs 장치 등록
-				String requestType = String.valueOf(param.get("requestType"));
-				String sensorName = String.valueOf(param.get("sensorName"));
+			// 요청 타입 구분: 장치 이름 변경 vs 장치 등록
+			String requestType = String.valueOf(param.get("requestType"));
+			
+			// sensorName 파라미터 안전하게 추출
+			Object sensorNameObj = param.get("sensorName");
+			String sensorName = null;
+			if(sensorNameObj != null && !"null".equals(String.valueOf(sensorNameObj)) && !"".equals(String.valueOf(sensorNameObj))) {
+				sensorName = String.valueOf(sensorNameObj);
+			}
+			
+			// 1. 기존 장치 확인 (중복등록 체크 전에 수행)
+			Map<String, Object> currentSensorInfo = new HashMap<String, Object>();
+			currentSensorInfo = mqttMapper.getSensorInfo(param);
+			
+			// 기존 장치가 있는지 확인
+			boolean existingSensor = false;
+			if(null != currentSensorInfo && 0 < currentSensorInfo.size()) {
+				int cnt = Integer.parseInt(String.valueOf(currentSensorInfo.get("cnt")));
+				existingSensor = (cnt > 0);
+			}
+			
+			// 기존 장치가 있고 sensorName이 제공된 경우 → 이름 변경 요청
+			if(existingSensor && sensorName != null) {
+				logger.info("장치 이름 변경 요청 감지 - userId: {}, sensorUuid: {}, newName: {}", 
+					currentUserId, sensorUuid, sensorName);
 				
-				// kimtest 사용자만 로깅 (로그 스팸 방지)
-				if("kimtest".equals(currentUserId)) {
-					logger.info("=== kimtest insertSensorInfo2 호출 시작 ===");
-					logger.info("현재 사용자: {}, 장치 UUID: {}", currentUserId, sensorUuid);
-					logger.info("전달받은 파라미터: {}", param);
-					logger.info("요청 타입: {}, 센서 이름: {}", requestType, sensorName);
+				// 장치 이름만 변경
+				Map<String, Object> updateParam = new HashMap<String, Object>();
+				updateParam.put("sensorUuid", sensorUuid);
+				updateParam.put("sensorName", sensorName);
+				updateParam.put("mdfId", param.get("mdfId") != null ? param.get("mdfId") : "hnt");
+				
+				// 직접 UPDATE 쿼리 실행
+				mqttMapper.updateSensorNameDirect(updateParam);
+				
+				resultMap.put("result", "true");
+				resultMap.put("message", "장치 이름이 성공적으로 변경되었습니다.");
+				
+				logger.info("장치 이름 변경 완료 - sensorUuid: {}, newName: {}", sensorUuid, sensorName);
+				
+				return resultMap;
+			}
+			
+			// 기존 장치가 있지만 sensorName이 없는 경우 → 중복 등록 시도
+			if(existingSensor) {
+				resultMap.put("result", "false");
+				resultMap.put("message", "이미 등록된 장치입니다.");
+				return resultMap;
+			}
+			
+			// 기존 장치가 없는 경우 → 신규 장치 등록 요청
+			logger.info("신규 장치 등록 요청으로 인식 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
+		
+		// 3. 다른 사용자가 해당 장치를 소유하고 있는지 확인 (장치 전송 기능)
+		Map<String, Object> checkParam = new HashMap<String, Object>();
+		checkParam.put("sensorUuid", sensorUuid);
+		Map<String, Object> existingOwner = mqttMapper.getSensorInfoByUuid(checkParam);
+		
+		if(existingOwner != null && existingOwner.size() > 0) {
+			String existingUserId = String.valueOf(existingOwner.get("user_id"));
+			
+			// 다른 사용자가 소유하고 있음 - 장치 전송 처리
+			logger.info("장치 전송 시작 - 기존 소유자: {}, 새 소유자: {}, sensorUuid: {}", existingUserId, currentUserId, sensorUuid);
+			
+			// 4. 기존 소유자의 장치 정보, 설정, 알림 삭제 (동기)
+			mqttMapper.deleteSensorInfoByUuid(checkParam);
+			mqttMapper.deleteConfigByUuid(checkParam);
+			mqttMapper.deleteAlarmByUuid(checkParam);
+			
+			logger.info("기존 소유자 장치 정보 삭제 완료 - userId: {}, sensorUuid: {}", existingUserId, sensorUuid);
+			
+			// 5. 기존 소유자의 센서 데이터 비동기 삭제 (대용량 데이터)
+			final String finalSensorUuid = sensorUuid;
+			final String finalExistingUserId = existingUserId;
+			java.util.concurrent.CompletableFuture.runAsync(() -> {
+				try {
+					logger.info("장치 이전 - 센서 데이터 비동기 삭제 시작 - 기존 소유자: {}, sensorUuid: {}", finalExistingUserId, finalSensorUuid);
+					
+					int batchSize = 1000; // 한 번에 1,000개씩 삭제
+					int deletedCount = 0;
+					int totalDeleted = 0;
+					
+					do {
+						Map<String, Object> asyncParam = new HashMap<>();
+						asyncParam.put("sensorUuid", finalSensorUuid);
+						asyncParam.put("batchSize", batchSize);
+						
+						deletedCount = mqttMapper.deleteSensorDataBatch(asyncParam);
+						totalDeleted += deletedCount;
+						
+						if (totalDeleted % 10000 == 0 && totalDeleted > 0) {
+							logger.info("장치 이전 - 센서 데이터 비동기 삭제 진행 중 - 삭제된 개수: {}, 총 삭제: {}, uuid: {}", 
+								deletedCount, totalDeleted, finalSensorUuid);
+						}
+						
+						// DB 부하 방지
+						if (deletedCount > 0) {
+							try { Thread.sleep(10); } catch (InterruptedException ie) {}
+						}
+					} while (deletedCount > 0);
+					
+					logger.info("장치 이전 - 센서 데이터 비동기 삭제 완료 - 기존 소유자: {}, sensorUuid: {}, 총 삭제: {}", 
+						finalExistingUserId, finalSensorUuid, totalDeleted);
+						
+				} catch (Exception e) {
+					logger.error("장치 이전 - 센서 데이터 비동기 삭제 중 오류 발생 - uuid: " + finalSensorUuid, e);
 				}
-				
-				// 장치 이름 변경 요청인 경우
-				if("UPDATE_NAME".equals(requestType) || 
-				   (sensorName != null && !"null".equals(sensorName) && !"".equals(sensorName))) {
-					
-					// kimtest 사용자만 로깅
-					if("kimtest".equals(currentUserId)) {
-						logger.info("kimtest 장치 이름 변경 요청으로 인식 - 중복등록 체크 건너뛰기");
-					}
-					
-					// 장치 이름만 변경 (중복등록 체크 없음)
-					Map<String, Object> updateParam = new HashMap<String, Object>();
-					updateParam.put("userId", currentUserId);
-					updateParam.put("sensorUuid", sensorUuid);
-					updateParam.put("sensorName", sensorName);
-					updateParam.put("mdfId", param.get("mdfId") != null ? param.get("mdfId") : "hnt");
-					
-					// 직접 UPDATE 쿼리 실행
-					mqttMapper.updateSensorNameDirect(updateParam);
-					
-					resultMap.put("result", "true");
-					resultMap.put("message", "장치 이름이 성공적으로 변경되었습니다.");
-					
-					// kimtest 사용자만 로깅
-					if("kimtest".equals(currentUserId)) {
-						logger.info("kimtest 장치 이름 변경 완료 - userId: {}, sensorUuid: {}, newName: {}", 
-							currentUserId, sensorUuid, sensorName);
-					}
-					
-					return resultMap;
-				}
-				
-				// 장치 등록 요청인 경우 (기존 로직)
-				// kimtest 사용자만 로깅
-				if("kimtest".equals(currentUserId)) {
-					logger.info("kimtest 장치 등록 요청으로 인식 - 중복등록 체크 수행");
-				}
-				
-				// 1. 현재 사용자가 이미 해당 장치를 소유하고 있는지 확인
-				Map<String, Object> currentSensorInfo = new HashMap<String, Object>();
-				currentSensorInfo = mqttMapper.getSensorInfo(param);
-
-				if(null != currentSensorInfo && 0 < currentSensorInfo.size()) {
-					int cnt = Integer.parseInt(String.valueOf(currentSensorInfo.get("cnt")));
-
-					if(0 < cnt) {
-						// 현재 사용자가 이미 소유하고 있음
-						resultMap.put("result", "false");
-						resultMap.put("message", "이미 등록된 장치입니다.");
-						return resultMap; // 중복 등록 시 즉시 return
-					} else {
-						// 2. 다른 사용자가 해당 장치를 소유하고 있는지 확인 (장치 전송 기능)
-						Map<String, Object> checkParam = new HashMap<String, Object>();
-						checkParam.put("sensorUuid", sensorUuid);
-						Map<String, Object> existingOwner = mqttMapper.getSensorInfoByUuid(checkParam);
-						
-						if(existingOwner != null && existingOwner.size() > 0) {
-							String existingUserId = String.valueOf(existingOwner.get("user_id"));
-							
-							// 다른 사용자가 소유하고 있음 - 장치 전송 처리
-							// kimtest 사용자만 로깅
-							if("kimtest".equals(currentUserId)) {
-								logger.info("kimtest 장치 전송 시작 - 기존 소유자: {}, 새 소유자: {}, sensorUuid: {}", existingUserId, currentUserId, sensorUuid);
-							}
-							
-							// 3. 기존 소유자의 모든 데이터 삭제
-							mqttMapper.deleteSensorInfoByUuid(checkParam);
-							mqttMapper.deleteConfigByUuid(checkParam);
-							mqttMapper.deleteSensorDataByUuid(checkParam);
-							mqttMapper.deleteAlarmByUuid(checkParam);
-							
-							// kimtest 사용자만 로깅
-							if("kimtest".equals(currentUserId)) {
-								logger.info("kimtest 기존 소유자 데이터 삭제 완료 - userId: {}, sensorUuid: {}", existingUserId, sensorUuid);
-							}
-						}
-						
-						// 4. 새 사용자에게 장치 등록 (임시 비활성화)
-						// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 장치등록 비활성화됨 - mqttMapper.insertSensorInfo 차단");
-						}
-						// mqttMapper.insertSensorInfo(param); // 임시 비활성화
-						// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 장치등록 차단됨 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
-						}
-						
-						resultMap.put("result", "true");
-						resultMap.put("message", "장치가 성공적으로 등록되었습니다.");
-						
-						if(existingOwner != null && existingOwner.size() > 0) {
-							String existingUserId = String.valueOf(existingOwner.get("user_id"));
-							resultMap.put("message", "기존 소유자(" + existingUserId + ")의 장치가 새 사용자(" + currentUserId + ")에게 전송되었습니다.");
-						}
-					}
-				} else {
-					// 2. 다른 사용자가 해당 장치를 소유하고 있는지 확인 (장치 전송 기능)
-					Map<String, Object> checkParam = new HashMap<String, Object>();
-					checkParam.put("sensorUuid", sensorUuid);
-					Map<String, Object> existingOwner = mqttMapper.getSensorInfoByUuid(checkParam);
-					
-					if(existingOwner != null && existingOwner.size() > 0) {
-						String existingUserId = String.valueOf(existingOwner.get("user_id"));
-						
-						// 다른 사용자가 소유하고 있음 - 장치 전송 처리
-						// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 장치 전송 시작 - 기존 소유자: {}, 새 소유자: {}, sensorUuid: {}", existingUserId, currentUserId, sensorUuid);
-						}
-						
-						// 3. 기존 소유자의 모든 데이터 삭제
-						mqttMapper.deleteSensorInfoByUuid(checkParam);
-						mqttMapper.deleteConfigByUuid(checkParam);
-						mqttMapper.deleteSensorDataByUuid(checkParam);
-						mqttMapper.deleteAlarmByUuid(checkParam);
-						
-						// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 기존 소유자 데이터 삭제 완료 - userId: {}, sensorUuid: {}", existingUserId, sensorUuid);
-						}
-					}
-					
-					// 4. 새 사용자에게 장치 등록 (임시 비활성화)
-											// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 장치등록 시작 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
-						}
-						mqttMapper.insertSensorInfo(param);
-						// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 장치등록 완료 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
-						}
-					
-					// 5. 알람설정 초기값 저장 (공통 서비스 사용)
-					try {
-						// 알람설정 서비스 제거됨
-						Map<String, Object> defaultSettings = new HashMap<>();
-						boolean alarmSuccess = true;
-						
-						if (alarmSuccess) {
-							if("kimtest".equals(currentUserId)) {
-								logger.info("kimtest 알람설정 저장 완료 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
-							}
-						} else {
-							logger.error("알람설정 저장 실패: userId={}, sensorUuid={}", currentUserId, sensorUuid);
-						}
-					} catch (Exception e) {
-						logger.error("알람설정 저장 실패: userId={}, sensorUuid={}, error={}", currentUserId, sensorUuid, e.getMessage());
-					}
-					
-					if(existingOwner != null && existingOwner.size() > 0) {
-						// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 장치 전송 시 알람설정 초기값 저장 완료 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
-						}
-					} else {
-						// kimtest 사용자만 로깅
-						if("kimtest".equals(currentUserId)) {
-							logger.info("kimtest 새 장치 등록 시 알람설정 초기값 저장 완료 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
-						}
-					}
-					
-					resultMap.put("result", "true");
-					resultMap.put("message", "장치가 성공적으로 등록되었습니다.");
-					
-					if(existingOwner != null && existingOwner.size() > 0) {
-						String existingUserId = String.valueOf(existingOwner.get("user_id"));
-						resultMap.put("message", "기존 소유자(" + existingUserId + ")의 장치가 새 사용자(" + currentUserId + ")에게 전송되었습니다.");
-					}
-				}
-				
-				logger.info("=== 장치 등록 완료 ===");
-				logger.info("최종 결과: {}", resultMap);
+			}, asyncExecutor);
+		}
+		
+		// 5. 새 사용자에게 장치 등록
+		logger.info("장치등록 시작 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
+		mqttMapper.insertSensorInfo(param);
+		logger.info("장치등록 완료 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
+		
+		// 6. 알람설정 초기값 저장
+		try {
+			Map<String, Object> defaultSettings = new HashMap<>();
+			boolean alarmSuccess = true;
+			
+			if (alarmSuccess) {
+				logger.info("알람설정 저장 완료 - userId: {}, sensorUuid: {}", currentUserId, sensorUuid);
+			} else {
+				logger.error("알람설정 저장 실패: userId={}, sensorUuid={}", currentUserId, sensorUuid);
+			}
+		} catch (Exception e) {
+			logger.error("알람설정 저장 실패: userId={}, sensorUuid={}, error={}", currentUserId, sensorUuid, e.getMessage());
+		}
+		
+		resultMap.put("result", "true");
+		resultMap.put("message", "장치가 성공적으로 등록되었습니다.");
+		
+		if(existingOwner != null && existingOwner.size() > 0) {
+			String existingUserId = String.valueOf(existingOwner.get("user_id"));
+			resultMap.put("message", "기존 소유자(" + existingUserId + ")의 장치가 새 사용자(" + currentUserId + ")에게 전송되었습니다.");
+		}
+		
+		logger.info("=== 장치 등록 완료 ===");
+		logger.info("최종 결과: {}", resultMap);
 				
 			} catch(Exception e) {
 				logger.error("Error : " + e.toString());

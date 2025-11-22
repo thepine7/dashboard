@@ -23,20 +23,32 @@
 
     <select id="getSensorInfoByUuid" parameterType="java.util.HashMap" resultType="java.util.HashMap">
         select
-		    user_id
-		    , sensor_id
-		    , sensor_uuid
-            , sensor_name
-		    , sensor_loc
-		    , sensor_type
-		    , sensor_gu
-            , chart_type
-		from hnt_sensor_info
-		where sensor_uuid = #{sensorUuid}
+		    s.user_id
+		    , s.sensor_id
+		    , s.sensor_uuid
+            , s.sensor_name
+		    , s.sensor_loc
+		    , s.sensor_type
+		    , s.sensor_gu
+            , s.chart_type
+            , c.p16 as device_type
+		from hnt_sensor_info s
+		left join hnt_config c on s.sensor_uuid = c.sensor_uuid
+		where s.sensor_uuid = #{sensorUuid}
 		<if test="userId != null and userId != ''">
-		and user_id = #{userId}
+		and s.user_id = #{userId}
 		</if>
 		limit 1
+    </select>
+
+    <select id="getUserToken" parameterType="java.util.HashMap" resultType="java.util.HashMap">
+        select
+            u.user_id
+            , u.token
+        from hnt_user u
+        where u.user_id = #{userId}
+          and u.del_yn = 'N'
+        limit 1
     </select>
 
 	<select id="getSensorList" parameterType="java.util.HashMap" resultType="java.util.HashMap">
@@ -251,14 +263,13 @@
 
 	</select>
 
-	<update id="deleteNoti" parameterType="java.util.HashMap">
-        update hnt_alarm set
-            use_yn = 'N'
+	<delete id="deleteNoti" parameterType="java.util.HashMap">
+        delete from hnt_alarm
 		where user_id = #{userId}
 		  and user_token = #{userToken}
 		  and sensor_uuid = #{sensorUuid}
 		  and (urgent_yn != 'Y' or urgent_yn is null)
-	</update>
+	</delete>
 
 	<!-- 최적화된 센서 값 조회 - 인덱스 활용 (uuid 우선) -->
 	<select id="getSensorVal" parameterType="java.util.HashMap" resultType="java.util.HashMap">
@@ -277,8 +288,7 @@
 
 	<update id="updateUrgentNoti2" parameterType="java.util.HashMap">
 		update hnt_alarm set
-			use_yn = 'N'
-			, mdf_dtm = now()
+			mdf_dtm = now()
 		where user_id = #{userId}
 		  and sensor_uuid = #{sensorUuid}
 		  and urgent_yn = 'Y'
@@ -308,16 +318,16 @@
 
 	<insert id="insertNoti" parameterType="java.util.HashMap">
 		insert into hnt_alarm
-        (user_id, user_token, sensor_uuid, alarm_time, inst_id, inst_dtm, mdf_id, mdf_dtm, use_yn, alarm_type, cur_temp, in_temp, urgent_yn)
+        (user_id, user_token, sensor_uuid, alarm_time, inst_id, inst_dtm, mdf_id, mdf_dtm, alarm_type, cur_temp, in_temp, urgent_yn)
         values
-        (#{userId}, #{userToken}, #{sensorUuid}, date_add(now(), interval #{addTime} minute), 'hnt', now(), 'hnt', now(), 'Y', #{alarmType}, #{curTemp}, #{inTemp}, #{urgentYn});
+        (#{userId}, #{userToken}, #{sensorUuid}, date_add(now(), interval #{addTime} minute), 'hnt', now(), 'hnt', now(), #{alarmType}, #{curTemp}, #{inTemp}, #{urgentYn});
 	</insert>
 
 	<insert id="insertUrgentNoti" parameterType="java.util.HashMap">
 		insert into hnt_alarm
-		(user_id, user_token, sensor_uuid, alarm_time, inst_id, inst_dtm, mdf_id, mdf_dtm, use_yn, alarm_type, cur_temp, in_temp, urgent_yn, release_yn)
+		(user_id, user_token, sensor_uuid, alarm_time, inst_id, inst_dtm, mdf_id, mdf_dtm, alarm_type, cur_temp, in_temp, urgent_yn, release_yn)
 		values
-		(#{userId}, #{userToken}, #{sensorUuid}, date_add(now(), interval #{addTime} minute), 'hnt', now(), 'hnt', now(), 'N', #{alarmType}, #{curTemp}, #{inTemp}, #{urgentYn}, #{releaseYn});
+		(#{userId}, #{userToken}, #{sensorUuid}, date_add(now(), interval #{addTime} minute), 'hnt', now(), 'hnt', now(), #{alarmType}, #{curTemp}, #{inTemp}, #{urgentYn}, #{releaseYn});
 	</insert>
 
 	<select id="selectNoti" parameterType="java.util.HashMap"  resultType="java.util.HashMap">
@@ -396,7 +406,6 @@
 		  and user_token = #{userToken}
 		  and sensor_uuid = #{sensorUuid}
 		  and alarm_type = #{alarmType}
-		  and use_yn = 'N'
 		  and release_yn = 'Y'
 		  and inst_dtm >= DATE_ADD(NOW(), INTERVAL -#{reDelayTime} MINUTE)
 	</select>
@@ -408,6 +417,23 @@
             , mdf_dtm = now()
         where 1 = 1
         and sensor_uuid = #{sensorUuid}
+	</update>
+	
+	<update id="updateSensorTokenByUserId" parameterType="java.util.HashMap">
+		update hnt_sensor_info set
+            token = #{token}
+            , mdf_id = 'hnt'
+            , mdf_dtm = now()
+        where 1 = 1
+        and user_id = #{userId}
+	</update>
+	
+	<update id="updateConfigP16" parameterType="java.util.HashMap">
+		update hnt_config set
+            p16 = #{p16}
+            , mdf_id = 'hnt'
+            , mdf_dtm = now()
+        where sensor_uuid = #{sensorUuid}
 	</update>
 
 	<select id="getAlarmSetting" parameterType="java.util.HashMap" resultType="java.util.HashMap">

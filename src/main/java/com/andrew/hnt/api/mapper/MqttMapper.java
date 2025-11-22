@@ -22,6 +22,9 @@ public interface MqttMapper {
     // 장치 이름 변경
     public void updateSensorNameDirect(Map<String, Object> param);
     
+    // 장치 마지막 접속 시간 업데이트 (중복 등록 시)
+    public void updateSensorLastAccessTime(Map<String, Object> param);
+    
     public Map<String, Object> selectSetting(Map<String, Object> param);
 
     public Map<String, Object> getUserInfoForMqtt(LoginVO loginVO);
@@ -36,6 +39,9 @@ public interface MqttMapper {
     public void deleteConfigByUuid(Map<String, Object> param);
     public void deleteSensorDataByUuid(Map<String, Object> param);
     public void deleteAlarmByUuid(Map<String, Object> param);
+    
+    // 센서 데이터 배치 삭제 (비동기 삭제용)
+    public int deleteSensorDataBatch(Map<String, Object> param);
     
     // 기본 설정 정보 삽입
     public void insertDefaultConfig(Map<String, Object> param);

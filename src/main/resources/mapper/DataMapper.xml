@@ -26,8 +26,14 @@
 
     <delete id="deleteSensorData" parameterType="java.util.HashMap">
         delete from hnt_sensor_data
-        where user_id = #{userId}
-        and uuid = #{sensorUuid}
+        where uuid = #{sensorUuid}
+    </delete>
+    
+    <!-- 배치 삭제 (대용량 데이터 처리용) -->
+    <delete id="deleteSensorDataBatch" parameterType="java.util.HashMap">
+        delete from hnt_sensor_data
+        where uuid = #{sensorUuid}
+        limit #{batchSize}
     </delete>
 
     <!-- 

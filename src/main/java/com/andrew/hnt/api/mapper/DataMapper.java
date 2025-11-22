@@ -17,6 +17,9 @@ public interface DataMapper {
 	public void deleteSensorInfo(Map<String, Object> param);
 
 	public void deleteSensorData(Map<String, Object> param);
+	
+	// 배치 삭제 (대용량 데이터 처리용)
+	public int deleteSensorDataBatch(Map<String, Object> param);
 
 	public List<Map<String, Object>> selectSensorData(Map<String, Object> param);
 

@@ -105,7 +105,14 @@
         SET sensor_name = #{sensorName},
             mdf_id = #{mdfId},
             mdf_dtm = NOW()
-        WHERE user_id = #{userId} 
+        WHERE sensor_uuid = #{sensorUuid}
+    </update>
+    
+    <!-- 장치 마지막 접속 시간 업데이트 (중복 등록 시) -->
+    <update id="updateSensorLastAccessTime" parameterType="java.util.HashMap">
+        UPDATE hnt_sensor_info 
+        SET mdf_dtm = NOW()
+        WHERE user_id = #{userId}
           AND sensor_uuid = #{sensorUuid}
     </update>
     
@@ -120,7 +127,7 @@
         insert into hnt_config
         (user_id, sensor_id, sensor_uuid, topic, alarm_yn1, alarm_yn2, alarm_yn3, alarm_yn4, alarm_yn5, set_val1, set_val2, set_val3, set_val4, delay_time1, delay_time2, delay_time3, delay_time4, delay_time5, re_delay_time1, re_delay_time2, re_delay_time3, re_delay_time4, re_delay_time5, inst_id, inst_dtm, mdf_id, mdf_dtm)
         values
-        (#{userId}, #{sensorId}, #{sensorUuid}, #{topic}, 'N', 'N', 'N', 'N', 'N', '25.0', '5.0', '0.0', '0.0', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'hnt', now(), 'hnt', now())
+        (#{userId}, #{sensorId}, #{sensorUuid}, #{topic}, 'N', 'N', 'N', 'N', 'N', '25.0', '10.0', '20.0', '0.0', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'hnt', now(), 'hnt', now())
     </insert>
 
     <!-- 최적화된 알림 조회 -->

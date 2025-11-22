@@ -288,6 +288,15 @@ public class UnifiedSessionServiceImpl implements UnifiedSessionService {
     @Override
     public boolean validateSessionSecurity(HttpSession session, HttpServletRequest request) {
         try {
+            // 앱 요청 감지 (User-Agent 확인)
+            String userAgent = request != null ? request.getHeader("User-Agent") : null;
+            boolean isAppRequest = userAgent != null && (userAgent.contains("hnt_android") || userAgent.contains("okhttp"));
+            
+            if (isAppRequest) {
+                logger.debug("앱 요청 감지 - 세션 보안 검증 건너뜀");
+                return true; // 앱 요청은 보안 검증 건너뜀
+            }
+            
             return sessionSecurityService.validateSessionSecurity(session, request);
         } catch (Exception e) {
             logger.error("세션 보안 검증 중 오류 발생", e);

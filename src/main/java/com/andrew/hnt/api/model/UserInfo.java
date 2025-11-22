@@ -21,6 +21,7 @@ public class UserInfo {
     public String parentUserId;
     public String userAgent;    // User-Agent (PC/앱 구분)
     public String autoLogin;    // 자동 로그인 여부 (PC/앱 공통)
+    public String deviceId;     // 디바이스 ID (앱 호환용)
     
     // Getters
     public int getNo() { return no; }
@@ -43,6 +44,7 @@ public class UserInfo {
     public String getParentUserId() { return parentUserId; }
     public String getUserAgent() { return userAgent; }
     public String getAutoLogin() { return autoLogin; }
+    public String getDeviceId() { return deviceId; }
     
     // Setters
     public void setNo(int no) { this.no = no; }
@@ -65,4 +67,5 @@ public class UserInfo {
     public void setParentUserId(String parentUserId) { this.parentUserId = parentUserId; }
     public void setUserAgent(String userAgent) { this.userAgent = userAgent; }
     public void setAutoLogin(String autoLogin) { this.autoLogin = autoLogin; }
+    public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
 }

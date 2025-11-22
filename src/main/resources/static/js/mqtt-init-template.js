@@ -111,13 +111,50 @@ function registerMQTTInitialization(options) {
         initializeMQTTStandard(options);
     });
     
-    // 페이지 로딩 완료 시에도 초기화 (MQTT 이벤트가 없는 경우 대비)
+    // 페이지 로딩 완료 시 버퍼 데이터 즉시 적용
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('[' + (options.pageName || 'Unknown') + '] DOM 로딩 완료 - MQTT 초기화 대기');
+            console.log('[' + (options.pageName || 'Unknown') + '] DOM 로딩 완료 - 버퍼 데이터 적용');
+            applyBufferedDataIfAvailable(options.pageName);
         });
     } else {
-        console.log('[' + (options.pageName || 'Unknown') + '] DOM 이미 로딩 완료 - MQTT 초기화 대기');
+        console.log('[' + (options.pageName || 'Unknown') + '] DOM 이미 로딩 완료 - 버퍼 데이터 적용');
+        applyBufferedDataIfAvailable(options.pageName);
+    }
+}
+
+/**
+ * 버퍼 데이터가 있으면 즉시 적용
+ * @param {string} pageName 페이지 이름
+ */
+function applyBufferedDataIfAvailable(pageName) {
+    console.log('[' + pageName + '] 버퍼 데이터 적용 시도');
+    
+    // UnifiedMQTTManager가 로드되었는지 확인
+    if (typeof UnifiedMQTTManager !== 'undefined' && 
+        typeof UnifiedMQTTManager.applyBufferedData === 'function') {
+        console.log('[' + pageName + '] UnifiedMQTTManager.applyBufferedData 호출');
+        UnifiedMQTTManager.applyBufferedData();
+    } else {
+        console.warn('[' + pageName + '] UnifiedMQTTManager 또는 applyBufferedData 함수가 없음');
+        
+        // 최대 5초 동안 재시도 (500ms 간격)
+        var retryCount = 0;
+        var maxRetries = 10;
+        var retryInterval = setInterval(function() {
+            retryCount++;
+            console.log('[' + pageName + '] UnifiedMQTTManager 로드 대기 중... (' + retryCount + '/' + maxRetries + ')');
+            
+            if (typeof UnifiedMQTTManager !== 'undefined' && 
+                typeof UnifiedMQTTManager.applyBufferedData === 'function') {
+                console.log('[' + pageName + '] UnifiedMQTTManager 로드 완료 - applyBufferedData 호출');
+                clearInterval(retryInterval);
+                UnifiedMQTTManager.applyBufferedData();
+            } else if (retryCount >= maxRetries) {
+                console.error('[' + pageName + '] UnifiedMQTTManager 로드 실패 - 최대 재시도 횟수 초과');
+                clearInterval(retryInterval);
+            }
+        }, 500);
     }
 }
 
@@ -149,8 +186,17 @@ window.initializeMQTTStandard = initializeMQTTStandard;
 window.initializePageVariables = initializePageVariables;
 window.registerMQTTInitialization = registerMQTTInitialization;
 window.getPageName = getPageName;
+window.applyBufferedDataIfAvailable = applyBufferedDataIfAvailable;
 
 console.log('표준 MQTT 초기화 템플릿 로드 완료');
+
+
+
+
+
+
+
+
 
 
 

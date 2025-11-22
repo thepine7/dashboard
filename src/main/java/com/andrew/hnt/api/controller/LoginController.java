@@ -8,6 +8,7 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 
 import com.andrew.hnt.api.model.LoginVO;
+import com.andrew.hnt.api.model.JoinVO;
 import com.andrew.hnt.api.model.UserInfo;
 import com.andrew.hnt.api.service.LoginService;
 import com.andrew.hnt.api.service.AdminService;
@@ -318,21 +319,38 @@ public class LoginController {
 	}
 	
 	/**
-	 * 회원 가입 처리 요청
+	 * 회원 가입 처리 요청 (앱/웹 호환)
 	 * @param req
 	 * @param res
+	 * @param joinVO 앱에서 전송하는 회원가입 정보
 	 * @return
 	 */
 	@RequestMapping(value = "/login/joinProcess", method = RequestMethod.POST)
 	public @ResponseBody Map<String, Object> joinProcess(
 			HttpServletRequest req
 			, HttpServletResponse res
-			, @RequestBody UserInfo userInfo
+			, @RequestBody JoinVO joinVO
 			) {
 
 		Map<String, Object> resultMap = new HashMap<String, Object>();
 
 		HttpSession session = req.getSession();
+		
+		// JoinVO를 UserInfo로 변환 (앱-서버 호환성)
+		UserInfo userInfo = new UserInfo();
+		userInfo.setUserId(joinVO.getUserId());
+		userInfo.setUserPass(joinVO.getUserPass());
+		userInfo.setUserNm(joinVO.getUserNm());
+		userInfo.setUserTel(joinVO.getUserTel());
+		userInfo.setUserEmail(joinVO.getUserEmail());
+		userInfo.setToken(joinVO.getToken());
+		userInfo.setDeviceId(joinVO.getDeviceId());
+		
+		logger.info("=== 회원가입 처리 (앱 호환) ===");
+		logger.info("userId: {}, deviceId: {}, token: {}", 
+			joinVO.getUserId(), 
+			joinVO.getDeviceId(), 
+			joinVO.getToken() != null ? "있음" : "없음");
 		
 		// 공통 검증 유틸리티 사용
 		ValidationUtil.ValidationResult validationResult = ValidationUtil.validateUserInfo(
@@ -609,9 +627,34 @@ public class LoginController {
 		Map<String, Object> resultMap = new HashMap<>();
 		HttpSession session = req.getSession(false);
 		
+		// 앱 요청 감지
+		String userAgent = req.getHeader("User-Agent");
+		boolean isAppRequest = userAgent != null && (userAgent.contains("hnt_android") || userAgent.contains("okhttp"));
+		
 		try {
+			String userId = null;
+			
+			// 1. 앱 요청인 경우 - requestMap에서 userId 추출하여 활동 시간 업데이트
+			if (isAppRequest) {
+				userId = (String) requestMap.get("userId");
+				if (userId != null && !userId.isEmpty()) {
+					// 활동 시간 업데이트 (mdf_dtm 갱신)
+					loginService.updateUserActivity(userId);
+					logger.debug("하트비트 성공 (앱) - userId: {}", userId);
+					
+					resultMap.put("resultCode", "200");
+					resultMap.put("resultMessage", "하트비트 성공 (앱)");
+				} else {
+					logger.warn("하트비트 실패 (앱) - userId 없음");
+					resultMap.put("resultCode", "400");
+					resultMap.put("resultMessage", "userId 필수");
+				}
+				return resultMap;
+			}
+			
+			// 2. 웹 브라우저 요청인 경우 - 세션 검증
 			if (session != null) {
-				String userId = (String) session.getAttribute("userId");
+				userId = (String) session.getAttribute("userId");
 				if (userId != null && !userId.isEmpty()) {
 					// 활동 시간 업데이트 (mdf_dtm 갱신)
 					loginService.updateUserActivity(userId);

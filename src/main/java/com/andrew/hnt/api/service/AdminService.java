@@ -12,7 +12,9 @@ public interface AdminService {
 
 	public Map<String, Object> getSensorInfo(Map<String, Object> param);
 	
-	public Map<String, Object> getSensorInfoByUuid(String sensorUuid);
+	public Map<String, Object> getSensorInfoByUuid(String sensorUuid, String userId);
+
+	public String getUserToken(String userId);
 
 	public List<Map<String, Object>> getSensorList(String userId);
 	
@@ -103,4 +105,11 @@ public interface AdminService {
 	 * @return 센서 리스트
 	 */
 	public List<Map<String, Object>> getFullSensorList(String targetUserId, String parentUserId);
+	
+	/**
+	 * 사용자 ID로 센서 토큰 업데이트
+	 * @param param userId, token
+	 * @return 업데이트된 행 수
+	 */
+	public int updateSensorTokenByUserId(Map<String, Object> param);
 }

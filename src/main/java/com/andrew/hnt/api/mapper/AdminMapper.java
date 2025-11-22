@@ -14,6 +14,8 @@ public interface AdminMapper {
 	
 	public Map<String, Object> getSensorInfoByUuid(Map<String, Object> param);
 
+	public Map<String, Object> getUserToken(Map<String, Object> param);
+
 	public List<Map<String, Object>> getSensorList(Map<String, Object> param);
 	
 	public List<Map<String, Object>> getSensorListBySensorId(Map<String, Object> param);
@@ -77,6 +79,10 @@ public interface AdminMapper {
 	public void deleteUserSensorData(String userId);
 
 	public void deleteSubUser(String userId);
+	
+	public int updateSensorTokenByUserId(Map<String, Object> param);
+	
+	public int updateConfigP16(Map<String, Object> param);
 
 	public int updateUser(Map<String, Object> param);
 

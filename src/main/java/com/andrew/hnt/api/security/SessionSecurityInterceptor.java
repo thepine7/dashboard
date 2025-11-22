@@ -45,6 +45,36 @@ public class SessionSecurityInterceptor implements HandlerInterceptor {
             return true;
         }
         
+        // 앱 요청 감지 (User-Agent 확인)
+        String userAgent = request.getHeader("User-Agent");
+        boolean isAppRequest = userAgent != null && (userAgent.contains("hnt_android") || userAgent.contains("okhttp"));
+        
+        if (isAppRequest) {
+            logger.debug("앱 요청 감지 - 세션 검증 완화: {}", requestURI);
+            // 앱 요청은 세션 검증을 완화 (기본 세션 체크만 수행)
+            HttpSession session = request.getSession(false);
+            if (session == null) {
+                logger.warn("앱 요청이지만 세션이 없음 - 로그인 페이지로 리다이렉트: {}", requestURI);
+                response.sendRedirect("/login/login");
+                return false;
+            }
+            
+            String userId = (String) session.getAttribute(Constants.SESSION_USER_ID);
+            if (userId == null || userId.isEmpty()) {
+                userId = (String) session.getAttribute("userId");
+            }
+            
+            if (userId == null || userId.isEmpty()) {
+                logger.warn("앱 요청이지만 사용자 ID가 없음 - 로그인 페이지로 리다이렉트: {}", requestURI);
+                response.sendRedirect("/login/login");
+                return false;
+            }
+            
+            // 앱 요청은 보안 검증을 건너뛰고 통과
+            logger.debug("앱 요청 세션 검증 완료 - userId: {}", userId);
+            return true;
+        }
+        
         HttpSession session = request.getSession(false);
         if (session == null) {
             // 세션이 없는 경우 로그인 페이지로 리다이렉트

@@ -1,6 +1,8 @@
 package com.andrew.hnt.api;
 
 import com.andrew.hnt.api.mapper.AdminMapper;
+import com.andrew.hnt.api.service.NotificationService;
+import com.andrew.hnt.api.model.NotificationRequest;
 import okhttp3.*;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -27,6 +29,9 @@ public class ScheduleWork {
 
     @Autowired
     private AdminMapper adminMapper;
+    
+    @Autowired
+    private NotificationService notificationService;
 
     private String apiKey = "AAAAoUCvVY0:APA91bFhv_a-RRU0OOJPmGk4MBri_Aqu0MW4r1CDfar4GrhQf3H9XPTWRhoul86dfhLTomTn-WsTrKJ-qPAakoap9vMl7JHmrj8WniVnTQE3y5mhxKFDPp09bAmjaAuDx8qUXH1qhO05";
     private String senderId = "692574967181";
@@ -142,105 +147,93 @@ public class ScheduleWork {
                 }
 
                 if(null != alarmYn && !"".equals(alarmYn) && "Y".equals(alarmYn)) {
-                    OkHttpClient client = new OkHttpClient.Builder().build();
-                    RequestBody body = new FormBody.Builder()
-                            .add("to", String.valueOf(notiList.get(i).get("user_token")))
-                            .add("project_id", senderId)
-                            .add("notification", "")
-                            .add("data", sensorName + "장치 이상 발생 : " + warnText)
-                            .build();
+                    // 통합된 NotificationService 사용 (FCM v1 API + MQTT 백업)
+                    logger.info("===============================================");
+                    logger.info("📅 스케줄러 알람 발송 시작");
+                    logger.info("   - 사용자 ID: {}", param.get("userId"));
+                    logger.info("   - 센서 UUID: {}", param.get("sensorUuid"));
+                    logger.info("   - 알람 유형: {}", type);
+                    logger.info("   - 알람 메시지: {}", sensorName + "장치 이상 발생 : " + warnText);
+                    logger.info("===============================================");
+                    
+                    NotificationRequest notificationRequest = new NotificationRequest();
+                    notificationRequest.setUserId(String.valueOf(param.get("userId")));
+                    notificationRequest.setFcmToken(String.valueOf(notiList.get(i).get("user_token")));
+                    notificationRequest.setSensorUuid(String.valueOf(param.get("sensorUuid")));
+                    notificationRequest.setMessage(sensorName + "장치 이상 발생 : " + warnText);
+                    notificationRequest.setAlarmType(type);
+                    
+                    boolean success = notificationService.sendDualNotification(notificationRequest);
+                    
+                    if (success) {
+                        logger.info("✅ 스케줄러 알람 발송 성공");
+                        logger.info("data : " + param.get("userId") + "/" + param.get("sensorUuid") + "/" + type);
 
-                    Request request = new Request.Builder()
-                            .url("https://fcm.googleapis.com/fcm/send")
-                            .addHeader("Authorization", "key=" + apiKey)
-                            .post(body)
-                            .build();
+                        try {
+                            adminMapper.deleteNoti(param);
+                            adminMapper.updateUrgentNoti2(param);
 
-                    client.newCall(request).enqueue(new Callback() {
-                        @Override
-                        public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                            logger.error("Error");
-                        }
+                            param.put("sensorId", String.valueOf(param.get("userId")));
 
-                        @Override
-                        public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
-                            if (response.isSuccessful()) {
-                                logger.info("Success : " + response.code() + "/" + response.body().string());
-                                logger.info("data : " + param.get("userId") + "/" + param.get("sensorUuid") + "/" + type);
+                            Map<String, Object> config = new HashMap<String, Object>();
+                            config = adminMapper.selectSetting(param);
 
-                                try {
-                                    adminMapper.deleteNoti(param);
-                                    adminMapper.updateUrgentNoti2(param);
-
-                                    param.put("sensorId", String.valueOf(param.get("userId")));
-
-                                    Map<String, Object> config = new HashMap<String, Object>();
-                                    config = adminMapper.selectSetting(param);
-
-                                    String highAlarmYn = "";
-                                    String lowAlarmYn = "";
-                                    String diAlarmYn = "";
-                                    String networkAlarmYn = "";
-
-                                    String highTemp = "";
-                                    String lowTemp = "";
-
-                                    if (type != null && type.contains("high")) {
-                                        param.put("alarmType", "rehigh");
-                                    } else if (type != null && type.contains("low")) {
-                                        param.put("alarmType", "relow");
-                                    } else if (type != null && type.contains("di")) {
-                                        param.put("alarmType", "di2");
-                                    } else if (type != null && type.contains("net")) {
-                                        param.put("alarmType", "netError2");
-                                    }
-
-                                    if (null != config && 0 < config.size()) {
-                                        highAlarmYn = String.valueOf(config.get("alarm_yn1"));
-                                        lowAlarmYn = String.valueOf(config.get("alarm_yn2"));
-                                        diAlarmYn = String.valueOf(config.get("alarm_yn4"));
-                                        networkAlarmYn = String.valueOf(config.get("alarm_yn5"));
-
-                                        highTemp = String.valueOf(config.get("set_val1"));
-                                        lowTemp = String.valueOf(config.get("set_val2"));
-
-                                        if (type != null && type.contains("high")) {
-                                            if (null != highAlarmYn && !"".equals(highAlarmYn) && "Y".equals(highAlarmYn)) {
-                                                logger.info("INFO : " + highAlarmYn);
-                                                param.put("addTime", String.valueOf(config.get("re_delay_time1")));
-                                                param.put("curTemp", highTemp);
-                                                adminMapper.insertNoti(param);
-                                            }
-                                        } else if (type != null && type.contains("low")) {
-                                            if (null != lowAlarmYn && !"".equals(lowAlarmYn) && "Y".equals(lowAlarmYn)) {
-                                                logger.info("INFO : " + lowAlarmYn);
-                                                param.put("addTime", String.valueOf(config.get("re_delay_time2")));
-                                                param.put("curTemp", lowTemp);
-                                                adminMapper.insertNoti(param);
-                                            }
-                                        } else if (type != null && type.contains("di")) {
-                                            if (null != diAlarmYn && !"".equals(diAlarmYn) && "Y".equals(diAlarmYn)) {
-                                                logger.info("INFO : " + diAlarmYn);
-                                                param.put("addTime", String.valueOf(config.get("re_delay_time4")));
-                                                adminMapper.insertNoti(param);
-                                            }
-                                        } else if (type != null && type.contains("net")) {
-                                            if (null != networkAlarmYn && !"".equals(networkAlarmYn) && "Y".equals(networkAlarmYn)) {
-                                                logger.info("INFO : " + networkAlarmYn);
-                                                param.put("addTime", String.valueOf(config.get("re_delay_time5")));
-                                                adminMapper.insertNoti(param);
-                                            }
-                                        }
-                                    }
-
-                                } catch (Exception e) {
-                                    logger.error("Error : " + e.toString(), e);
-                                }
-                            } else {
-                                logger.info("Fail : " + response.code() + "/" + response.body().string());
+                            // 재전송 알람 타입 설정
+                            if (type != null && type.contains("high")) {
+                                param.put("alarmType", "rehigh");
+                            } else if (type != null && type.contains("low")) {
+                                param.put("alarmType", "relow");
+                            } else if (type != null && type.contains("di")) {
+                                param.put("alarmType", "di2");
+                            } else if (type != null && type.contains("net")) {
+                                param.put("alarmType", "netError2");
                             }
+
+                            // 재전송 알람 설정 확인 (기존 변수 재사용)
+                            if (null != config && 0 < config.size()) {
+                                String reHighAlarmYn = String.valueOf(config.get("alarm_yn1"));
+                                String reLowAlarmYn = String.valueOf(config.get("alarm_yn2"));
+                                String reDiAlarmYn = String.valueOf(config.get("alarm_yn4"));
+                                String reNetworkAlarmYn = String.valueOf(config.get("alarm_yn5"));
+
+                                String reHighTemp = String.valueOf(config.get("set_val1"));
+                                String reLowTemp = String.valueOf(config.get("set_val2"));
+
+                                if (type != null && type.contains("high")) {
+                                    if (null != reHighAlarmYn && !"".equals(reHighAlarmYn) && "Y".equals(reHighAlarmYn)) {
+                                        logger.info("INFO : " + reHighAlarmYn);
+                                        param.put("addTime", String.valueOf(config.get("re_delay_time1")));
+                                        param.put("curTemp", reHighTemp);
+                                        adminMapper.insertNoti(param);
+                                    }
+                                } else if (type != null && type.contains("low")) {
+                                    if (null != reLowAlarmYn && !"".equals(reLowAlarmYn) && "Y".equals(reLowAlarmYn)) {
+                                        logger.info("INFO : " + reLowAlarmYn);
+                                        param.put("addTime", String.valueOf(config.get("re_delay_time2")));
+                                        param.put("curTemp", reLowTemp);
+                                        adminMapper.insertNoti(param);
+                                    }
+                                } else if (type != null && type.contains("di")) {
+                                    if (null != reDiAlarmYn && !"".equals(reDiAlarmYn) && "Y".equals(reDiAlarmYn)) {
+                                        logger.info("INFO : " + reDiAlarmYn);
+                                        param.put("addTime", String.valueOf(config.get("re_delay_time4")));
+                                        adminMapper.insertNoti(param);
+                                    }
+                                } else if (type != null && type.contains("net")) {
+                                    if (null != reNetworkAlarmYn && !"".equals(reNetworkAlarmYn) && "Y".equals(reNetworkAlarmYn)) {
+                                        logger.info("INFO : " + reNetworkAlarmYn);
+                                        param.put("addTime", String.valueOf(config.get("re_delay_time5")));
+                                        adminMapper.insertNoti(param);
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            logger.error("Error : " + e.toString(), e);
                         }
-                    });
+                    } else {
+                        logger.warn("❌ 스케줄러 알람 발송 실패");
+                    }
+                    logger.info("===============================================");
                 }
             }
         }
